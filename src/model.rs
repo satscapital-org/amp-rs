@@ -47,6 +47,7 @@ pub struct ChangePasswordResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct Asset {
     pub name: String,
     pub asset_uuid: String,

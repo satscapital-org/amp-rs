@@ -81,17 +81,17 @@ async fn main() {
 To run the tests, you will need to set the `AMP_USERNAME` and `AMP_PASSWORD` environment variables.
 
 ```
-AMP_USERNAME=... AMP_PASSWORD=... cargo test --features mocks
+AMP_USERNAME=... AMP_PASSWORD=... cargo test
 ```
 
 To run the live tests, you will also need to set the `AMP_TESTS` environment variable to `live`.
 
 ```
-AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test --features mocks
+AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test
 ```
 
 Some tests that perform state-changing operations are ignored by default. To run them, use the `--ignored` flag.
 
 ```
-AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test --features mocks -- --ignored
+AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test -- --ignored
 ```

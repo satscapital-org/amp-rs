@@ -16,9 +16,9 @@ use crate::model::{
     Activity, AddAssetToGroup, Asset, AssetActivityParams, AssetGroup, AssetPermission,
     AssetSummary, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit, CategoryResponse,
     ChangePasswordRequest, ChangePasswordResponse, CreateAssetGroup, CreateAssetPermission,
-    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Ownership, Password,
-    TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit, Utxo,
-    Outpoint,
+    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
+    Password, TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit,
+    Utxo,
 };
 
 static AMP_TOKEN: OnceCell<Arc<Mutex<Option<String>>>> = OnceCell::new();
@@ -49,22 +49,47 @@ pub struct ApiClient {
     base_url: Url,
 }
 
+#[allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 impl ApiClient {
+    /// Creates a new API client with the base URL from environment variables.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The `AMP_API_BASE_URL` environment variable contains an invalid URL
     pub fn new() -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        Ok(ApiClient {
+        Ok(Self {
             client: Client::new(),
             base_url,
         })
     }
 
+    /// Creates a new API client with the specified base URL.
+    ///
+    /// # Errors
+    ///
+    /// This function is infallible but returns `Result` for API consistency.
     pub fn with_base_url(base_url: Url) -> Result<Self, Error> {
-        Ok(ApiClient {
+        Ok(Self {
             client: Client::new(),
             base_url,
         })
     }
 
+    /// Obtains a new authentication token from the AMP API.
+    ///
+    /// # Panics
+    ///
+    /// May panic if the base URL is malformed and cannot be segmented.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The `AMP_USERNAME` or `AMP_PASSWORD` environment variables are not set
+    /// - The HTTP request fails
+    /// - The token request is rejected by the server
+    /// - The response cannot be parsed
     pub async fn obtain_amp_token(&self) -> Result<String, Error> {
         // Get credentials from environment variables
         let username = env::var("AMP_USERNAME")
@@ -75,13 +100,12 @@ impl ApiClient {
         let request_payload = TokenRequest { username, password };
 
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("user").push("obtain_token");
+        url.path_segments_mut()
+            .unwrap()
+            .push("user")
+            .push("obtain_token");
 
-        let response = self.client
-            .post(url)
-            .json(&request_payload)
-            .send()
-            .await?;
+        let response = self.client.post(url).json(&request_payload).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -113,17 +137,22 @@ impl ApiClient {
         Ok(token_response.token)
     }
 
+    /// Gets a valid authentication token, refreshing if necessary.
+    ///
+    /// # Panics
+    ///
+    /// May panic if no valid token exists after attempting to obtain one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if token acquisition fails (see `obtain_amp_token`).
     pub async fn get_token(&self) -> Result<String, Error> {
         let token_storage = AMP_TOKEN.get_or_init(|| Arc::new(Mutex::new(None)));
         let expiry_storage = AMP_TOKEN_EXPIRY.get_or_init(|| Arc::new(Mutex::new(None)));
 
         let is_expired = {
             let expiry_guard = expiry_storage.lock().await;
-            if let Some(expiry) = *expiry_guard {
-                Utc::now() > expiry
-            } else {
-                true
-            }
+            expiry_guard.is_none_or(|expiry| Utc::now() > expiry)
         };
 
         if is_expired {
@@ -147,7 +176,7 @@ impl ApiClient {
         let mut request_builder = self
             .client
             .request(method, url)
-            .header(AUTHORIZATION, format!("token {}", token));
+            .header(AUTHORIZATION, format!("token {token}"));
 
         if let Some(body) = body {
             request_builder = request_builder.json(&body);
@@ -162,8 +191,7 @@ impl ApiClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::RequestFailed(format!(
-                "Request to {:?} failed with status {}: {}",
-                path, status, error_text
+                "Request to {path:?} failed with status {status}: {error_text}"
             )));
         }
 
@@ -193,11 +221,29 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Gets the API changelog.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed as JSON
     pub async fn get_changelog(&self) -> Result<serde_json::Value, Error> {
         self.request_json(Method::GET, &["changelog"], None::<&()>)
             .await
     }
 
+    /// Changes the user's password.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server rejects the password change
+    /// - The response cannot be parsed
     pub async fn user_change_password(
         &self,
         password: Secret<String>,
@@ -209,16 +255,43 @@ impl ApiClient {
             .await
     }
 
+    /// Gets a list of all assets.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_assets(&self) -> Result<Vec<Asset>, Error> {
         self.request_json(Method::GET, &["assets"], None::<&()>)
             .await
     }
 
+    /// Gets a specific asset by UUID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The asset does not exist
+    /// - The response cannot be parsed
     pub async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid], None::<&()>)
             .await
     }
 
+    /// Issues a new asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The issuance request is invalid
+    /// - The response cannot be parsed
     pub async fn issue_asset(
         &self,
         issuance_request: &IssuanceRequest,
@@ -227,6 +300,16 @@ impl ApiClient {
             .await
     }
 
+    /// Edits an existing asset.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The asset does not exist
+    /// - The edit request is invalid
+    /// - The response cannot be parsed
     pub async fn edit_asset(
         &self,
         asset_uuid: &str,
@@ -241,8 +324,12 @@ impl ApiClient {
     }
 
     pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
-        self.request_empty(Method::DELETE, &["assets", asset_uuid, "delete"], None::<&()>)
-            .await
+        self.request_empty(
+            Method::DELETE,
+            &["assets", asset_uuid, "delete"],
+            None::<&()>,
+        )
+        .await
     }
 
     pub async fn list_asset_permissions(&self) -> Result<Vec<AssetPermission>, Error> {
@@ -307,7 +394,8 @@ impl ApiClient {
     }
 
     pub async fn list_audits(&self) -> Result<Vec<Audit>, Error> {
-        self.request_json(Method::GET, &["audits"], None::<&()>).await
+        self.request_json(Method::GET, &["audits"], None::<&()>)
+            .await
     }
 
     pub async fn create_audit(&self, create_audit: &CreateAudit) -> Result<Audit, Error> {
@@ -418,8 +506,12 @@ impl ApiClient {
     }
 
     pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
-        self.request_json(Method::GET, &["assets", asset_uuid, "register"], None::<&()>)
-            .await
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "register"],
+            None::<&()>,
+        )
+        .await
     }
 
     pub async fn register_asset_authorized(&self, asset_uuid: &str) -> Result<Asset, Error> {
@@ -570,19 +662,19 @@ impl ApiClient {
         &self,
         new_user: &crate::model::RegisteredUserAdd,
     ) -> Result<crate::model::RegisteredUserResponse, Error> {
-        self.request_json(
-            Method::POST,
-            &["registered_users", "add"],
-            Some(new_user),
-        )
-        .await
+        self.request_json(Method::POST, &["registered_users", "add"], Some(new_user))
+            .await
     }
 
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
-        self.request_json(Method::GET, &["categories"], None::<&()>).await
+        self.request_json(Method::GET, &["categories"], None::<&()>)
+            .await
     }
 
-    pub async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error> {
+    pub async fn add_category(
+        &self,
+        new_category: &CategoryAdd,
+    ) -> Result<CategoryResponse, Error> {
         self.request_json(Method::POST, &["categories", "add"], Some(new_category))
             .await
     }
@@ -711,7 +803,8 @@ impl ApiClient {
     }
 
     pub async fn get_managers(&self) -> Result<Vec<crate::model::Manager>, Error> {
-        self.request_json(Method::GET, &["managers"], None::<&()>).await
+        self.request_json(Method::GET, &["managers"], None::<&()>)
+            .await
     }
 
     pub async fn create_manager(
@@ -724,7 +817,7 @@ impl ApiClient {
 }
 
 fn get_amp_api_base_url() -> Result<Url, Error> {
-    let url_str =
-        env::var("AMP_API_BASE_URL").unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
+    let url_str = env::var("AMP_API_BASE_URL")
+        .unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
     Url::parse(&url_str).map_err(Error::from)
 }

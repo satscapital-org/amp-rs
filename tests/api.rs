@@ -1,8 +1,8 @@
-use amp_rs::ApiClient;
-use std::env;
-use httpmock::prelude::*;
-use url::Url;
 use amp_rs::mocks;
+use amp_rs::ApiClient;
+use httpmock::prelude::*;
+use std::env;
+use url::Url;
 
 #[tokio::test]
 async fn test_get_changelog_live() {
@@ -135,8 +135,8 @@ async fn test_issue_asset_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let destination_address = env::var("DESTINATION_ADDRESS")
-        .expect("DESTINATION_ADDRESS must be set for this test");
+    let destination_address =
+        env::var("DESTINATION_ADDRESS").expect("DESTINATION_ADDRESS must be set for this test");
 
     let client = ApiClient::new().unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
@@ -212,7 +212,9 @@ async fn test_edit_asset_live() {
         let edit_request = amp_rs::model::EditAssetRequest {
             issuer_authorization_endpoint: "https://example.com/authorize".to_string(),
         };
-        let result = client.edit_asset(&asset_to_edit.asset_uuid, &edit_request).await;
+        let result = client
+            .edit_asset(&asset_to_edit.asset_uuid, &edit_request)
+            .await;
         assert!(result.is_ok());
     } else {
         println!("Skipping test_edit_asset because no assets were found.");
@@ -235,13 +237,18 @@ async fn test_edit_asset_mock() {
         let edit_request = amp_rs::model::EditAssetRequest {
             issuer_authorization_endpoint: "https://example.com/authorize".to_string(),
         };
-        let result = client.edit_asset(&asset_to_edit.asset_uuid, &edit_request).await;
+        let result = client
+            .edit_asset(&asset_to_edit.asset_uuid, &edit_request)
+            .await;
         if let Err(e) = &result {
             println!("Error: {:?}", e);
         }
         assert!(result.is_ok());
         let edited_asset = result.unwrap();
-        assert_eq!(edited_asset.issuer_authorization_endpoint, Some("https://example.com/authorize".to_string()));
+        assert_eq!(
+            edited_asset.issuer_authorization_endpoint,
+            Some("https://example.com/authorize".to_string())
+        );
     } else {
         panic!("mock_get_assets should have returned at least one asset");
     }
@@ -264,8 +271,8 @@ async fn test_delete_asset_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let destination_address = env::var("DESTINATION_ADDRESS")
-        .expect("DESTINATION_ADDRESS must be set for this test");
+    let destination_address =
+        env::var("DESTINATION_ADDRESS").expect("DESTINATION_ADDRESS must be set for this test");
 
     let client = ApiClient::new().unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
@@ -723,7 +730,10 @@ async fn test_get_and_update_asset_group_live() {
     let update_req = amp_rs::model::UpdateAssetGroup {
         name: "test_group_2_updated".to_string(),
     };
-    let update_res = client.update_asset_group(create_res.id, &update_req).await.unwrap();
+    let update_res = client
+        .update_asset_group(create_res.id, &update_req)
+        .await
+        .unwrap();
     assert_eq!(update_res.name, "test_group_2_updated");
 
     let delete_res = client.delete_asset_group(create_res.id).await;
@@ -904,7 +914,10 @@ async fn test_get_and_update_asset_permission_live() {
         asset_group: None,
         permission: amp_rs::model::Permission::Transfer,
     };
-    let update_res = client.update_asset_permission(create_res.id, &update_req).await.unwrap();
+    let update_res = client
+        .update_asset_permission(create_res.id, &update_req)
+        .await
+        .unwrap();
     assert_eq!(update_res.permission, amp_rs::model::Permission::Transfer);
 
     let delete_res = client.delete_asset_permission(create_res.id).await;
@@ -1064,7 +1077,10 @@ async fn test_get_and_update_audit_live() {
     let update_req = amp_rs::model::UpdateAudit {
         audit_status: "completed".to_string(),
     };
-    let update_res = client.update_audit(create_res.id, &update_req).await.unwrap();
+    let update_res = client
+        .update_audit(create_res.id, &update_req)
+        .await
+        .unwrap();
     assert_eq!(update_res.audit_status, "completed");
 
     let delete_res = client.delete_audit(create_res.id).await;

@@ -1,6 +1,5 @@
 pub mod client;
-pub mod model;
-#[cfg(feature = "mocks")]
 pub mod mocks;
+pub mod model;
 
 pub use client::{ApiClient, Error};

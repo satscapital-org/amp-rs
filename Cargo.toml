@@ -25,10 +25,8 @@ tokio-retry = "0.3.0"
 secrecy = { version = "0.8", features = ["serde"] }
 url = "2.2.2"
 zeroize = { version = "1.5", features = ["derive"] }
-httpmock = { version = "0.6.8", optional = true }
+httpmock = { version = "0.6.8" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 
-[features]
-mocks = ["httpmock"]
