@@ -3,8 +3,7 @@ use serde_json::json;
 
 pub fn mock_get_changelog(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/changelog");
+        when.method(GET).path("/changelog");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -19,8 +18,7 @@ pub fn mock_get_changelog(server: &MockServer) {
 
 pub fn mock_list_audits(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/audits");
+        when.method(GET).path("/audits");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -37,8 +35,7 @@ pub fn mock_list_audits(server: &MockServer) {
 
 pub fn mock_create_audit(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/audits");
+        when.method(POST).path("/audits");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -55,8 +52,7 @@ pub fn mock_create_audit(server: &MockServer) {
 
 pub fn mock_get_audit(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/audits/1");
+        when.method(GET).path("/audits/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -73,8 +69,7 @@ pub fn mock_get_audit(server: &MockServer) {
 
 pub fn mock_update_audit(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT)
-            .path("/audits/1");
+        when.method(PUT).path("/audits/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -91,16 +86,14 @@ pub fn mock_update_audit(server: &MockServer) {
 
 pub fn mock_delete_audit(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(DELETE)
-            .path("/audits/1");
+        when.method(DELETE).path("/audits/1");
         then.status(200);
     });
 }
 
 pub fn mock_broadcast_transaction(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/tx/broadcast");
+        when.method(POST).path("/tx/broadcast");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -112,8 +105,7 @@ pub fn mock_broadcast_transaction(server: &MockServer) {
 
 pub fn mock_get_broadcast_status(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/tx/broadcast/mock_txid");
+        when.method(GET).path("/tx/broadcast/mock_txid");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -125,8 +117,7 @@ pub fn mock_get_broadcast_status(server: &MockServer) {
 
 pub fn mock_list_asset_permissions(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/asset_permissions");
+        when.method(GET).path("/asset_permissions");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -141,8 +132,7 @@ pub fn mock_list_asset_permissions(server: &MockServer) {
 
 pub fn mock_create_asset_permission(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/asset_permissions");
+        when.method(POST).path("/asset_permissions");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -157,8 +147,7 @@ pub fn mock_create_asset_permission(server: &MockServer) {
 
 pub fn mock_get_asset_permission(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/asset_permissions/1");
+        when.method(GET).path("/asset_permissions/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -173,8 +162,7 @@ pub fn mock_get_asset_permission(server: &MockServer) {
 
 pub fn mock_update_asset_permission(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT)
-            .path("/asset_permissions/1");
+        when.method(PUT).path("/asset_permissions/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -189,16 +177,14 @@ pub fn mock_update_asset_permission(server: &MockServer) {
 
 pub fn mock_delete_asset_permission(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(DELETE)
-            .path("/asset_permissions/1");
+        when.method(DELETE).path("/asset_permissions/1");
         then.status(200);
     });
 }
 
 pub fn mock_list_asset_groups(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/asset_groups");
+        when.method(GET).path("/asset_groups");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -211,8 +197,7 @@ pub fn mock_list_asset_groups(server: &MockServer) {
 
 pub fn mock_create_asset_group(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/asset_groups");
+        when.method(POST).path("/asset_groups");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -225,8 +210,7 @@ pub fn mock_create_asset_group(server: &MockServer) {
 
 pub fn mock_get_asset_group(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/asset_groups/1");
+        when.method(GET).path("/asset_groups/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -239,8 +223,7 @@ pub fn mock_get_asset_group(server: &MockServer) {
 
 pub fn mock_update_asset_group(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT)
-            .path("/asset_groups/1");
+        when.method(PUT).path("/asset_groups/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -253,16 +236,14 @@ pub fn mock_update_asset_group(server: &MockServer) {
 
 pub fn mock_delete_asset_group(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(DELETE)
-            .path("/asset_groups/1");
+        when.method(DELETE).path("/asset_groups/1");
         then.status(200);
     });
 }
 
 pub fn mock_add_asset_to_group(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/asset_groups/1/assets");
+        when.method(POST).path("/asset_groups/1/assets");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -283,8 +264,7 @@ pub fn mock_remove_asset_from_group(server: &MockServer) {
 
 pub fn mock_get_managers(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/managers");
+        when.method(GET).path("/managers");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -298,8 +278,7 @@ pub fn mock_get_managers(server: &MockServer) {
 
 pub fn mock_create_manager(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/managers/create");
+        when.method(POST).path("/managers/create");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -350,8 +329,7 @@ pub fn mock_validate_gaid(server: &MockServer) {
 
 pub fn mock_get_categories(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/categories");
+        when.method(GET).path("/categories");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -366,8 +344,7 @@ pub fn mock_get_categories(server: &MockServer) {
 
 pub fn mock_add_category(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/categories/add");
+        when.method(POST).path("/categories/add");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -382,8 +359,7 @@ pub fn mock_add_category(server: &MockServer) {
 
 pub fn mock_add_registered_user(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/registered_users/add");
+        when.method(POST).path("/registered_users/add");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -408,8 +384,7 @@ pub fn mock_delete_asset(server: &MockServer) {
 
 pub fn mock_get_registered_users(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/registered_users");
+        when.method(GET).path("/registered_users");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -426,8 +401,7 @@ pub fn mock_get_registered_users(server: &MockServer) {
 
 pub fn mock_get_registered_user(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/registered_users/1");
+        when.method(GET).path("/registered_users/1");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -471,8 +445,7 @@ pub fn mock_edit_asset(server: &MockServer) {
 
 pub fn mock_issue_asset(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/assets/issue");
+        when.method(POST).path("/assets/issue");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -503,8 +476,7 @@ pub fn mock_issue_asset(server: &MockServer) {
 
 pub fn mock_get_assets(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/assets");
+        when.method(GET).path("/assets");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!([{
@@ -529,8 +501,7 @@ pub fn mock_get_assets(server: &MockServer) {
 
 pub fn mock_get_asset(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/assets/mock_asset_uuid");
+        when.method(GET).path("/assets/mock_asset_uuid");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({

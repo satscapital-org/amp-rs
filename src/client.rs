@@ -16,9 +16,9 @@ use crate::model::{
     Activity, AddAssetToGroup, Asset, AssetActivityParams, AssetGroup, AssetPermission,
     AssetSummary, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit, CategoryResponse,
     ChangePasswordRequest, ChangePasswordResponse, CreateAssetGroup, CreateAssetPermission,
-    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Ownership, Password,
-    TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit, Utxo,
-    Outpoint,
+    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
+    Password, TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit,
+    Utxo,
 };
 
 static AMP_TOKEN: OnceCell<Arc<Mutex<Option<String>>>> = OnceCell::new();
@@ -100,13 +100,12 @@ impl ApiClient {
         let request_payload = TokenRequest { username, password };
 
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("user").push("obtain_token");
+        url.path_segments_mut()
+            .unwrap()
+            .push("user")
+            .push("obtain_token");
 
-        let response = self.client
-            .post(url)
-            .json(&request_payload)
-            .send()
-            .await?;
+        let response = self.client.post(url).json(&request_payload).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -325,8 +324,12 @@ impl ApiClient {
     }
 
     pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
-        self.request_empty(Method::DELETE, &["assets", asset_uuid, "delete"], None::<&()>)
-            .await
+        self.request_empty(
+            Method::DELETE,
+            &["assets", asset_uuid, "delete"],
+            None::<&()>,
+        )
+        .await
     }
 
     pub async fn list_asset_permissions(&self) -> Result<Vec<AssetPermission>, Error> {
@@ -391,7 +394,8 @@ impl ApiClient {
     }
 
     pub async fn list_audits(&self) -> Result<Vec<Audit>, Error> {
-        self.request_json(Method::GET, &["audits"], None::<&()>).await
+        self.request_json(Method::GET, &["audits"], None::<&()>)
+            .await
     }
 
     pub async fn create_audit(&self, create_audit: &CreateAudit) -> Result<Audit, Error> {
@@ -502,8 +506,12 @@ impl ApiClient {
     }
 
     pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
-        self.request_json(Method::GET, &["assets", asset_uuid, "register"], None::<&()>)
-            .await
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "register"],
+            None::<&()>,
+        )
+        .await
     }
 
     pub async fn register_asset_authorized(&self, asset_uuid: &str) -> Result<Asset, Error> {
@@ -654,19 +662,19 @@ impl ApiClient {
         &self,
         new_user: &crate::model::RegisteredUserAdd,
     ) -> Result<crate::model::RegisteredUserResponse, Error> {
-        self.request_json(
-            Method::POST,
-            &["registered_users", "add"],
-            Some(new_user),
-        )
-        .await
+        self.request_json(Method::POST, &["registered_users", "add"], Some(new_user))
+            .await
     }
 
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
-        self.request_json(Method::GET, &["categories"], None::<&()>).await
+        self.request_json(Method::GET, &["categories"], None::<&()>)
+            .await
     }
 
-    pub async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error> {
+    pub async fn add_category(
+        &self,
+        new_category: &CategoryAdd,
+    ) -> Result<CategoryResponse, Error> {
         self.request_json(Method::POST, &["categories", "add"], Some(new_category))
             .await
     }
@@ -795,7 +803,8 @@ impl ApiClient {
     }
 
     pub async fn get_managers(&self) -> Result<Vec<crate::model::Manager>, Error> {
-        self.request_json(Method::GET, &["managers"], None::<&()>).await
+        self.request_json(Method::GET, &["managers"], None::<&()>)
+            .await
     }
 
     pub async fn create_manager(
@@ -808,7 +817,7 @@ impl ApiClient {
 }
 
 fn get_amp_api_base_url() -> Result<Url, Error> {
-    let url_str =
-        env::var("AMP_API_BASE_URL").unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
+    let url_str = env::var("AMP_API_BASE_URL")
+        .unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
     Url::parse(&url_str).map_err(Error::from)
 }

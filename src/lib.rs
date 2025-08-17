@@ -1,5 +1,5 @@
 pub mod client;
-pub mod model;
 pub mod mocks;
+pub mod model;
 
 pub use client::{ApiClient, Error};
