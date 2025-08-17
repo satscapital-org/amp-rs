@@ -41,11 +41,15 @@ pub struct ApiClient {
 impl ApiClient {
     pub fn new() -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        let client = Client::builder()
-            .user_agent("amp-rs-client/0.1.0")
-            .build()?;
         Ok(ApiClient {
-            client,
+            client: Client::new(),
+            base_url,
+        })
+    }
+
+    pub fn with_base_url(base_url: Url) -> Result<Self, Error> {
+        Ok(ApiClient {
+            client: Client::new(),
             base_url,
         })
     }
@@ -74,7 +78,7 @@ impl ApiClient {
 
         // Make POST request to obtain token
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("user/obtain_token");
+        url.path_segments_mut().unwrap().push("user").push("obtain_token");
 
         let response = self.client
             .post(url)
@@ -167,7 +171,7 @@ impl ApiClient {
         let token = self.get_token().await?;
 
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets/");
+        url.path_segments_mut().unwrap().push("assets");
 
         let response = self.client
             .get(url)
@@ -293,7 +297,7 @@ impl ApiClient {
         let token = self.get_token().await?;
 
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("registered_users/");
+        url.path_segments_mut().unwrap().push("registered_users");
 
         let response = self.client
             .get(url)
