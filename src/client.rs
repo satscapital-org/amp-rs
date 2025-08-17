@@ -4,11 +4,22 @@ use std::sync::Arc;
 use chrono::{DateTime, Duration, Utc};
 use once_cell::sync::OnceCell;
 use reqwest::header::AUTHORIZATION;
-use reqwest::{Client, Url};
+use reqwest::{Client, Method, Url};
+use serde::de::DeserializeOwned;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::model::{TokenRequest, TokenResponse};
+use secrecy::ExposeSecret;
+use secrecy::Secret;
+
+use crate::model::{
+    Activity, AddAssetToGroup, Asset, AssetActivityParams, AssetGroup, AssetPermission,
+    AssetSummary, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit, CategoryResponse,
+    ChangePasswordRequest, ChangePasswordResponse, CreateAssetGroup, CreateAssetPermission,
+    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Ownership, Password,
+    TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit, Utxo,
+    Outpoint,
+};
 
 static AMP_TOKEN: OnceCell<Arc<Mutex<Option<String>>>> = OnceCell::new();
 static AMP_TOKEN_EXPIRY: OnceCell<Arc<Mutex<Option<DateTime<Utc>>>>> = OnceCell::new();
@@ -54,18 +65,6 @@ impl ApiClient {
         })
     }
 
-    /// Obtains an API authentication token from Blockstream's AMP API
-    ///
-    /// This function retrieves credentials from environment variables `AMP_USERNAME` and `AMP_PASSWORD`,
-    /// makes a POST request to the `/user/obtain_token` endpoint, and stores the token securely.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Required environment variables are missing
-    /// - The HTTP request fails
-    /// - The API returns an error response
-    /// - JSON parsing fails
     pub async fn obtain_amp_token(&self) -> Result<String, Error> {
         // Get credentials from environment variables
         let username = env::var("AMP_USERNAME")
@@ -73,10 +72,8 @@ impl ApiClient {
         let password = env::var("AMP_PASSWORD")
             .map_err(|_| Error::MissingEnvVar("AMP_PASSWORD".to_string()))?;
 
-        // Prepare request payload
         let request_payload = TokenRequest { username, password };
 
-        // Make POST request to obtain token
         let mut url = self.base_url.clone();
         url.path_segments_mut().unwrap().push("user").push("obtain_token");
 
@@ -86,7 +83,6 @@ impl ApiClient {
             .send()
             .await?;
 
-        // Check if request was successful
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response
@@ -96,13 +92,11 @@ impl ApiClient {
             return Err(Error::TokenRequestFailed { status, error_text });
         }
 
-        // Parse response
         let token_response: TokenResponse = response
             .json()
             .await
             .map_err(|e| Error::ResponseParsingFailed(e.to_string()))?;
 
-        // Store token securely
         let token_storage = AMP_TOKEN.get_or_init(|| Arc::new(Mutex::new(None)));
         let expiry_storage = AMP_TOKEN_EXPIRY.get_or_init(|| Arc::new(Mutex::new(None)));
 
@@ -112,7 +106,6 @@ impl ApiClient {
             drop(token_guard);
 
             let mut expiry_guard = expiry_storage.lock().await;
-            // Set expiry to 1 day from now
             *expiry_guard = Some(Utc::now() + Duration::days(1));
         }
 
@@ -129,7 +122,7 @@ impl ApiClient {
             if let Some(expiry) = *expiry_guard {
                 Utc::now() > expiry
             } else {
-                true // No token or expiry, so it's "expired"
+                true
             }
         };
 
@@ -137,392 +130,601 @@ impl ApiClient {
             self.obtain_amp_token().await
         } else {
             let token_guard = token_storage.lock().await;
-            // The token must be Some if expiry is not None and not expired.
             Ok(token_guard.as_ref().unwrap().clone())
         }
     }
 
-    pub async fn get_changelog(&self) -> Result<serde_json::Value, Error> {
+    async fn request_raw(
+        &self,
+        method: Method,
+        path: &[&str],
+        body: Option<impl serde::Serialize>,
+    ) -> Result<reqwest::Response, Error> {
         let token = self.get_token().await?;
-
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("changelog");
+        url.path_segments_mut().unwrap().extend(path);
 
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
+        let mut request_builder = self
+            .client
+            .request(method, url)
+            .header(AUTHORIZATION, format!("token {}", token));
+
+        if let Some(body) = body {
+            request_builder = request_builder.json(&body);
+        }
+
+        let response = request_builder.send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::RequestFailed(format!(
-                "Changelog request failed with status {}: {}",
-                status, error_text
+                "Request to {:?} failed with status {}: {}",
+                path, status, error_text
             )));
         }
 
-        let changelog: serde_json::Value = response.json().await?;
-        Ok(changelog)
+        Ok(response)
     }
 
-    pub async fn get_assets(&self) -> Result<Vec<crate::model::Asset>, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets");
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get assets request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let assets: Vec<crate::model::Asset> = response.json().await?;
-        Ok(assets)
+    async fn request_json<T: DeserializeOwned>(
+        &self,
+        method: Method,
+        path: &[&str],
+        body: Option<impl serde::Serialize>,
+    ) -> Result<T, Error> {
+        let response = self.request_raw(method, path, body).await?;
+        response
+            .json()
+            .await
+            .map_err(|e| Error::ResponseParsingFailed(e.to_string()))
     }
 
-    pub async fn get_asset(&self, asset_uuid: &str) -> Result<crate::model::Asset, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets").push(asset_uuid);
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get asset request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let asset: crate::model::Asset = response.json().await?;
-        Ok(asset)
-    }
-
-    pub async fn issue_asset(&self, issuance_request: &crate::model::IssuanceRequest) -> Result<crate::model::IssuanceResponse, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets").push("issue");
-
-        let response = self.client
-            .post(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .json(issuance_request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Issue asset request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let issuance_response: crate::model::IssuanceResponse = response.json().await?;
-        Ok(issuance_response)
-    }
-
-    pub async fn edit_asset(&self, asset_uuid: &str, edit_asset_request: &crate::model::EditAssetRequest) -> Result<crate::model::Asset, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets").push(asset_uuid).push("edit");
-
-        let response = self.client
-            .put(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .json(edit_asset_request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Edit asset request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let asset: crate::model::Asset = response.json().await?;
-        Ok(asset)
-    }
-
-    pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("assets").push(asset_uuid).push("delete");
-
-        let response = self.client
-            .delete(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Delete asset request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
+    async fn request_empty(
+        &self,
+        method: Method,
+        path: &[&str],
+        body: Option<impl serde::Serialize>,
+    ) -> Result<(), Error> {
+        self.request_raw(method, path, body).await?;
         Ok(())
     }
 
-    pub async fn get_registered_users(&self) -> Result<Vec<crate::model::RegisteredUserResponse>, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("registered_users");
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get registered users request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let registered_users: Vec<crate::model::RegisteredUserResponse> = response.json().await?;
-        Ok(registered_users)
+    pub async fn get_changelog(&self) -> Result<serde_json::Value, Error> {
+        self.request_json(Method::GET, &["changelog"], None::<&()>)
+            .await
     }
 
-    pub async fn get_registered_user(&self, user_id: i64) -> Result<crate::model::RegisteredUserResponse, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("registered_users").push(&user_id.to_string());
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get registered user request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let registered_user: crate::model::RegisteredUserResponse = response.json().await?;
-        Ok(registered_user)
+    pub async fn user_change_password(
+        &self,
+        password: Secret<String>,
+    ) -> Result<ChangePasswordResponse, Error> {
+        let request = ChangePasswordRequest {
+            password: Secret::new(Password(password.expose_secret().clone())),
+        };
+        self.request_json(Method::POST, &["user", "change_password"], Some(request))
+            .await
     }
 
-    pub async fn add_registered_user(&self, new_user: &crate::model::RegisteredUserAdd) -> Result<crate::model::RegisteredUserResponse, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("registered_users").push("add");
-
-        let response = self.client
-            .post(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .json(new_user)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Add registered user request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let registered_user: crate::model::RegisteredUserResponse = response.json().await?;
-        Ok(registered_user)
+    pub async fn get_assets(&self) -> Result<Vec<Asset>, Error> {
+        self.request_json(Method::GET, &["assets"], None::<&()>)
+            .await
     }
 
-    pub async fn get_categories(&self) -> Result<Vec<crate::model::CategoryResponse>, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("categories");
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get categories request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let categories: Vec<crate::model::CategoryResponse> = response.json().await?;
-        Ok(categories)
+    pub async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid], None::<&()>)
+            .await
     }
 
-    pub async fn add_category(&self, new_category: &crate::model::CategoryAdd) -> Result<crate::model::CategoryResponse, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("categories").push("add");
-
-        let response = self.client
-            .post(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .json(new_category)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Add category request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let category: crate::model::CategoryResponse = response.json().await?;
-        Ok(category)
+    pub async fn issue_asset(
+        &self,
+        issuance_request: &IssuanceRequest,
+    ) -> Result<IssuanceResponse, Error> {
+        self.request_json(Method::POST, &["assets", "issue"], Some(issuance_request))
+            .await
     }
 
-    pub async fn validate_gaid(&self, gaid: &str) -> Result<crate::model::ValidateGaidResponse, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("gaids").push(gaid).push("validate");
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Validate GAID request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let validate_gaid_response: crate::model::ValidateGaidResponse = response.json().await?;
-        Ok(validate_gaid_response)
+    pub async fn edit_asset(
+        &self,
+        asset_uuid: &str,
+        edit_asset_request: &EditAssetRequest,
+    ) -> Result<Asset, Error> {
+        self.request_json(
+            Method::PUT,
+            &["assets", asset_uuid, "edit"],
+            Some(edit_asset_request),
+        )
+        .await
     }
 
-    pub async fn get_gaid_address(&self, gaid: &str) -> Result<crate::model::AddressGaidResponse, Error> {
-        let token = self.get_token().await?;
+    pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
+        self.request_empty(Method::DELETE, &["assets", asset_uuid, "delete"], None::<&()>)
+            .await
+    }
 
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("gaids").push(gaid).push("address");
+    pub async fn list_asset_permissions(&self) -> Result<Vec<AssetPermission>, Error> {
+        self.request_json(Method::GET, &["asset_permissions"], None::<&()>)
+            .await
+    }
 
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
+    pub async fn create_asset_permission(
+        &self,
+        create_asset_permission: &CreateAssetPermission,
+    ) -> Result<AssetPermission, Error> {
+        self.request_json(
+            Method::POST,
+            &["asset_permissions"],
+            Some(create_asset_permission),
+        )
+        .await
+    }
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get GAID address request failed with status {}: {}",
-                status, error_text
-            )));
+    pub async fn get_asset_permission(
+        &self,
+        asset_permission_id: i64,
+    ) -> Result<AssetPermission, Error> {
+        self.request_json(
+            Method::GET,
+            &["asset_permissions", &asset_permission_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn update_asset_permission(
+        &self,
+        asset_permission_id: i64,
+        update_asset_permission: &UpdateAssetPermission,
+    ) -> Result<AssetPermission, Error> {
+        self.request_json(
+            Method::PUT,
+            &["asset_permissions", &asset_permission_id.to_string()],
+            Some(update_asset_permission),
+        )
+        .await
+    }
+
+    pub async fn delete_asset_permission(&self, asset_permission_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["asset_permissions", &asset_permission_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn get_broadcast_status(&self, txid: &str) -> Result<BroadcastResponse, Error> {
+        self.request_json(Method::GET, &["tx", "broadcast", txid], None::<&()>)
+            .await
+    }
+
+    pub async fn broadcast_transaction(&self, tx_hex: &str) -> Result<BroadcastResponse, Error> {
+        self.request_json(Method::POST, &["tx", "broadcast"], Some(tx_hex))
+            .await
+    }
+
+    pub async fn list_audits(&self) -> Result<Vec<Audit>, Error> {
+        self.request_json(Method::GET, &["audits"], None::<&()>).await
+    }
+
+    pub async fn create_audit(&self, create_audit: &CreateAudit) -> Result<Audit, Error> {
+        self.request_json(Method::POST, &["audits"], Some(create_audit))
+            .await
+    }
+
+    pub async fn get_audit(&self, audit_id: i64) -> Result<Audit, Error> {
+        self.request_json(Method::GET, &["audits", &audit_id.to_string()], None::<&()>)
+            .await
+    }
+
+    pub async fn update_audit(
+        &self,
+        audit_id: i64,
+        update_audit: &UpdateAudit,
+    ) -> Result<Audit, Error> {
+        self.request_json(
+            Method::PUT,
+            &["audits", &audit_id.to_string()],
+            Some(update_audit),
+        )
+        .await
+    }
+
+    pub async fn delete_audit(&self, audit_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["audits", &audit_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn list_asset_groups(&self) -> Result<Vec<AssetGroup>, Error> {
+        self.request_json(Method::GET, &["asset_groups"], None::<&()>)
+            .await
+    }
+
+    pub async fn create_asset_group(
+        &self,
+        create_asset_group: &CreateAssetGroup,
+    ) -> Result<AssetGroup, Error> {
+        self.request_json(Method::POST, &["asset_groups"], Some(create_asset_group))
+            .await
+    }
+
+    pub async fn get_asset_group(&self, asset_group_id: i64) -> Result<AssetGroup, Error> {
+        self.request_json(
+            Method::GET,
+            &["asset_groups", &asset_group_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn update_asset_group(
+        &self,
+        asset_group_id: i64,
+        update_asset_group: &UpdateAssetGroup,
+    ) -> Result<AssetGroup, Error> {
+        self.request_json(
+            Method::PUT,
+            &["asset_groups", &asset_group_id.to_string()],
+            Some(update_asset_group),
+        )
+        .await
+    }
+
+    pub async fn delete_asset_group(&self, asset_group_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["asset_groups", &asset_group_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn add_asset_to_group(
+        &self,
+        asset_group_id: i64,
+        add_asset_to_group: &AddAssetToGroup,
+    ) -> Result<AssetGroup, Error> {
+        self.request_json(
+            Method::POST,
+            &["asset_groups", &asset_group_id.to_string(), "assets"],
+            Some(add_asset_to_group),
+        )
+        .await
+    }
+
+    pub async fn remove_asset_from_group(
+        &self,
+        asset_group_id: i64,
+        asset_uuid: &str,
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &[
+                "asset_groups",
+                &asset_group_id.to_string(),
+                "assets",
+                asset_uuid,
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid, "register"], None::<&()>)
+            .await
+    }
+
+    pub async fn register_asset_authorized(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "register-authorized"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn lock_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.request_json(Method::PUT, &["assets", asset_uuid, "lock"], None::<&()>)
+            .await
+    }
+
+    pub async fn unlock_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.request_json(Method::PUT, &["assets", asset_uuid, "unlock"], None::<&()>)
+            .await
+    }
+
+    pub async fn get_asset_activities(
+        &self,
+        asset_uuid: &str,
+        params: &AssetActivityParams,
+    ) -> Result<Vec<Activity>, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "activities"],
+            Some(params),
+        )
+        .await
+    }
+
+    pub async fn get_asset_ownerships(
+        &self,
+        asset_uuid: &str,
+        height: Option<i64>,
+    ) -> Result<Vec<Ownership>, Error> {
+        let mut path = vec!["assets", asset_uuid, "ownerships"];
+        let height_str;
+        if let Some(h) = height {
+            height_str = h.to_string();
+            path.push(&height_str);
         }
+        self.request_json(Method::GET, &path, None::<&()>).await
+    }
 
-        let address_gaid_response: crate::model::AddressGaidResponse = response.json().await?;
-        Ok(address_gaid_response)
+    pub async fn get_asset_balance(&self, asset_uuid: &str) -> Result<Balance, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid, "balance"], None::<&()>)
+            .await
+    }
+
+    pub async fn get_asset_summary(&self, asset_uuid: &str) -> Result<AssetSummary, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid, "summary"], None::<&()>)
+            .await
+    }
+
+    pub async fn get_asset_utxos(&self, asset_uuid: &str) -> Result<Vec<Utxo>, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid, "utxos"], None::<&()>)
+            .await
+    }
+
+    pub async fn blacklist_asset_utxos(
+        &self,
+        asset_uuid: &str,
+        utxos: &[Outpoint],
+    ) -> Result<Vec<Utxo>, Error> {
+        self.request_json(
+            Method::POST,
+            &["assets", asset_uuid, "utxos", "blacklist"],
+            Some(utxos),
+        )
+        .await
+    }
+
+    pub async fn whitelist_asset_utxos(
+        &self,
+        asset_uuid: &str,
+        utxos: &[Outpoint],
+    ) -> Result<Vec<Utxo>, Error> {
+        self.request_json(
+            Method::POST,
+            &["assets", asset_uuid, "utxos", "whitelist"],
+            Some(utxos),
+        )
+        .await
+    }
+
+    pub async fn get_asset_treasury_addresses(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<Vec<String>, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "treasury-addresses"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn add_asset_treasury_addresses(
+        &self,
+        asset_uuid: &str,
+        addresses: &[String],
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::POST,
+            &["assets", asset_uuid, "treasury-addresses", "add"],
+            Some(addresses),
+        )
+        .await
+    }
+
+    pub async fn delete_asset_treasury_addresses(
+        &self,
+        asset_uuid: &str,
+        addresses: &[String],
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["assets", asset_uuid, "treasury-addresses", "delete"],
+            Some(addresses),
+        )
+        .await
+    }
+
+    pub async fn get_registered_users(
+        &self,
+    ) -> Result<Vec<crate::model::RegisteredUserResponse>, Error> {
+        self.request_json(Method::GET, &["registered_users"], None::<&()>)
+            .await
+    }
+
+    pub async fn get_registered_user(
+        &self,
+        user_id: i64,
+    ) -> Result<crate::model::RegisteredUserResponse, Error> {
+        self.request_json(
+            Method::GET,
+            &["registered_users", &user_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn add_registered_user(
+        &self,
+        new_user: &crate::model::RegisteredUserAdd,
+    ) -> Result<crate::model::RegisteredUserResponse, Error> {
+        self.request_json(
+            Method::POST,
+            &["registered_users", "add"],
+            Some(new_user),
+        )
+        .await
+    }
+
+    pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
+        self.request_json(Method::GET, &["categories"], None::<&()>).await
+    }
+
+    pub async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error> {
+        self.request_json(Method::POST, &["categories", "add"], Some(new_category))
+            .await
+    }
+
+    pub async fn get_category(&self, category_id: i64) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::GET,
+            &["categories", &category_id.to_string()],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn edit_category(
+        &self,
+        category_id: i64,
+        edit_category: &CategoryEdit,
+    ) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &["categories", &category_id.to_string(), "edit"],
+            Some(edit_category),
+        )
+        .await
+    }
+
+    pub async fn delete_category(&self, category_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["categories", &category_id.to_string(), "delete"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn add_registered_user_to_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &[
+                "categories",
+                &category_id.to_string(),
+                "registered_users",
+                &user_id.to_string(),
+                "add",
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn remove_registered_user_from_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &[
+                "categories",
+                &category_id.to_string(),
+                "registered_users",
+                &user_id.to_string(),
+                "remove",
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn add_asset_to_category(
+        &self,
+        category_id: i64,
+        asset_uuid: &str,
+    ) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &[
+                "categories",
+                &category_id.to_string(),
+                "assets",
+                asset_uuid,
+                "add",
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn remove_asset_from_category(
+        &self,
+        category_id: i64,
+        asset_uuid: &str,
+    ) -> Result<CategoryResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &[
+                "categories",
+                &category_id.to_string(),
+                "assets",
+                asset_uuid,
+                "remove",
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn validate_gaid(
+        &self,
+        gaid: &str,
+    ) -> Result<crate::model::ValidateGaidResponse, Error> {
+        self.request_json(Method::GET, &["gaids", gaid, "validate"], None::<&()>)
+            .await
+    }
+
+    pub async fn get_gaid_address(
+        &self,
+        gaid: &str,
+    ) -> Result<crate::model::AddressGaidResponse, Error> {
+        self.request_json(Method::GET, &["gaids", gaid, "address"], None::<&()>)
+            .await
     }
 
     pub async fn get_managers(&self) -> Result<Vec<crate::model::Manager>, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("managers");
-
-        let response = self.client
-            .get(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Get managers request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let managers: Vec<crate::model::Manager> = response.json().await?;
-        Ok(managers)
+        self.request_json(Method::GET, &["managers"], None::<&()>).await
     }
 
-    pub async fn create_manager(&self, new_manager: &crate::model::ManagerCreate) -> Result<crate::model::Manager, Error> {
-        let token = self.get_token().await?;
-
-        let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().push("managers").push("create");
-
-        let response = self.client
-            .post(url)
-            .header(AUTHORIZATION, format!("token {}", token))
-            .json(new_manager)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Create manager request failed with status {}: {}",
-                status, error_text
-            )));
-        }
-
-        let manager: crate::model::Manager = response.json().await?;
-        Ok(manager)
+    pub async fn create_manager(
+        &self,
+        new_manager: &crate::model::ManagerCreate,
+    ) -> Result<crate::model::Manager, Error> {
+        self.request_json(Method::POST, &["managers", "create"], Some(new_manager))
+            .await
     }
 }
 
 fn get_amp_api_base_url() -> Result<Url, Error> {
-    let url_str = env::var("AMP_API_BASE_URL").unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
+    let url_str =
+        env::var("AMP_API_BASE_URL").unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
     Url::parse(&url_str).map_err(Error::from)
 }

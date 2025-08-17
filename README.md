@@ -1,49 +1,97 @@
-# Blockstream AMP API Client
+# AMP Client
 
 A Rust client for the Blockstream AMP API.
 
 ## Usage
 
-See the examples directory for usage.
+Add the following to your `Cargo.toml`:
 
-## Testing with Mocks
+```toml
+[dependencies]
+amp_client = "0.1.0"
+```
 
-This client provides a public `mocks` module that can be used by downstream applications for testing purposes. The mocks are built using `httpmock` and allow you to test your application's integration with the AMP API without making live network calls.
+## Examples
 
-To use the mocks in your tests, you will need to:
+For more detailed examples, please refer to the [crate documentation](https://docs.rs/amp-client).
 
-1.  Add `amp-rs` and `httpmock` to your `[dev-dependencies]` in `Cargo.toml`.
-2.  In your test, start a `MockServer` from `httpmock`.
-3.  Use the functions in the `amp_rs::mocks` module to set up the desired mock responses on the server.
-4.  Instantiate the `ApiClient` using `ApiClient::with_base_url`, passing it the URL of the mock server.
-
-### Example
+### Get a registered user
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use amp_rs::{mocks, ApiClient};
-    use httpmock::prelude::*;
-    use url::Url;
+use amp_client::client::ApiClient;
 
-    #[tokio::test]
-    async fn my_app_test() {
-        // Arrange
-        std::env::set_var("AMP_USERNAME", "mock_user");
-        std::env::set_var("AMP_PASSWORD", "mock_pass");
-        let server = MockServer::start();
-
-        mocks::mock_obtain_token(&server);
-        mocks::mock_get_assets(&server);
-
-        let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
-
-        // Act
-        let assets = client.get_assets().await;
-
-        // Assert
-        assert!(assets.is_ok());
-        assert!(!assets.unwrap().is_empty());
-    }
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let users = client.get_registered_users().await.unwrap();
+    let user_id = users.first().unwrap().id;
+    let user = client.get_registered_user(user_id).await.unwrap();
+    println!("{:?}", user);
 }
+```
+
+### Get an asset
+
+```rust
+use amp_client::client::ApiClient;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets.first().unwrap().asset_uuid.clone();
+    let asset = client.get_asset(&asset_uuid).await.unwrap();
+    println!("{:?}", asset);
+}
+```
+
+### Create a category
+
+```rust
+use amp_client::client::ApiClient;
+use amp_client::model::CategoryAdd;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let new_category = CategoryAdd {
+        name: "Test Category".to_string(),
+        description: Some("A test category".to_string()),
+    };
+    let category = client.add_category(&new_category).await.unwrap();
+    println!("{:?}", category);
+}
+```
+
+### List asset groups
+
+```rust
+use amp_client::client::ApiClient;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let asset_groups = client.list_asset_groups().await.unwrap();
+    println!("{:?}", asset_groups);
+}
+```
+
+## Testing
+
+To run the tests, you will need to set the `AMP_USERNAME` and `AMP_PASSWORD` environment variables.
+
+```
+AMP_USERNAME=... AMP_PASSWORD=... cargo test --features mocks
+```
+
+To run the live tests, you will also need to set the `AMP_TESTS` environment variable to `live`.
+
+```
+AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test --features mocks
+```
+
+Some tests that perform state-changing operations are ignored by default. To run them, use the `--ignored` flag.
+
+```
+AMP_USERNAME=... AMP_PASSWORD=... AMP_TESTS=live cargo test --features mocks -- --ignored
 ```
