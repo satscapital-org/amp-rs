@@ -14,11 +14,11 @@ use secrecy::Secret;
 
 use crate::model::{
     Activity, AddAssetToGroup, Asset, AssetActivityParams, AssetGroup, AssetPermission,
-    AssetSummary, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit, CategoryResponse,
-    ChangePasswordRequest, ChangePasswordResponse, CreateAssetGroup, CreateAssetPermission,
-    CreateAudit, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
-    Password, TokenRequest, TokenResponse, UpdateAssetGroup, UpdateAssetPermission, UpdateAudit,
-    Utxo,
+    AssetSummary, Assignment, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit,
+    CategoryResponse, ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest,
+    CreateAssetGroup, CreateAssetPermission, CreateAudit, EditAssetRequest, IssuanceRequest,
+    IssuanceResponse, Outpoint, Ownership, Password, TokenRequest, TokenResponse,
+    UpdateAssetGroup, UpdateAssetPermission, UpdateAudit, Utxo,
 };
 
 static AMP_TOKEN: OnceCell<Arc<Mutex<Option<String>>>> = OnceCell::new();
@@ -813,6 +813,19 @@ impl ApiClient {
     ) -> Result<crate::model::Manager, Error> {
         self.request_json(Method::POST, &["managers", "create"], Some(new_manager))
             .await
+    }
+
+    pub async fn create_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        request: &CreateAssetAssignmentRequest,
+    ) -> Result<Assignment, Error> {
+        self.request_json(
+            Method::POST,
+            &["assets", asset_uuid, "assignments"],
+            Some(request),
+        )
+        .await
     }
 }
 

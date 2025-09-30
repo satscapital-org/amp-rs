@@ -1024,6 +1024,99 @@ async fn test_broadcast_transaction_mock() {
 }
 
 #[tokio::test]
+#[ignore]
+async fn test_create_asset_assignment_live() {
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = ApiClient::new().unwrap();
+
+    // 1. Create an asset
+    let destination_address = "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string();
+    let pubkey = "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
+
+    let issuance_request = amp_rs::model::IssuanceRequest {
+        name: "Jules Test Asset".to_string(),
+        amount: 1000,
+        destination_address,
+        domain: "jules.test".to_string(),
+        ticker: "JTA".to_string(),
+        pubkey,
+        precision: Some(8),
+        is_confidential: Some(true),
+        is_reissuable: Some(false),
+        reissuance_amount: None,
+        reissuance_address: None,
+        transfer_restricted: Some(true),
+    };
+
+    let issued_asset = client.issue_asset(&issuance_request).await.unwrap();
+    let asset_uuid = issued_asset.asset_uuid;
+
+    // 2. Create a registered user
+    let new_user = amp_rs::model::RegisteredUserAdd {
+        name: "Test User for Assignment".to_string(),
+        gaid: None,
+        is_company: false,
+    };
+    let user = client.add_registered_user(&new_user).await.unwrap();
+    let user_id = user.id;
+
+    // 3. Create the assignment
+    let request = amp_rs::model::CreateAssetAssignmentRequest {
+        registered_user_id: user_id,
+        amount: 100,
+        is_locked: false,
+        vesting_timestamp: None,
+        comment: Some("Test assignment from Jules".to_string()),
+    };
+
+    let result = client.create_asset_assignment(&asset_uuid, &request).await;
+    println!("{:?}", result);
+    if let Err(e) = &result {
+        println!("Error: {:?}", e);
+    }
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_create_asset_assignment_mock() {
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_assets(&server);
+    mocks::mock_get_registered_users(&server);
+    mocks::mock_create_asset_assignment(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets.first().unwrap().asset_uuid.clone();
+    let users = client.get_registered_users().await.unwrap();
+    let user_id = users.first().unwrap().id;
+
+    let request = amp_rs::model::CreateAssetAssignmentRequest {
+        registered_user_id: user_id,
+        amount: 100,
+        is_locked: false,
+        vesting_timestamp: None,
+        comment: Some("Test assignment from Jules".to_string()),
+    };
+
+    let result = client.create_asset_assignment(&asset_uuid, &request).await;
+    assert!(result.is_ok());
+    let assignment = result.unwrap();
+    assert_eq!(assignment.id, 10);
+}
+
+#[tokio::test]
 async fn test_list_audits_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");

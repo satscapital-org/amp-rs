@@ -219,6 +219,15 @@ pub struct Distribution {
     pub transactions: Vec<Transaction>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct CreateAssetAssignmentRequest {
+    pub registered_user_id: i64,
+    pub amount: i64,
+    pub is_locked: bool,
+    pub vesting_timestamp: Option<i64>,
+    pub comment: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Assignment {
     pub id: i64,

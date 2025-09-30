@@ -16,6 +16,27 @@ pub fn mock_get_changelog(server: &MockServer) {
     });
 }
 
+pub fn mock_create_asset_assignment(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST).path("/assets/mock_asset_uuid/assignments");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+              "id": 10,
+              "registered_user": 13,
+              "amount": 100,
+              "receiving_address": "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26",
+              "distribution_uuid": null,
+              "ready_for_distribution": true,
+              "vesting_datetime": null,
+              "vesting_timestamp": null,
+              "has_vested": true,
+              "is_distributed": false,
+              "creator": 1
+            }));
+    });
+}
+
 pub fn mock_list_audits(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/audits");
