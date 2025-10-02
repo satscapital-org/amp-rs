@@ -1,0 +1,1 @@
+./gaid-scripts/sign.py

@@ -118,7 +118,6 @@ async fn test_get_asset_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_issue_asset_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -189,7 +188,6 @@ async fn test_issue_asset_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_edit_asset_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -255,7 +253,6 @@ async fn test_edit_asset_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_delete_asset_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -403,7 +400,6 @@ async fn test_get_registered_user_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_add_registered_user_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -485,7 +481,6 @@ async fn test_get_categories_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_add_category_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -638,7 +633,6 @@ async fn test_get_managers_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_create_manager_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
@@ -1024,7 +1018,6 @@ async fn test_broadcast_transaction_mock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_create_asset_assignment_live() {
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
