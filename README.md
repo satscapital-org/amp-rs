@@ -76,6 +76,44 @@ async fn main() {
 }
 ```
 
+## Configuration
+
+### Environment Variables
+
+The client can be configured using the following environment variables:
+
+#### Authentication (Required for live tests)
+- `AMP_USERNAME`: Username for AMP API authentication
+- `AMP_PASSWORD`: Password for AMP API authentication
+- `AMP_API_BASE_URL`: Base URL for the AMP API (default: `https://amp-test.blockstream.com/api`)
+
+#### Retry Configuration (Optional)
+- `API_RETRY_MAX_ATTEMPTS`: Maximum number of retry attempts (default: 3)
+- `API_RETRY_BASE_DELAY_MS`: Base delay between retries in milliseconds (default: 1000)
+- `API_RETRY_MAX_DELAY_MS`: Maximum delay between retries in milliseconds (default: 30000)
+- `API_REQUEST_TIMEOUT_SECONDS`: Request timeout in seconds (default: 10)
+
+#### Test Configuration
+- `AMP_TESTS`: Set to `live` to run tests against the actual API
+
+### Example Configuration
+
+```bash
+# Authentication
+export AMP_USERNAME=your_username
+export AMP_PASSWORD=your_password
+export AMP_API_BASE_URL=https://amp-test.blockstream.com/api
+
+# Retry configuration (optional)
+export API_RETRY_MAX_ATTEMPTS=5
+export API_RETRY_BASE_DELAY_MS=2000
+export API_RETRY_MAX_DELAY_MS=60000
+export API_REQUEST_TIMEOUT_SECONDS=30
+
+# Enable live tests
+export AMP_TESTS=live
+```
+
 ## Testing
 
 To run the tests, you will need to set the `AMP_USERNAME` and `AMP_PASSWORD` environment variables.

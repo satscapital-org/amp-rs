@@ -27,6 +27,8 @@ url = "2.2.2"
 zeroize = { version = "1.5", features = ["derive"] }
 httpmock = { version = "0.6.8" }
 dotenvy = "0.15"
+rand = "0.8"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+serial_test = "3.0"
 

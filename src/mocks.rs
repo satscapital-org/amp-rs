@@ -314,12 +314,63 @@ pub fn mock_create_manager(server: &MockServer) {
 pub fn mock_obtain_token(server: &MockServer) {
     server.mock(|when, then| {
         when.method(POST)
-            .path("/user/obtain_token")
-            .header("content-type", "application/json");
+            .path("/user/obtain_token");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
                 "token": "mock_token"
+            }));
+    });
+}
+
+pub fn mock_refresh_token(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/user/refresh_token")
+            .header("authorization", "token mock_token");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "token": "mock_refreshed_token"
+            }));
+    });
+}
+
+pub fn mock_obtain_token_with_rate_limiting(server: &MockServer, retry_after_seconds: u64) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/user/obtain_token")
+            .header("content-type", "application/json");
+        then.status(429)
+            .header("retry-after", retry_after_seconds.to_string())
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Too Many Requests"
+            }));
+    });
+}
+
+pub fn mock_obtain_token_server_error(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/user/obtain_token")
+            .header("content-type", "application/json");
+        then.status(500)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Internal Server Error"
+            }));
+    });
+}
+
+pub fn mock_refresh_token_failure(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/user/refresh_token");
+        then.status(401)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Invalid token"
             }));
     });
 }

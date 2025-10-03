@@ -6,6 +6,7 @@ use url::Url;
 
 #[tokio::test]
 async fn test_get_changelog_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -26,6 +27,7 @@ async fn test_get_changelog_live() {
 
 #[tokio::test]
 async fn test_get_changelog_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -38,10 +40,14 @@ async fn test_get_changelog_mock() {
     assert!(changelog.is_ok());
     let changelog_val = changelog.unwrap();
     assert!(changelog_val.as_object().unwrap().len() > 0);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_assets_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -60,6 +66,7 @@ async fn test_get_assets_live() {
 
 #[tokio::test]
 async fn test_get_assets_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -71,10 +78,14 @@ async fn test_get_assets_mock() {
 
     assert!(assets.is_ok());
     assert!(!assets.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_asset_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -98,6 +109,7 @@ async fn test_get_asset_live() {
 
 #[tokio::test]
 async fn test_get_asset_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -115,10 +127,14 @@ async fn test_get_asset_mock() {
     } else {
         panic!("mock_get_assets should have returned at least one asset");
     }
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_issue_asset_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -159,6 +175,7 @@ async fn test_issue_asset_live() {
 
 #[tokio::test]
 async fn test_issue_asset_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -185,10 +202,14 @@ async fn test_issue_asset_mock() {
     assert!(result.is_ok());
     let response = result.unwrap();
     assert_eq!(response.asset_uuid, "new_mock_asset_uuid");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_edit_asset_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -221,6 +242,7 @@ async fn test_edit_asset_live() {
 
 #[tokio::test]
 async fn test_edit_asset_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -250,10 +272,14 @@ async fn test_edit_asset_mock() {
     } else {
         panic!("mock_get_assets should have returned at least one asset");
     }
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_delete_asset_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -294,6 +320,7 @@ async fn test_delete_asset_live() {
 
 #[tokio::test]
 async fn test_delete_asset_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -320,10 +347,14 @@ async fn test_delete_asset_mock() {
     let issue_result = client.issue_asset(&issuance_request).await.unwrap();
     let delete_result = client.delete_asset(&issue_result.asset_uuid).await;
     assert!(delete_result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_registered_users_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -342,6 +373,7 @@ async fn test_get_registered_users_live() {
 
 #[tokio::test]
 async fn test_get_registered_users_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -353,10 +385,14 @@ async fn test_get_registered_users_mock() {
 
     assert!(registered_users.is_ok());
     assert!(!registered_users.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_registered_user_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -380,6 +416,7 @@ async fn test_get_registered_user_live() {
 
 #[tokio::test]
 async fn test_get_registered_user_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -397,10 +434,14 @@ async fn test_get_registered_user_mock() {
     } else {
         panic!("mock_get_registered_users should have returned at least one user");
     }
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_add_registered_user_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -427,6 +468,7 @@ async fn test_add_registered_user_live() {
 
 #[tokio::test]
 async fn test_add_registered_user_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -445,10 +487,14 @@ async fn test_add_registered_user_mock() {
     let added_user = result.unwrap();
     assert_eq!(added_user.id, 2);
     assert_eq!(added_user.name, "Test User");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_categories_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -467,6 +513,7 @@ async fn test_get_categories_live() {
 
 #[tokio::test]
 async fn test_get_categories_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -478,10 +525,14 @@ async fn test_get_categories_mock() {
 
     assert!(categories.is_ok());
     assert!(!categories.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_add_category_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -507,6 +558,7 @@ async fn test_add_category_live() {
 
 #[tokio::test]
 async fn test_add_category_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -524,10 +576,14 @@ async fn test_add_category_mock() {
     let added_category = result.unwrap();
     assert_eq!(added_category.id, 2);
     assert_eq!(added_category.name, "Test Category");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_validate_gaid_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -548,6 +604,7 @@ async fn test_validate_gaid_live() {
 
 #[tokio::test]
 async fn test_validate_gaid_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -560,10 +617,14 @@ async fn test_validate_gaid_mock() {
     assert!(result.is_ok());
     let response = result.unwrap();
     assert!(response.is_valid);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_gaid_address_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -584,6 +645,7 @@ async fn test_get_gaid_address_live() {
 
 #[tokio::test]
 async fn test_get_gaid_address_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -597,10 +659,14 @@ async fn test_get_gaid_address_mock() {
     let response = result.unwrap();
     assert!(!response.address.is_empty());
     assert_eq!(response.address, "mock_address");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_managers_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -619,6 +685,7 @@ async fn test_get_managers_live() {
 
 #[tokio::test]
 async fn test_get_managers_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -630,10 +697,14 @@ async fn test_get_managers_mock() {
 
     assert!(managers.is_ok());
     assert!(!managers.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_create_manager_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -659,6 +730,7 @@ async fn test_create_manager_live() {
 
 #[tokio::test]
 async fn test_create_manager_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -676,10 +748,14 @@ async fn test_create_manager_mock() {
     let created_manager = result.unwrap();
     assert_eq!(created_manager.id, 2);
     assert_eq!(created_manager.username, "test_manager");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_list_asset_groups_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -691,6 +767,7 @@ async fn test_list_asset_groups_live() {
 
 #[tokio::test]
 async fn test_create_and_delete_asset_group_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -708,6 +785,7 @@ async fn test_create_and_delete_asset_group_live() {
 
 #[tokio::test]
 async fn test_get_and_update_asset_group_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -736,6 +814,7 @@ async fn test_get_and_update_asset_group_live() {
 
 #[tokio::test]
 async fn test_list_asset_groups_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -746,10 +825,14 @@ async fn test_list_asset_groups_mock() {
     let result = client.list_asset_groups().await;
     assert!(result.is_ok());
     assert!(!result.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_create_asset_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -764,10 +847,14 @@ async fn test_create_asset_group_mock() {
     assert!(result.is_ok());
     let group = result.unwrap();
     assert_eq!(group.name, "test_group");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_asset_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -779,10 +866,14 @@ async fn test_get_asset_group_mock() {
     assert!(result.is_ok());
     let group = result.unwrap();
     assert_eq!(group.id, 1);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_update_asset_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -797,10 +888,14 @@ async fn test_update_asset_group_mock() {
     assert!(result.is_ok());
     let group = result.unwrap();
     assert_eq!(group.name, "updated_group_name");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_delete_asset_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -810,10 +905,14 @@ async fn test_delete_asset_group_mock() {
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
     let result = client.delete_asset_group(1).await;
     assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_add_asset_to_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -828,10 +927,14 @@ async fn test_add_asset_to_group_mock() {
     assert!(result.is_ok());
     let group = result.unwrap();
     assert!(group.assets.contains(&"mock_asset_uuid".to_string()));
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_remove_asset_from_group_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -841,10 +944,14 @@ async fn test_remove_asset_from_group_mock() {
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
     let result = client.remove_asset_from_group(1, "mock_asset_uuid").await;
     assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_list_asset_permissions_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -856,6 +963,7 @@ async fn test_list_asset_permissions_live() {
 
 #[tokio::test]
 async fn test_create_and_delete_asset_permission_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -881,6 +989,7 @@ async fn test_create_and_delete_asset_permission_live() {
 
 #[tokio::test]
 async fn test_get_and_update_asset_permission_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -920,6 +1029,7 @@ async fn test_get_and_update_asset_permission_live() {
 
 #[tokio::test]
 async fn test_list_asset_permissions_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -930,10 +1040,14 @@ async fn test_list_asset_permissions_mock() {
     let result = client.list_asset_permissions().await;
     assert!(result.is_ok());
     assert!(!result.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_create_asset_permission_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -951,10 +1065,14 @@ async fn test_create_asset_permission_mock() {
     assert!(result.is_ok());
     let permission = result.unwrap();
     assert_eq!(permission.permission, amp_rs::model::Permission::View);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_asset_permission_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -966,10 +1084,14 @@ async fn test_get_asset_permission_mock() {
     assert!(result.is_ok());
     let permission = result.unwrap();
     assert_eq!(permission.id, 1);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_update_asset_permission_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -987,10 +1109,14 @@ async fn test_update_asset_permission_mock() {
     assert!(result.is_ok());
     let permission = result.unwrap();
     assert_eq!(permission.permission, amp_rs::model::Permission::Transfer);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_delete_asset_permission_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1000,10 +1126,14 @@ async fn test_delete_asset_permission_mock() {
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
     let result = client.delete_asset_permission(1).await;
     assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_broadcast_transaction_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1015,10 +1145,14 @@ async fn test_broadcast_transaction_mock() {
     assert!(result.is_ok());
     let res = result.unwrap();
     assert_eq!(res.txid, "mock_txid");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_create_asset_assignment_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -1032,7 +1166,9 @@ async fn test_create_asset_assignment_live() {
     let client = ApiClient::new().unwrap();
 
     // 1. Create an asset
-    let destination_address = "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string();
+    let destination_address =
+        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+            .to_string();
     let pubkey = "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
 
     let issuance_request = amp_rs::model::IssuanceRequest {
@@ -1081,6 +1217,7 @@ async fn test_create_asset_assignment_live() {
 
 #[tokio::test]
 async fn test_create_asset_assignment_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1107,10 +1244,14 @@ async fn test_create_asset_assignment_mock() {
     assert!(result.is_ok());
     let assignment = result.unwrap();
     assert_eq!(assignment.id, 10);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_list_audits_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -1122,6 +1263,7 @@ async fn test_list_audits_live() {
 
 #[tokio::test]
 async fn test_create_and_delete_audit_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -1143,6 +1285,7 @@ async fn test_create_and_delete_audit_live() {
 
 #[tokio::test]
 async fn test_get_and_update_audit_live() {
+    dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -1175,6 +1318,7 @@ async fn test_get_and_update_audit_live() {
 
 #[tokio::test]
 async fn test_list_audits_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1185,10 +1329,14 @@ async fn test_list_audits_mock() {
     let result = client.list_audits().await;
     assert!(result.is_ok());
     assert!(!result.unwrap().is_empty());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_create_audit_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1204,10 +1352,14 @@ async fn test_create_audit_mock() {
     assert!(result.is_ok());
     let audit = result.unwrap();
     assert_eq!(audit.audit_type, "test_audit");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_audit_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1219,10 +1371,14 @@ async fn test_get_audit_mock() {
     assert!(result.is_ok());
     let audit = result.unwrap();
     assert_eq!(audit.id, 1);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_update_audit_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1237,10 +1393,14 @@ async fn test_update_audit_mock() {
     assert!(result.is_ok());
     let audit = result.unwrap();
     assert_eq!(audit.audit_status, "completed");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_delete_audit_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1250,10 +1410,14 @@ async fn test_delete_audit_mock() {
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
     let result = client.delete_audit(1).await;
     assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
 
 #[tokio::test]
 async fn test_get_broadcast_status_mock() {
+    dotenvy::from_filename_override(".env").ok();
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
     let server = MockServer::start();
@@ -1265,4 +1429,7 @@ async fn test_get_broadcast_status_mock() {
     assert!(result.is_ok());
     let res = result.unwrap();
     assert_eq!(res.txid, "mock_txid");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
 }
