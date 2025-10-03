@@ -63,18 +63,7 @@ async fn main() {
 }
 ```
 
-### List asset groups
 
-```rust
-use amp_client::client::ApiClient;
-
-#[tokio::main]
-async fn main() {
-    let client = ApiClient::new().unwrap();
-    let asset_groups = client.list_asset_groups().await.unwrap();
-    println!("{:?}", asset_groups);
-}
-```
 
 ## Configuration
 

@@ -388,27 +388,7 @@ pub struct BurnConfirmRequest {
     pub change_data: Vec<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct AssetGroup {
-    pub id: i64,
-    pub name: String,
-    pub assets: Vec<String>,
-}
 
-#[derive(Debug, Serialize)]
-pub struct CreateAssetGroup {
-    pub name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct UpdateAssetGroup {
-    pub name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AddAssetToGroup {
-    pub asset_uuid: String,
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -425,36 +405,9 @@ pub enum Permission {
     Permissions,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct AssetPermission {
-    pub id: i64,
-    pub manager: i64,
-    pub asset: Option<String>,
-    pub asset_group: Option<i64>,
-    pub permission: Permission,
-}
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Audit {
-    pub id: i64,
-    pub asset: String,
-    pub audit_type: String,
-    pub audit_status: String,
-    pub created: String,
-    pub updated: String,
-    pub blockheight: Option<i64>,
-}
 
-#[derive(Debug, Serialize)]
-pub struct CreateAudit {
-    pub asset_uuid: String,
-    pub audit_type: String,
-}
 
-#[derive(Debug, Serialize)]
-pub struct UpdateAudit {
-    pub audit_status: String,
-}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BroadcastResponse {
@@ -462,25 +415,7 @@ pub struct BroadcastResponse {
     pub hex: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CreateAssetPermission {
-    pub manager: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset_group: Option<i64>,
-    pub permission: Permission,
-}
 
-#[derive(Debug, Serialize)]
-pub struct UpdateAssetPermission {
-    pub manager: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset_group: Option<i64>,
-    pub permission: Permission,
-}
 
 /// Enhanced token data structure with secure storage and timestamp tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]

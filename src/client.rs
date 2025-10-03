@@ -15,12 +15,10 @@ use secrecy::ExposeSecret;
 use secrecy::Secret;
 
 use crate::model::{
-    Activity, AddAssetToGroup, Asset, AssetActivityParams, AssetGroup, AssetPermission,
-    AssetSummary, Assignment, Audit, Balance, BroadcastResponse, CategoryAdd, CategoryEdit,
-    CategoryResponse, ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest,
-    CreateAssetGroup, CreateAssetPermission, CreateAudit, EditAssetRequest, IssuanceRequest,
-    IssuanceResponse, Outpoint, Ownership, Password, TokenData, TokenInfo, TokenRequest, TokenResponse, UpdateAssetGroup,
-    UpdateAssetPermission, UpdateAudit, Utxo,
+    Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse, 
+    CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest, ChangePasswordResponse, 
+    CreateAssetAssignmentRequest, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint, 
+    Ownership, Password, TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
 
@@ -1198,56 +1196,7 @@ impl ApiClient {
         .await
     }
 
-    pub async fn list_asset_permissions(&self) -> Result<Vec<AssetPermission>, Error> {
-        self.request_json(Method::GET, &["asset_permissions"], None::<&()>)
-            .await
-    }
 
-    pub async fn create_asset_permission(
-        &self,
-        create_asset_permission: &CreateAssetPermission,
-    ) -> Result<AssetPermission, Error> {
-        self.request_json(
-            Method::POST,
-            &["asset_permissions"],
-            Some(create_asset_permission),
-        )
-        .await
-    }
-
-    pub async fn get_asset_permission(
-        &self,
-        asset_permission_id: i64,
-    ) -> Result<AssetPermission, Error> {
-        self.request_json(
-            Method::GET,
-            &["asset_permissions", &asset_permission_id.to_string()],
-            None::<&()>,
-        )
-        .await
-    }
-
-    pub async fn update_asset_permission(
-        &self,
-        asset_permission_id: i64,
-        update_asset_permission: &UpdateAssetPermission,
-    ) -> Result<AssetPermission, Error> {
-        self.request_json(
-            Method::PUT,
-            &["asset_permissions", &asset_permission_id.to_string()],
-            Some(update_asset_permission),
-        )
-        .await
-    }
-
-    pub async fn delete_asset_permission(&self, asset_permission_id: i64) -> Result<(), Error> {
-        self.request_empty(
-            Method::DELETE,
-            &["asset_permissions", &asset_permission_id.to_string()],
-            None::<&()>,
-        )
-        .await
-    }
 
     pub async fn get_broadcast_status(&self, txid: &str) -> Result<BroadcastResponse, Error> {
         self.request_json(Method::GET, &["tx", "broadcast", txid], None::<&()>)
@@ -1259,117 +1208,17 @@ impl ApiClient {
             .await
     }
 
-    pub async fn list_audits(&self) -> Result<Vec<Audit>, Error> {
-        self.request_json(Method::GET, &["audits"], None::<&()>)
-            .await
-    }
 
-    pub async fn create_audit(&self, create_audit: &CreateAudit) -> Result<Audit, Error> {
-        self.request_json(Method::POST, &["audits"], Some(create_audit))
-            .await
-    }
 
-    pub async fn get_audit(&self, audit_id: i64) -> Result<Audit, Error> {
-        self.request_json(Method::GET, &["audits", &audit_id.to_string()], None::<&()>)
-            .await
-    }
 
-    pub async fn update_audit(
-        &self,
-        audit_id: i64,
-        update_audit: &UpdateAudit,
-    ) -> Result<Audit, Error> {
-        self.request_json(
-            Method::PUT,
-            &["audits", &audit_id.to_string()],
-            Some(update_audit),
-        )
-        .await
-    }
 
-    pub async fn delete_audit(&self, audit_id: i64) -> Result<(), Error> {
-        self.request_empty(
-            Method::DELETE,
-            &["audits", &audit_id.to_string()],
-            None::<&()>,
-        )
-        .await
-    }
 
-    pub async fn list_asset_groups(&self) -> Result<Vec<AssetGroup>, Error> {
-        self.request_json(Method::GET, &["asset_groups"], None::<&()>)
-            .await
-    }
 
-    pub async fn create_asset_group(
-        &self,
-        create_asset_group: &CreateAssetGroup,
-    ) -> Result<AssetGroup, Error> {
-        self.request_json(Method::POST, &["asset_groups"], Some(create_asset_group))
-            .await
-    }
 
-    pub async fn get_asset_group(&self, asset_group_id: i64) -> Result<AssetGroup, Error> {
-        self.request_json(
-            Method::GET,
-            &["asset_groups", &asset_group_id.to_string()],
-            None::<&()>,
-        )
-        .await
-    }
 
-    pub async fn update_asset_group(
-        &self,
-        asset_group_id: i64,
-        update_asset_group: &UpdateAssetGroup,
-    ) -> Result<AssetGroup, Error> {
-        self.request_json(
-            Method::PUT,
-            &["asset_groups", &asset_group_id.to_string()],
-            Some(update_asset_group),
-        )
-        .await
-    }
 
-    pub async fn delete_asset_group(&self, asset_group_id: i64) -> Result<(), Error> {
-        self.request_empty(
-            Method::DELETE,
-            &["asset_groups", &asset_group_id.to_string()],
-            None::<&()>,
-        )
-        .await
-    }
 
-    pub async fn add_asset_to_group(
-        &self,
-        asset_group_id: i64,
-        add_asset_to_group: &AddAssetToGroup,
-    ) -> Result<AssetGroup, Error> {
-        self.request_json(
-            Method::POST,
-            &["asset_groups", &asset_group_id.to_string(), "assets"],
-            Some(add_asset_to_group),
-        )
-        .await
-    }
 
-    pub async fn remove_asset_from_group(
-        &self,
-        asset_group_id: i64,
-        asset_uuid: &str,
-    ) -> Result<(), Error> {
-        self.request_empty(
-            Method::DELETE,
-            &[
-                "asset_groups",
-                &asset_group_id.to_string(),
-                "assets",
-                asset_uuid,
-            ],
-            None::<&()>,
-        )
-        .await
-    }
 
     pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(
