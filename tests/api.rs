@@ -109,7 +109,7 @@ async fn test_get_asset_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let assets = client.get_assets().await.unwrap();
 
     if let Some(asset_to_test) = assets.first() {
@@ -166,7 +166,7 @@ async fn test_issue_asset_live() {
     let destination_address =
         env::var("DESTINATION_ADDRESS").expect("DESTINATION_ADDRESS must be set for this test");
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset".to_string(),
         amount: 1000,
@@ -237,7 +237,7 @@ async fn test_edit_asset_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let assets = client.get_assets().await.unwrap();
 
     if let Some(asset_to_edit) = assets.first() {
@@ -310,7 +310,7 @@ async fn test_delete_asset_live() {
     let destination_address =
         env::var("DESTINATION_ADDRESS").expect("DESTINATION_ADDRESS must be set for this test");
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset to Delete".to_string(),
         amount: 1000,
@@ -416,7 +416,7 @@ async fn test_get_registered_user_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let registered_users = client.get_registered_users().await.unwrap();
 
     if let Some(user_to_test) = registered_users.first() {
@@ -468,7 +468,7 @@ async fn test_add_registered_user_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let new_user = amp_rs::model::RegisteredUserAdd {
         name: "Test User".to_string(),
         gaid: None,
@@ -630,7 +630,7 @@ async fn test_validate_gaid_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.validate_gaid(gaid).await;
     assert!(result.is_ok());
@@ -671,7 +671,7 @@ async fn test_get_gaid_address_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.get_gaid_address(gaid).await;
     assert!(result.is_ok());
@@ -713,7 +713,7 @@ async fn test_get_managers_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let managers = client.get_managers().await;
 
     assert!(managers.is_ok());
@@ -799,7 +799,7 @@ async fn test_create_asset_assignment_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
 
     // 1. Create an asset
     let destination_address =

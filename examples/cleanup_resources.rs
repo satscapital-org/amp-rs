@@ -1,6 +1,5 @@
 use amp_rs::ApiClient;
 use std::env;
-use std::io::{self, Write};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,13 +21,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Show what will be cleaned up
     show_cleanup_preview(&client).await?;
 
-    // Get user confirmation
-    if !get_user_confirmation()? {
-        println!("Cleanup cancelled.");
-        return Ok(());
-    }
+    println!("⚠️  DANGER: This will COMPLETELY WIPE your AMP environment!");
+    println!("⚠️  ALL resources will be permanently deleted!");
+    println!("⚠️  Managers will remain but all other resources will be deleted!");
+    println!("⚠️  This action cannot be undone!");
+    println!("\n🚀 Proceeding with automatic cleanup...\n");
 
-    // Perform cleanup
+    // Perform cleanup automatically
     perform_cleanup(&client).await?;
 
     println!("\n✅ Cleanup completed!");
@@ -93,20 +92,7 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-fn get_user_confirmation() -> Result<bool, Box<dyn std::error::Error>> {
-    println!("⚠️  DANGER: This will COMPLETELY WIPE your AMP environment!");
-    println!("⚠️  ALL resources will be permanently deleted!");
-    println!("⚠️  Managers will remain but all other resources will be deleted!");
-    println!("⚠️  This action cannot be undone!");
-    println!();
-    print!("Are you sure you want to proceed? Type 'DELETE' to confirm: ");
-    io::stdout().flush()?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-
-    Ok(input.trim() == "DELETE")
-}
 
 async fn perform_cleanup(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🧹 Starting complete cleanup...\n");
