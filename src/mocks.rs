@@ -387,3 +387,50 @@ pub fn mock_get_asset(server: &MockServer) {
             }));
     });
 }
+
+pub fn mock_get_manager(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/managers/1");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "username": "mock_manager",
+                "is_locked": false,
+                "assets": ["asset_uuid_1", "asset_uuid_2"]
+            }));
+    });
+}
+
+pub fn mock_manager_remove_asset(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST).path("/managers/1/assets/asset_uuid_1/remove");
+        then.status(200);
+    });
+    
+    server.mock(|when, then| {
+        when.method(POST).path("/managers/1/assets/asset_uuid_2/remove");
+        then.status(200);
+    });
+}
+
+pub fn mock_get_current_manager_raw(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/managers/me");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "username": "current_manager",
+                "is_locked": false,
+                "assets": ["asset_uuid_1"]
+            }));
+    });
+}
+
+pub fn mock_unlock_manager(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/unlock");
+        then.status(200);
+    });
+}

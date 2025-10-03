@@ -2,7 +2,20 @@ use amp_rs::mocks;
 use amp_rs::ApiClient;
 use httpmock::prelude::*;
 use std::env;
+use std::sync::Arc;
 use url::Url;
+use tokio::sync::OnceCell;
+
+// Shared token manager for live tests to avoid token conflicts
+static SHARED_TOKEN_MANAGER: OnceCell<Arc<amp_rs::client::TokenManager>> = OnceCell::const_new();
+
+async fn get_shared_client() -> Result<ApiClient, amp_rs::client::Error> {
+    let token_manager = SHARED_TOKEN_MANAGER.get_or_init(|| async {
+        Arc::new(amp_rs::client::TokenManager::new().expect("Failed to create token manager"))
+    }).await;
+    
+    ApiClient::with_token_manager(Arc::clone(token_manager))
+}
 
 #[tokio::test]
 async fn test_get_changelog_live() {
@@ -17,7 +30,7 @@ async fn test_get_changelog_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let changelog = client.get_changelog().await;
 
     assert!(changelog.is_ok());
@@ -58,7 +71,7 @@ async fn test_get_assets_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let assets = client.get_assets().await;
 
     assert!(assets.is_ok());
@@ -365,7 +378,7 @@ async fn test_get_registered_users_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let registered_users = client.get_registered_users().await;
 
     assert!(registered_users.is_ok());
@@ -505,10 +518,12 @@ async fn test_get_categories_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
     let categories = client.get_categories().await;
 
     assert!(categories.is_ok());
+    let categories_val = categories.unwrap();
+    println!("Existing categories: {:?}", categories_val);
 }
 
 #[tokio::test]
@@ -546,14 +561,35 @@ async fn test_add_category_live() {
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
 
-    let client = ApiClient::new().unwrap();
+    let client = get_shared_client().await.unwrap();
+    
+    // Use a unique name with timestamp to avoid conflicts
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    
     let new_category = amp_rs::model::CategoryAdd {
-        name: "Test Category".to_string(),
+        name: format!("Test Category {}", timestamp),
         description: Some("Test category description".to_string()),
     };
 
+    println!("Attempting to add category: {:?}", new_category);
     let result = client.add_category(&new_category).await;
+    if let Err(e) = &result {
+        println!("Error: {:?}", e);
+    }
     assert!(result.is_ok());
+    
+    // Clean up: delete the created category
+    let created_category = result.unwrap();
+    println!("Cleaning up: deleting category with ID {}", created_category.id);
+    let delete_result = client.delete_category(created_category.id).await;
+    if let Err(e) = &delete_result {
+        println!("Warning: Failed to delete category: {:?}", e);
+    } else {
+        println!("Successfully deleted test category");
+    }
 }
 
 #[tokio::test]
@@ -681,6 +717,8 @@ async fn test_get_managers_live() {
     let managers = client.get_managers().await;
 
     assert!(managers.is_ok());
+    let managers_val = managers.unwrap();
+    println!("Existing managers: {:?}", managers_val);
 }
 
 #[tokio::test]
@@ -702,31 +740,7 @@ async fn test_get_managers_mock() {
     dotenvy::from_filename_override(".env").ok();
 }
 
-#[tokio::test]
-async fn test_create_manager_live() {
-    dotenvy::from_filename_override(".env").ok();
-    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
-        println!("Skipping live test");
-        return;
-    }
-    // This test is ignored by default because it performs a state-changing operation.
-    // To run this test:
-    // 1. Set the `AMP_USERNAME` and `AMP_PASSWORD` environment variables.
-    // 2. Run `cargo test -- --ignored`.
 
-    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
-        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
-    }
-
-    let client = ApiClient::new().unwrap();
-    let new_manager = amp_rs::model::ManagerCreate {
-        username: "test_manager".to_string(),
-        password: "password".to_string(),
-    };
-
-    let result = client.create_manager(&new_manager).await;
-    assert!(result.is_ok());
-}
 
 #[tokio::test]
 async fn test_create_manager_mock() {
@@ -885,6 +899,98 @@ async fn test_get_broadcast_status_mock() {
     assert!(result.is_ok());
     let res = result.unwrap();
     assert_eq!(res.txid, "mock_txid");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+#[tokio::test]
+async fn test_get_manager_mock() {
+    dotenvy::from_filename_override(".env").ok();
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_manager(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let result = client.get_manager(1).await;
+    assert!(result.is_ok());
+    let manager = result.unwrap();
+    assert_eq!(manager.id, 1);
+    assert_eq!(manager.username, "mock_manager");
+    assert_eq!(manager.assets.len(), 2);
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_manager_remove_asset_mock() {
+    dotenvy::from_filename_override(".env").ok();
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_manager_remove_asset(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let result = client.manager_remove_asset(1, "asset_uuid_1").await;
+    assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_revoke_manager_mock() {
+    dotenvy::from_filename_override(".env").ok();
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_manager(&server);
+    mocks::mock_manager_remove_asset(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let result = client.revoke_manager(1).await;
+    assert!(result.is_ok());
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_get_current_manager_raw_mock() {
+    dotenvy::from_filename_override(".env").ok();
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_current_manager_raw(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let result = client.get_current_manager_raw().await;
+    assert!(result.is_ok());
+    let manager_json = result.unwrap();
+    assert_eq!(manager_json["id"], 1);
+    assert_eq!(manager_json["username"], "current_manager");
+    
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_unlock_manager_mock() {
+    dotenvy::from_filename_override(".env").ok();
+    std::env::set_var("AMP_USERNAME", "mock_user");
+    std::env::set_var("AMP_PASSWORD", "mock_pass");
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_unlock_manager(&server);
+
+    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
+    let result = client.unlock_manager(1).await;
+    assert!(result.is_ok());
     
     // Cleanup: reload .env file
     dotenvy::from_filename_override(".env").ok();

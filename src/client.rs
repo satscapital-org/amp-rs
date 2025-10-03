@@ -1551,6 +1551,107 @@ impl ApiClient {
         )
         .await
     }
+
+    /// Gets a specific manager by ID.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager to retrieve
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed as JSON
+    pub async fn get_manager(&self, manager_id: i64) -> Result<crate::model::Manager, Error> {
+        self.request_json(Method::GET, &["managers", &manager_id.to_string()], None::<&()>)
+            .await
+    }
+
+    /// Removes a manager's permissions to modify a specific asset.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager
+    /// * `asset_uuid` - The UUID of the asset to remove permissions for
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    pub async fn manager_remove_asset(
+        &self,
+        manager_id: i64,
+        asset_uuid: &str,
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::POST,
+            &["managers", &manager_id.to_string(), "assets", asset_uuid, "remove"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Revokes all asset permissions for a manager.
+    ///
+    /// This method first retrieves the manager's current asset permissions,
+    /// then removes the manager's access to each asset they currently have access to.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager to revoke permissions for
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - Any individual asset removal fails
+    pub async fn revoke_manager(&self, manager_id: i64) -> Result<(), Error> {
+        // First, get the manager to see which assets they have access to
+        let manager = self.get_manager(manager_id).await?;
+
+        // Remove the manager's access to each asset
+        for asset_uuid in &manager.assets {
+            self.manager_remove_asset(manager_id, asset_uuid).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Gets the current manager information as raw JSON.
+    ///
+    /// This method calls the `/managers/me` endpoint to retrieve information
+    /// about the currently authenticated manager.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed as JSON
+    pub async fn get_current_manager_raw(&self) -> Result<serde_json::Value, Error> {
+        self.request_json(Method::GET, &["managers", "me"], None::<&()>)
+            .await
+    }
+
+    /// Unlocks a manager account.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager to unlock
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    pub async fn unlock_manager(&self, manager_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::PUT,
+            &["managers", &manager_id.to_string(), "unlock"],
+            None::<&()>,
+        )
+        .await
+    }
 }
 
 fn get_amp_api_base_url() -> Result<Url, Error> {
