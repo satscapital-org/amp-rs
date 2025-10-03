@@ -1381,6 +1381,15 @@ impl ApiClient {
             .await
     }
 
+    pub async fn delete_registered_user(&self, user_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["registered_users", &user_id.to_string(), "delete"],
+            None::<&()>,
+        )
+        .await
+    }
+
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
         self.request_json(Method::GET, &["categories"], None::<&()>)
             .await
