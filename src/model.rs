@@ -493,7 +493,7 @@ impl From<&TokenData> for TokenInfo {
 
 /// Custom serialization module for Secret<String>
 pub mod secret_serde {
-    use super::{Serializer, Secret, Serialize, Deserializer, Deserialize};
+    use super::{Deserialize, Deserializer, Secret, Serialize, Serializer};
 
     /// # Errors
     /// Returns an error if serialization fails

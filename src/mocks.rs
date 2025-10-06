@@ -103,7 +103,11 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
             // Custom matcher to validate multiple assignments
             .matches(|req| {
                 let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
-                body.map_or(false, |json| json.get("assignments").and_then(|v| v.as_array()).map_or(false, |assignments| assignments.len() > 1))
+                body.map_or(false, |json| {
+                    json.get("assignments")
+                        .and_then(|v| v.as_array())
+                        .map_or(false, |assignments| assignments.len() > 1)
+                })
             });
         then.status(200)
             .header("content-type", "application/json")

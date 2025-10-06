@@ -116,9 +116,7 @@ impl TokenError {
     pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::RefreshFailed(_)
-                | Self::RateLimited { .. }
-                | Self::Timeout { .. }
+            Self::RefreshFailed(_) | Self::RateLimited { .. } | Self::Timeout { .. }
         )
     }
 
