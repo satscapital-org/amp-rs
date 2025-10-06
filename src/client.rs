@@ -633,16 +633,21 @@ impl TokenManager {
     /// Determines whether we need to refresh or obtain a new token
     async fn determine_token_operation(&self) -> bool {
         let token_guard = self.token_data.lock().await;
-        token_guard.as_ref().map_or_else(|| {
-            tracing::info!("No token exists, will obtain new token");
-            false
-        }, |token_data| if token_data.is_expired() {
-            tracing::info!("Token is expired, will obtain new token");
-            false
-        } else {
-            tracing::info!("Token expires soon, will attempt refresh");
-            true
-        })
+        token_guard.as_ref().map_or_else(
+            || {
+                tracing::info!("No token exists, will obtain new token");
+                false
+            },
+            |token_data| {
+                if token_data.is_expired() {
+                    tracing::info!("Token is expired, will obtain new token");
+                    false
+                } else {
+                    tracing::info!("Token expires soon, will attempt refresh");
+                    true
+                }
+            },
+        )
     }
 
     /// Obtains a new authentication token using environment credentials with retry logic
@@ -693,9 +698,9 @@ impl TokenManager {
         let url = self.build_obtain_token_url();
         let response = self.execute_token_request(&url, &request_payload).await?;
         let token_response = self.parse_token_response(response).await?;
-        
+
         self.store_token_data(&token_response.token).await;
-        
+
         tracing::info!("New authentication token obtained successfully");
         Ok(token_response.token)
     }
@@ -706,7 +711,7 @@ impl TokenManager {
             .map_err(|_| Error::MissingEnvVar("AMP_USERNAME".to_string()))?;
         let password = env::var("AMP_PASSWORD")
             .map_err(|_| Error::MissingEnvVar("AMP_PASSWORD".to_string()))?;
-        
+
         Ok(TokenRequest { username, password })
     }
 
@@ -721,7 +726,11 @@ impl TokenManager {
     }
 
     /// Executes the token request with retry logic
-    async fn execute_token_request(&self, url: &Url, request_payload: &TokenRequest) -> Result<reqwest::Response, Error> {
+    async fn execute_token_request(
+        &self,
+        url: &Url,
+        request_payload: &TokenRequest,
+    ) -> Result<reqwest::Response, Error> {
         let response = self
             .retry_client
             .execute_with_retry(|| {
@@ -746,7 +755,10 @@ impl TokenManager {
     }
 
     /// Parses the token response from the API
-    async fn parse_token_response(&self, response: reqwest::Response) -> Result<TokenResponse, Error> {
+    async fn parse_token_response(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<TokenResponse, Error> {
         response
             .json()
             .await
@@ -821,7 +833,9 @@ impl TokenManager {
     /// Gets the current token for refresh operations
     async fn get_current_token_for_refresh(&self) -> Option<String> {
         let token_guard = self.token_data.lock().await;
-        token_guard.as_ref().map(|token_data| token_data.token.expose_secret().clone())
+        token_guard
+            .as_ref()
+            .map(|token_data| token_data.token.expose_secret().clone())
     }
 
     /// Builds the URL for token refresh endpoint
@@ -835,7 +849,11 @@ impl TokenManager {
     }
 
     /// Executes the refresh request with retry logic
-    async fn execute_refresh_request(&self, url: &Url, current_token: &str) -> Result<reqwest::Response, TokenError> {
+    async fn execute_refresh_request(
+        &self,
+        url: &Url,
+        current_token: &str,
+    ) -> Result<reqwest::Response, TokenError> {
         self.retry_client
             .execute_with_retry(|| {
                 self.retry_client
