@@ -4587,23 +4587,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_token_request_response_types() {
-        // Test that our types serialize/deserialize correctly
-        let token_request = TokenRequest {
-            username: "test".to_string(),
-            password: "pass".to_string(),
-        };
-
-        let json = serde_json::to_string(&token_request).unwrap();
-        assert!(json.contains("username"));
-        assert!(json.contains("password"));
-
-        let token_response_json = r#"{"token": "test_token"}"#;
-        let token_response: TokenResponse = serde_json::from_str(token_response_json).unwrap();
-        assert_eq!(token_response.token, "test_token");
-    }
-
-    #[tokio::test]
     async fn test_issuance_types() {
         // Test Issuance struct serialization
         let issuance = Issuance {

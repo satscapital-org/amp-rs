@@ -8,8 +8,7 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, OnceCell};
 use url::Url;
 
-// Shared token manager for live tests to avoid rate limiting issues
-static SHARED_TOKEN_MANAGER: OnceCell<Arc<amp_rs::client::TokenManager>> = OnceCell::const_new();
+
 static ENV_SETUP_LOCK: OnceCell<Arc<Mutex<()>>> = OnceCell::const_new();
 
 async fn get_shared_client() -> Result<ApiClient, amp_rs::client::Error> {
@@ -23,14 +22,7 @@ async fn get_shared_client() -> Result<ApiClient, amp_rs::client::Error> {
     // This ensures live tests always use the correct credentials from the .env file
     dotenvy::from_filename_override(".env").ok();
 
-    // Get or create the shared token manager (only created once with correct environment)
-    let token_manager = SHARED_TOKEN_MANAGER
-        .get_or_init(|| async {
-            Arc::new(amp_rs::client::TokenManager::new().expect("Failed to create token manager"))
-        })
-        .await;
-
-    ApiClient::with_token_manager(Arc::clone(token_manager))
+    ApiClient::new()
 }
 
 /// Helper function to get a destination address for a specific GAID using address.py
