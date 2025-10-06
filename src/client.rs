@@ -258,25 +258,29 @@ impl RetryConfig {
     }
 
     /// Sets a custom timeout value
-    pub fn with_timeout(mut self, timeout_seconds: u64) -> Self {
+    #[must_use]
+    pub const fn with_timeout(mut self, timeout_seconds: u64) -> Self {
         self.timeout_seconds = timeout_seconds;
         self
     }
 
     /// Sets custom max attempts
-    pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
     }
 
     /// Sets custom base delay
-    pub fn with_base_delay_ms(mut self, base_delay_ms: u64) -> Self {
+    #[must_use]
+    pub const fn with_base_delay_ms(mut self, base_delay_ms: u64) -> Self {
         self.base_delay_ms = base_delay_ms;
         self
     }
 
     /// Sets custom max delay
-    pub fn with_max_delay_ms(mut self, max_delay_ms: u64) -> Self {
+    #[must_use]
+    pub const fn with_max_delay_ms(mut self, max_delay_ms: u64) -> Self {
         self.max_delay_ms = max_delay_ms;
         self
     }
@@ -290,7 +294,8 @@ pub struct RetryClient {
 }
 
 impl RetryClient {
-    /// Creates a new RetryClient with the given configuration
+    /// Creates a new `RetryClient` with the given configuration
+    #[must_use]
     pub fn new(config: RetryConfig) -> Self {
         Self {
             client: Client::new(),
@@ -298,12 +303,14 @@ impl RetryClient {
         }
     }
 
-    /// Creates a new RetryClient with default configuration
+    /// Creates a new `RetryClient` with default configuration
+    #[must_use]
     pub fn with_default_config() -> Self {
         Self::new(RetryConfig::default())
     }
 
-    /// Creates a new RetryClient with test-optimized configuration
+    /// Creates a new `RetryClient` with test-optimized configuration
+    #[must_use]
     pub fn for_tests() -> Self {
         Self::new(RetryConfig::for_tests())
     }
@@ -345,7 +352,7 @@ impl RetryClient {
 
                     // Handle rate limiting (429 Too Many Requests)
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        let retry_after = self.extract_retry_after(&response).unwrap_or(60);
+                        let retry_after = Self::extract_retry_after(&response).unwrap_or(60);
 
                         tracing::warn!(
                             "Rate limited (429) on attempt {}/{}. Retry after {} seconds",
@@ -368,14 +375,14 @@ impl RetryClient {
                     // Handle other client errors (4xx) - these are generally not retryable
                     if status.is_client_error() && status != reqwest::StatusCode::TOO_MANY_REQUESTS
                     {
-                        last_error = format!("Client error: {}", status);
+                        last_error = format!("Client error: {status}");
                         tracing::error!("Non-retryable client error: {}", status);
                         break;
                     }
 
                     // Handle server errors (5xx) - these are retryable
                     if status.is_server_error() {
-                        last_error = format!("Server error: {}", status);
+                        last_error = format!("Server error: {status}");
                         tracing::warn!(
                             "Server error {} on attempt {}/{}",
                             status,
@@ -432,8 +439,8 @@ impl RetryClient {
 
     /// Calculates the delay for exponential backoff with jitter
     ///
-    /// Uses the formula: min(base_delay * 2^(attempt-1) + jitter, max_delay)
-    /// where jitter is a random value between 0 and base_delay/2
+    /// Uses the formula: `min(base_delay * 2^(attempt-1) + jitter, max_delay)`
+    /// where jitter is a random value between 0 and `base_delay/2`
     pub fn calculate_backoff_delay(&self, attempt: u32) -> StdDuration {
         use rand::Rng;
 
@@ -466,7 +473,7 @@ impl RetryClient {
     ///
     /// Returns the number of seconds to wait, or None if the header is not present
     /// or cannot be parsed
-    fn extract_retry_after(&self, response: &reqwest::Response) -> Option<u64> {
+    fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
         response
             .headers()
             .get("retry-after")
@@ -475,12 +482,14 @@ impl RetryClient {
     }
 
     /// Gets the underlying reqwest client
-    pub fn client(&self) -> &Client {
+    #[must_use]
+    pub const fn client(&self) -> &Client {
         &self.client
     }
 
     /// Gets the retry configuration
-    pub fn config(&self) -> &RetryConfig {
+    #[must_use]
+    pub const fn config(&self) -> &RetryConfig {
         &self.config
     }
 }
@@ -497,7 +506,7 @@ pub struct TokenManager {
 }
 
 impl TokenManager {
-    /// Creates a new TokenManager with default configuration
+    /// Creates a new `TokenManager` with default configuration
     ///
     /// # Errors
     /// Returns an error if the base URL cannot be obtained from environment variables
@@ -506,7 +515,7 @@ impl TokenManager {
         Self::with_config(config)
     }
 
-    /// Creates a new TokenManager with the specified retry configuration
+    /// Creates a new `TokenManager` with the specified retry configuration
     ///
     /// # Errors
     /// Returns an error if the base URL cannot be obtained from environment variables
@@ -520,7 +529,7 @@ impl TokenManager {
         })
     }
 
-    /// Creates a new TokenManager with the specified configuration and base URL (for testing)
+    /// Creates a new `TokenManager` with the specified configuration and base URL (for testing)
     ///
     /// # Errors
     /// This method is infallible but returns Result for API consistency
@@ -552,65 +561,58 @@ impl TokenManager {
     /// Returns a `TokenError` if token acquisition or refresh fails after all retries
     pub async fn get_token(&self) -> Result<String, Error> {
         // Fast path: check if we have a valid token without acquiring semaphore
-        {
-            let token_guard = self.token_data.lock().await;
-            if let Some(ref token_data) = *token_guard {
-                if !token_data.expires_soon(Duration::minutes(5)) {
-                    tracing::debug!("Using existing valid token (fast path)");
-                    return Ok(token_data.token.expose_secret().clone());
-                }
-            }
+        if let Some(token) = self.check_existing_token().await? {
+            return Ok(token);
         }
 
         // Slow path: token needs refresh/obtain, acquire semaphore for thread safety
-        let _permit = self
+        let _permit = self.acquire_token_semaphore().await?;
+
+        // Double-check token state after acquiring semaphore - another thread may have updated it
+        if let Some(token) = self.check_existing_token().await? {
+            tracing::debug!("Token was updated by another thread, using existing valid token");
+            return Ok(token);
+        }
+
+        // At this point, we need to refresh or obtain a new token
+        self.handle_token_refresh_or_obtain().await
+    }
+
+    /// Checks if we have a valid existing token that doesn't expire soon
+    async fn check_existing_token(&self) -> Result<Option<String>, Error> {
+        let token_guard = self.token_data.lock().await;
+        if let Some(ref token_data) = *token_guard {
+            if !token_data.expires_soon(Duration::minutes(5)) {
+                tracing::debug!("Using existing valid token");
+                let token = token_data.token.expose_secret().clone();
+                drop(token_guard);
+                return Ok(Some(token));
+            }
+        }
+        drop(token_guard);
+        Ok(None)
+    }
+
+    /// Acquires the token operation semaphore for thread-safe operations
+    async fn acquire_token_semaphore(&self) -> Result<tokio::sync::SemaphorePermit<'_>, Error> {
+        let permit = self
             .token_operation_semaphore
             .acquire()
             .await
             .map_err(|e| {
                 Error::Token(TokenError::storage(format!(
-                    "Failed to acquire token operation semaphore: {}",
-                    e
+                    "Failed to acquire token operation semaphore: {e}"
                 )))
             })?;
 
         tracing::debug!("Acquired token operation semaphore for thread-safe token management");
+        Ok(permit)
+    }
 
-        // Double-check token state after acquiring semaphore - another thread may have updated it
-        {
-            let token_guard = self.token_data.lock().await;
-            if let Some(ref token_data) = *token_guard {
-                if !token_data.expires_soon(Duration::minutes(5)) {
-                    tracing::debug!(
-                        "Token was updated by another thread, using existing valid token"
-                    );
-                    return Ok(token_data.token.expose_secret().clone());
-                }
-            }
-        }
+    /// Handles the token refresh or obtain logic
+    async fn handle_token_refresh_or_obtain(&self) -> Result<String, Error> {
+        let needs_refresh = self.determine_token_operation().await;
 
-        // At this point, we need to refresh or obtain a new token
-        // Determine the current token state for decision making
-        let (needs_refresh, _needs_obtain) = {
-            let token_guard = self.token_data.lock().await;
-            match token_guard.as_ref() {
-                Some(token_data) => {
-                    if token_data.is_expired() {
-                        tracing::info!("Token is expired, will obtain new token");
-                        (false, true)
-                    } else {
-                        tracing::info!("Token expires soon, will attempt refresh");
-                        (true, false)
-                    }
-                }
-                None => {
-                    tracing::info!("No token exists, will obtain new token");
-                    (false, true)
-                }
-            }
-        };
-
-        // Perform the appropriate token operation
         if needs_refresh {
             match self.refresh_token_internal().await {
                 Ok(token) => {
@@ -618,7 +620,7 @@ impl TokenManager {
                     return Ok(token);
                 }
                 Err(e) => {
-                    tracing::warn!("Token refresh failed, falling back to obtain: {}", e);
+                    tracing::warn!("Token refresh failed, falling back to obtain: {e}");
                     // Fall through to obtain new token
                 }
             }
@@ -626,6 +628,21 @@ impl TokenManager {
 
         // Either we needed to obtain from the start, or refresh failed
         self.obtain_token_internal().await
+    }
+
+    /// Determines whether we need to refresh or obtain a new token
+    async fn determine_token_operation(&self) -> bool {
+        let token_guard = self.token_data.lock().await;
+        token_guard.as_ref().map_or_else(|| {
+            tracing::info!("No token exists, will obtain new token");
+            false
+        }, |token_data| if token_data.is_expired() {
+            tracing::info!("Token is expired, will obtain new token");
+            false
+        } else {
+            tracing::info!("Token expires soon, will attempt refresh");
+            true
+        })
     }
 
     /// Obtains a new authentication token using environment credentials with retry logic
@@ -652,8 +669,7 @@ impl TokenManager {
             .await
             .map_err(|e| {
                 Error::Token(TokenError::storage(format!(
-                    "Failed to acquire token operation semaphore: {}",
-                    e
+                    "Failed to acquire token operation semaphore: {e}"
                 )))
             })?;
 
@@ -673,28 +689,46 @@ impl TokenManager {
     async fn obtain_token_internal(&self) -> Result<String, Error> {
         tracing::debug!("Obtaining new authentication token");
 
-        // Get credentials from environment variables - check early to avoid retry logic for missing credentials
+        let request_payload = Self::get_credentials_from_env()?;
+        let url = self.build_obtain_token_url();
+        let response = self.execute_token_request(&url, &request_payload).await?;
+        let token_response = self.parse_token_response(response).await?;
+        
+        self.store_token_data(&token_response.token).await;
+        
+        tracing::info!("New authentication token obtained successfully");
+        Ok(token_response.token)
+    }
+
+    /// Gets credentials from environment variables
+    fn get_credentials_from_env() -> Result<TokenRequest, Error> {
         let username = env::var("AMP_USERNAME")
             .map_err(|_| Error::MissingEnvVar("AMP_USERNAME".to_string()))?;
         let password = env::var("AMP_PASSWORD")
             .map_err(|_| Error::MissingEnvVar("AMP_PASSWORD".to_string()))?;
+        
+        Ok(TokenRequest { username, password })
+    }
 
-        let request_payload = TokenRequest { username, password };
-
+    /// Builds the URL for token obtain endpoint
+    fn build_obtain_token_url(&self) -> Url {
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .unwrap()
             .push("user")
             .push("obtain_token");
+        url
+    }
 
-        // Use retry client for robust token acquisition
+    /// Executes the token request with retry logic
+    async fn execute_token_request(&self, url: &Url, request_payload: &TokenRequest) -> Result<reqwest::Response, Error> {
         let response = self
             .retry_client
             .execute_with_retry(|| {
                 self.retry_client
                     .client()
                     .post(url.clone())
-                    .json(&request_payload)
+                    .json(request_payload)
             })
             .await
             .map_err(Error::Token)?;
@@ -708,21 +742,25 @@ impl TokenManager {
             return Err(Error::TokenRequestFailed { status, error_text });
         }
 
-        let token_response: TokenResponse = response
+        Ok(response)
+    }
+
+    /// Parses the token response from the API
+    async fn parse_token_response(&self, response: reqwest::Response) -> Result<TokenResponse, Error> {
+        response
             .json()
             .await
-            .map_err(|e| Error::ResponseParsingFailed(e.to_string()))?;
+            .map_err(|e| Error::ResponseParsingFailed(e.to_string()))
+    }
 
-        // Store the new token with 24-hour expiry atomically
+    /// Stores the token data with 24-hour expiry
+    async fn store_token_data(&self, token: &str) {
         let expires_at = Utc::now() + Duration::days(1);
-        let token_data = TokenData::new(token_response.token.clone(), expires_at);
+        let token_data = TokenData::new(token.to_string(), expires_at);
 
         // Atomic token update - hold the lock for the minimal time needed
         *self.token_data.lock().await = Some(token_data);
         tracing::debug!("Token data updated atomically in storage");
-
-        tracing::info!("New authentication token obtained successfully");
-        Ok(token_response.token)
     }
 
     /// Refreshes the current authentication token with fallback to obtain on failure
@@ -759,81 +797,76 @@ impl TokenManager {
     ///
     /// # Errors
     /// Returns an error if both refresh and obtain operations fail
+    #[allow(clippy::cognitive_complexity)]
     async fn refresh_token_internal(&self) -> Result<String, Error> {
         tracing::debug!("Refreshing authentication token");
 
-        // Get the current token for refresh request
-        let current_token = {
-            let token_guard = self.token_data.lock().await;
-            if let Some(token_data) = token_guard.as_ref() {
-                token_data.token.expose_secret().clone()
-            } else {
-                tracing::warn!("No token available for refresh, obtaining new token");
-                return self.obtain_token_internal().await;
-            }
+        let Some(current_token) = self.get_current_token_for_refresh().await else {
+            tracing::warn!("No token available for refresh, obtaining new token");
+            return self.obtain_token_internal().await;
         };
 
+        let url = self.build_refresh_token_url();
+        let response = self.execute_refresh_request(&url, &current_token).await;
+
+        match response {
+            Ok(resp) => self.handle_refresh_response(resp).await,
+            Err(e) => {
+                tracing::warn!("Token refresh request failed: {e}, falling back to obtain");
+                self.obtain_token_internal().await
+            }
+        }
+    }
+
+    /// Gets the current token for refresh operations
+    async fn get_current_token_for_refresh(&self) -> Option<String> {
+        let token_guard = self.token_data.lock().await;
+        token_guard.as_ref().map(|token_data| token_data.token.expose_secret().clone())
+    }
+
+    /// Builds the URL for token refresh endpoint
+    fn build_refresh_token_url(&self) -> Url {
         let mut url = self.base_url.clone();
         url.path_segments_mut()
             .unwrap()
             .push("user")
             .push("refresh_token");
+        url
+    }
 
-        // Use retry client for robust token refresh
-        let response = self
-            .retry_client
+    /// Executes the refresh request with retry logic
+    async fn execute_refresh_request(&self, url: &Url, current_token: &str) -> Result<reqwest::Response, TokenError> {
+        self.retry_client
             .execute_with_retry(|| {
                 self.retry_client
                     .client()
                     .post(url.clone())
                     .header(AUTHORIZATION, format!("token {current_token}"))
             })
-            .await;
+            .await
+    }
 
-        match response {
-            Ok(resp) => {
-                if !resp.status().is_success() {
-                    let status = resp.status();
-                    let error_text = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
+    /// Handles the refresh response, either storing the new token or falling back to obtain
+    async fn handle_refresh_response(&self, resp: reqwest::Response) -> Result<String, Error> {
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let error_text = resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
 
-                    tracing::warn!(
-                        "Token refresh failed with status {}: {}",
-                        status,
-                        error_text
-                    );
-
-                    // If refresh fails, fall back to obtaining a new token
-                    return self.obtain_token_internal().await;
-                }
-
-                let token_response: TokenResponse = resp
-                    .json()
-                    .await
-                    .map_err(|e| Error::ResponseParsingFailed(e.to_string()))?;
-
-                // Store the refreshed token with 24-hour expiry atomically
-                let expires_at = Utc::now() + Duration::days(1);
-                let token_data = TokenData::new(token_response.token.clone(), expires_at);
-
-                // Atomic token update - hold the lock for the minimal time needed
-                *self.token_data.lock().await = Some(token_data);
-                tracing::debug!("Refreshed token data updated atomically in storage");
-
-                tracing::info!("Authentication token refreshed successfully");
-                Ok(token_response.token)
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Token refresh request failed: {}, falling back to obtain",
-                    e
-                );
-                // Fall back to obtaining a new token
-                self.obtain_token_internal().await
-            }
+            tracing::warn!("Token refresh failed with status {status}: {error_text}");
+            return self.obtain_token_internal().await;
         }
+
+        let token_response: TokenResponse = resp
+            .json()
+            .await
+            .map_err(|e| Error::ResponseParsingFailed(e.to_string()))?;
+
+        self.store_token_data(&token_response.token).await;
+        tracing::info!("Authentication token refreshed successfully");
+        Ok(token_response.token)
     }
 
     /// Gets current token information for debugging and monitoring
@@ -911,17 +944,13 @@ impl TokenManager {
     pub async fn force_refresh(&self) -> Result<String, Error> {
         tracing::info!("Forcing token refresh - bypassing normal proactive refresh logic");
 
-        let _permit = self
-            .token_operation_semaphore
-            .acquire()
-            .await
-            .map_err(|e| {
-                Error::Token(TokenError::storage(format!(
-                    "Failed to acquire token operation semaphore: {e}"
-                )))
-            })?;
+        let _permit = self.acquire_token_semaphore().await?;
+        self.log_token_status_for_refresh().await;
+        self.execute_forced_refresh().await
+    }
 
-        // Check if we have a token to refresh
+    /// Logs the current token status for forced refresh operation
+    async fn log_token_status_for_refresh(&self) {
         let has_token = {
             let token_guard = self.token_data.lock().await;
             token_guard.is_some()
@@ -932,14 +961,17 @@ impl TokenManager {
         } else {
             tracing::debug!("No existing token found, will obtain new token");
         }
+    }
 
+    /// Executes the forced refresh operation
+    async fn execute_forced_refresh(&self) -> Result<String, Error> {
         match self.refresh_token_internal().await {
             Ok(token) => {
                 tracing::info!("Forced token refresh completed successfully");
                 Ok(token)
             }
             Err(e) => {
-                tracing::error!("Forced token refresh failed: {}", e);
+                tracing::error!("Forced token refresh failed: {e}");
                 Err(e)
             }
         }
