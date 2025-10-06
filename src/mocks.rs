@@ -16,24 +16,130 @@ pub fn mock_get_changelog(server: &MockServer) {
     });
 }
 
-pub fn mock_create_asset_assignment(server: &MockServer) {
+pub fn mock_create_asset_assignments(server: &MockServer) {
+    use serde_json::Value;
+    
     server.mock(|when, then| {
-        when.method(POST).path("/assets/mock_asset_uuid/assignments");
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/assignments/create")
+            .header("content-type", "application/json")
+            // Custom matcher to validate the request structure and data types
+            .matches(|req| {
+                // Parse the request body
+                let body: Result<Value, _> = serde_json::from_slice(&req.body.as_ref().unwrap());
+                match body {
+                    Ok(json) => {
+                        // Validate that the request is wrapped in an "assignments" array
+                        if let Some(assignments) = json.get("assignments") {
+                            if let Some(assignments_array) = assignments.as_array() {
+                                // Allow any number of assignments (1 or more)
+                                if !assignments_array.is_empty() {
+                                    // Validate each assignment
+                                    for assignment in assignments_array {
+                                        let has_registered_user = assignment.get("registered_user")
+                                            .and_then(|v| v.as_i64())
+                                            .is_some();
+                                        let has_amount = assignment.get("amount")
+                                            .and_then(|v| v.as_i64())
+                                            .is_some();
+                                        let vesting_timestamp_valid = assignment.get("vesting_timestamp")
+                                            .map(|v| v.is_null() || v.is_i64())
+                                            .unwrap_or(true); // Optional field
+                                        let ready_for_distribution_valid = assignment.get("ready_for_distribution")
+                                            .map(|v| v.is_boolean())
+                                            .unwrap_or(true); // Optional field with default
+                                        
+                                        if !(has_registered_user && has_amount && vesting_timestamp_valid && ready_for_distribution_valid) {
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                }
+                            }
+                        }
+                        false
+                    }
+                    Err(_) => false
+                }
+            });
         then.status(200)
             .header("content-type", "application/json")
-            .json_body(json!({
+            // Response with single assignment for basic testing
+            .json_body(json!([{
               "id": 10,
               "registered_user": 13,
               "amount": 100,
-              "receiving_address": "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26",
+              "receiving_address": null,
               "distribution_uuid": null,
               "ready_for_distribution": true,
               "vesting_datetime": null,
               "vesting_timestamp": null,
               "has_vested": true,
               "is_distributed": false,
-              "creator": 1
-            }));
+              "creator": 1,
+              "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
+              "investor": 13
+            }]));
+    });
+}
+
+pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
+    use serde_json::Value;
+    
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/assignments/create")
+            .header("content-type", "application/json")
+            // Custom matcher to validate multiple assignments
+            .matches(|req| {
+                let body: Result<Value, _> = serde_json::from_slice(&req.body.as_ref().unwrap());
+                match body {
+                    Ok(json) => {
+                        if let Some(assignments) = json.get("assignments").and_then(|v| v.as_array()) {
+                            // Specifically check for multiple assignments
+                            assignments.len() > 1
+                        } else {
+                            false
+                        }
+                    }
+                    Err(_) => false
+                }
+            });
+        then.status(200)
+            .header("content-type", "application/json")
+            // Response with multiple assignments
+            .json_body(json!([
+                {
+                    "id": 10,
+                    "registered_user": 13,
+                    "amount": 100,
+                    "receiving_address": null,
+                    "distribution_uuid": null,
+                    "ready_for_distribution": true,
+                    "vesting_datetime": null,
+                    "vesting_timestamp": null,
+                    "has_vested": true,
+                    "is_distributed": false,
+                    "creator": 1,
+                    "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
+                    "investor": 13
+                },
+                {
+                    "id": 11,
+                    "registered_user": 14,
+                    "amount": 200,
+                    "receiving_address": null,
+                    "distribution_uuid": null,
+                    "ready_for_distribution": true,
+                    "vesting_datetime": null,
+                    "vesting_timestamp": null,
+                    "has_vested": true,
+                    "is_distributed": false,
+                    "creator": 1,
+                    "GAID": "GA4DS3emT12zDF4RGywBvJqZfhefNp",
+                    "investor": 14
+                }
+            ]));
     });
 }
 
@@ -254,7 +360,7 @@ pub fn mock_get_registered_users(server: &MockServer) {
             .json_body(json!([{
                 "id": 1,
                 "name": "Mock User",
-                "gaid": "mock_gaid",
+                "GAID": "mock_gaid",
                 "is_company": false,
                 "authorization_url": "https://example.com/auth",
                 "categories": [],
@@ -318,7 +424,7 @@ pub fn mock_issue_asset(server: &MockServer) {
                 "destination_address": "destination_address",
                 "domain": "example.com",
                 "ticker": "TSTA",
-                "pubkey": "03...",
+                "pubkey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
                 "is_confidential": true,
                 "is_reissuable": false,
                 "reissuance_amount": 0,
@@ -432,5 +538,132 @@ pub fn mock_unlock_manager(server: &MockServer) {
     server.mock(|when, then| {
         when.method(PUT).path("/managers/1/unlock");
         then.status(200);
+    });
+}
+
+pub fn mock_add_asset_treasury_addresses(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/treasury-addresses/add")
+            .header("content-type", "application/json");
+        then.status(200);
+    });
+}
+
+pub fn mock_get_asset_treasury_addresses(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/treasury-addresses");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([
+                "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26",
+                "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27"
+            ]));
+    });
+}
+
+pub fn mock_delete_asset_assignment(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(DELETE)
+            .path("/assets/mock_asset_uuid/assignments/10/delete");
+        then.status(200);
+    });
+}
+
+pub fn mock_lock_asset_assignment(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/assets/mock_asset_uuid/assignments/10/lock");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 10,
+                "registered_user": 13,
+                "amount": 100,
+                "receiving_address": null,
+                "distribution_uuid": null,
+                "ready_for_distribution": true,
+                "vesting_datetime": null,
+                "vesting_timestamp": null,
+                "has_vested": true,
+                "is_distributed": false,
+                "creator": 1,
+                "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
+                "investor": 13
+            }));
+    });
+}
+
+pub fn mock_unlock_asset_assignment(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/assets/mock_asset_uuid/assignments/10/unlock");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 10,
+                "registered_user": 13,
+                "amount": 100,
+                "receiving_address": null,
+                "distribution_uuid": null,
+                "ready_for_distribution": true,
+                "vesting_datetime": null,
+                "vesting_timestamp": null,
+                "has_vested": true,
+                "is_distributed": false,
+                "creator": 1,
+                "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
+                "investor": 13
+            }));
+    });
+}
+pub fn mock_lock_asset(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/assets/mock_asset_uuid/lock");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_uuid": "mock_asset_uuid",
+                "name": "Mock Asset",
+                "issuer": 1,
+                "asset_id": "mock_asset_id",
+                "reissuance_token_id": "mock_reissuance_token_id",
+                "requirements": [],
+                "ticker": "MOCK",
+                "precision": 8,
+                "domain": "example.com",
+                "pubkey": "mock_pubkey",
+                "is_registered": true,
+                "is_authorized": true,
+                "is_locked": true,
+                "issuer_authorization_endpoint": "https://example.com/authorize",
+                "transfer_restricted": true
+            }));
+    });
+}
+
+pub fn mock_unlock_asset(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/assets/mock_asset_uuid/unlock");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_uuid": "mock_asset_uuid",
+                "name": "Mock Asset",
+                "issuer": 1,
+                "asset_id": "mock_asset_id",
+                "reissuance_token_id": "mock_reissuance_token_id",
+                "requirements": [],
+                "ticker": "MOCK",
+                "precision": 8,
+                "domain": "example.com",
+                "pubkey": "mock_pubkey",
+                "is_registered": true,
+                "is_authorized": true,
+                "is_locked": false,
+                "issuer_authorization_endpoint": "https://example.com/authorize",
+                "transfer_restricted": true
+            }));
     });
 }

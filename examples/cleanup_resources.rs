@@ -1,6 +1,10 @@
 use amp_rs::ApiClient;
 use std::env;
 
+// Protected resources that should not be deleted
+const PROTECTED_CATEGORY_ID: i64 = 28273;
+const PROTECTED_USER_IDS: &[i64] = &[1194, 1203];
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from .env file if it exists
@@ -38,16 +42,36 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     println!("📋 Cleanup Preview:");
     println!("-------------------");
 
-    // Preview assets
+    // Preview assets and their assignments
     match client.get_assets().await {
         Ok(assets) => {
-            println!("💰 Assets to delete: {}", assets.len());
+            let locked_count = assets.iter().filter(|a| a.is_locked).count();
+            println!("💰 Assets to delete: {} ({} locked)", assets.len(), locked_count);
             if !assets.is_empty() {
+                let mut total_assignments = 0;
                 for asset in assets.iter().take(3) {
-                    println!("   • {} ({:?})", asset.name, asset.ticker);
+                    let assignment_count = match client.get_asset_assignments(&asset.asset_uuid).await {
+                        Ok(assignments) => {
+                            total_assignments += assignments.len();
+                            assignments.len()
+                        }
+                        Err(_) => 0,
+                    };
+                    let lock_status = if asset.is_locked { " 🔒" } else { "" };
+                    println!("   • {} ({:?}) - {} assignments{}", asset.name, asset.ticker, assignment_count, lock_status);
                 }
                 if assets.len() > 3 {
-                    println!("   ... and {} more", assets.len() - 3);
+                    // Count assignments for remaining assets
+                    for asset in assets.iter().skip(3) {
+                        if let Ok(assignments) = client.get_asset_assignments(&asset.asset_uuid).await {
+                            total_assignments += assignments.len();
+                        }
+                    }
+                    println!("   ... and {} more assets", assets.len() - 3);
+                }
+                println!("   📋 Total assignments to delete: {}", total_assignments);
+                if locked_count > 0 {
+                    println!("   🔓 {} locked assets will be unlocked before deletion", locked_count);
                 }
             }
         }
@@ -57,13 +81,17 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     // Preview categories
     match client.get_categories().await {
         Ok(categories) => {
-            println!("📁 Categories to delete: {}", categories.len());
-            if !categories.is_empty() {
-                for category in categories.iter().take(3) {
-                    println!("   • {}", category.name);
+            let deletable_categories: Vec<_> = categories.iter()
+                .filter(|cat| cat.id != PROTECTED_CATEGORY_ID)
+                .collect();
+            println!("📁 Categories to delete: {} (excluding protected category ID {})", 
+                     deletable_categories.len(), PROTECTED_CATEGORY_ID);
+            if !deletable_categories.is_empty() {
+                for category in deletable_categories.iter().take(3) {
+                    println!("   • {} (ID: {})", category.name, category.id);
                 }
-                if categories.len() > 3 {
-                    println!("   ... and {} more", categories.len() - 3);
+                if deletable_categories.len() > 3 {
+                    println!("   ... and {} more", deletable_categories.len() - 3);
                 }
             }
         }
@@ -73,13 +101,17 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     // Preview registered users
     match client.get_registered_users().await {
         Ok(users) => {
-            println!("👤 Registered users to delete: {}", users.len());
-            if !users.is_empty() {
-                for user in users.iter().take(3) {
+            let deletable_users: Vec<_> = users.iter()
+                .filter(|user| !PROTECTED_USER_IDS.contains(&user.id))
+                .collect();
+            println!("👤 Registered users to delete: {} (excluding protected user IDs {:?})", 
+                     deletable_users.len(), PROTECTED_USER_IDS);
+            if !deletable_users.is_empty() {
+                for user in deletable_users.iter().take(3) {
                     println!("   • {} (ID: {})", user.name, user.id);
                 }
-                if users.len() > 3 {
-                    println!("   ... and {} more", users.len() - 3);
+                if deletable_users.len() > 3 {
+                    println!("   ... and {} more", deletable_users.len() - 3);
                 }
             }
         }
@@ -113,7 +145,7 @@ async fn perform_cleanup(client: &ApiClient) -> Result<(), Box<dyn std::error::E
 }
 
 async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
-    println!("🗑️  Deleting assets...");
+    println!("🗑️  Deleting assets and their assignments...");
     
     let assets = match client.get_assets().await {
         Ok(assets) => assets,
@@ -128,12 +160,83 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
         return Ok(());
     }
 
+    let mut asset_success_count = 0;
+    let mut asset_error_count = 0;
+    let mut total_assignments_deleted = 0;
+    let mut total_assignment_errors = 0;
+    let mut unlocked_count = 0;
+    let mut unlock_error_count = 0;
+
+    for asset in assets {
+        println!("   Processing asset '{}' ({:?})...", asset.name, asset.ticker);
+        
+        // Check if asset is locked and unlock it if necessary
+        if asset.is_locked {
+            print!("     Asset is locked, unlocking... ");
+            match client.unlock_asset(&asset.asset_uuid).await {
+                Ok(_) => {
+                    println!("✅");
+                    unlocked_count += 1;
+                }
+                Err(e) => {
+                    println!("❌ {}", e);
+                    unlock_error_count += 1;
+                    // Continue with deletion attempt even if unlock fails
+                }
+            }
+        } else {
+            println!("     Asset is not locked");
+        }
+        
+        // First, delete all assignments for this asset
+        let (assignments_deleted, assignment_errors) = delete_asset_assignments(client, &asset.asset_uuid).await;
+        total_assignments_deleted += assignments_deleted;
+        total_assignment_errors += assignment_errors;
+        
+        // Then delete the asset itself
+        print!("     Deleting asset... ");
+        match client.delete_asset(&asset.asset_uuid).await {
+            Ok(_) => {
+                println!("✅");
+                asset_success_count += 1;
+            }
+            Err(e) => {
+                println!("❌ {}", e);
+                asset_error_count += 1;
+            }
+        }
+    }
+
+    println!("   📊 Assets: {} deleted, {} errors", asset_success_count, asset_error_count);
+    println!("   📊 Assignments: {} deleted, {} errors", total_assignments_deleted, total_assignment_errors);
+    println!("   📊 Unlocked: {} assets, {} unlock errors", unlocked_count, unlock_error_count);
+    Ok(())
+}
+
+async fn delete_asset_assignments(client: &ApiClient, asset_uuid: &str) -> (usize, usize) {
+    let assignments = match client.get_asset_assignments(asset_uuid).await {
+        Ok(assignments) => assignments,
+        Err(e) => {
+            println!("     ❌ Failed to list assignments: {}", e);
+            return (0, 1);
+        }
+    };
+
+    if assignments.is_empty() {
+        println!("     ✅ No assignments to delete");
+        return (0, 0);
+    }
+
+    println!("     Found {} assignments to delete", assignments.len());
+    
     let mut success_count = 0;
     let mut error_count = 0;
 
-    for asset in assets {
-        print!("   Deleting '{}' ({:?})... ", asset.name, asset.ticker);
-        match client.delete_asset(&asset.asset_uuid).await {
+    for assignment in assignments {
+        let assignment_id = assignment.id.to_string();
+        print!("       Deleting assignment {} (user: {})... ", assignment_id, assignment.registered_user);
+        
+        match client.delete_asset_assignment(asset_uuid, &assignment_id).await {
             Ok(_) => {
                 println!("✅");
                 success_count += 1;
@@ -145,8 +248,7 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
         }
     }
 
-    println!("   📊 Assets: {} deleted, {} errors", success_count, error_count);
-    Ok(())
+    (success_count, error_count)
 }
 
 async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
@@ -160,16 +262,27 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
         }
     };
 
-    if categories.is_empty() {
-        println!("   ✅ No categories to delete");
+    let deletable_categories: Vec<_> = categories.into_iter()
+        .filter(|cat| cat.id != PROTECTED_CATEGORY_ID)
+        .collect();
+
+    if deletable_categories.is_empty() {
+        println!("   ✅ No categories to delete (protected category ID {} preserved)", PROTECTED_CATEGORY_ID);
         return Ok(());
     }
 
     let mut success_count = 0;
     let mut error_count = 0;
+    let mut protected_count = 0;
 
-    for category in categories {
-        print!("   Deleting '{}'... ", category.name);
+    for category in deletable_categories {
+        if category.id == PROTECTED_CATEGORY_ID {
+            println!("   Skipping protected category '{}' (ID: {})... 🛡️", category.name, category.id);
+            protected_count += 1;
+            continue;
+        }
+
+        print!("   Deleting '{}' (ID: {})... ", category.name, category.id);
         match client.delete_category(category.id).await {
             Ok(_) => {
                 println!("✅");
@@ -182,7 +295,7 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
         }
     }
 
-    println!("   📊 Categories: {} deleted, {} errors", success_count, error_count);
+    println!("   📊 Categories: {} deleted, {} errors, {} protected", success_count, error_count, protected_count);
     Ok(())
 }
 
@@ -197,16 +310,27 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
         }
     };
 
-    if users.is_empty() {
-        println!("   ✅ No registered users to delete");
+    let deletable_users: Vec<_> = users.into_iter()
+        .filter(|user| !PROTECTED_USER_IDS.contains(&user.id))
+        .collect();
+
+    if deletable_users.is_empty() {
+        println!("   ✅ No registered users to delete (protected user IDs {:?} preserved)", PROTECTED_USER_IDS);
         return Ok(());
     }
 
     let mut success_count = 0;
     let mut error_count = 0;
+    let mut protected_count = 0;
 
-    for user in users {
-        print!("   Deleting user '{}'... ", user.name);
+    for user in deletable_users {
+        if PROTECTED_USER_IDS.contains(&user.id) {
+            println!("   Skipping protected user '{}' (ID: {})... 🛡️", user.name, user.id);
+            protected_count += 1;
+            continue;
+        }
+
+        print!("   Deleting user '{}' (ID: {})... ", user.name, user.id);
         match client.delete_registered_user(user.id).await {
             Ok(_) => {
                 println!("✅");
@@ -219,7 +343,7 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
         }
     }
 
-    println!("   📊 Users: {} deleted, {} errors", success_count, error_count);
+    println!("   📊 Users: {} deleted, {} errors, {} protected", success_count, error_count, protected_count);
     Ok(())
 }
 

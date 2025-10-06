@@ -63,6 +63,40 @@ async fn main() {
 }
 ```
 
+### Manage asset assignments
+
+```rust
+use amp_client::client::ApiClient;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let asset_uuid = "your_asset_uuid";
+    let assignment_id = "assignment_id";
+    
+    // Lock an assignment
+    let locked_assignment = client
+        .lock_asset_assignment(asset_uuid, assignment_id)
+        .await
+        .unwrap();
+    println!("Locked assignment: {:?}", locked_assignment);
+    
+    // Unlock an assignment
+    let unlocked_assignment = client
+        .unlock_asset_assignment(asset_uuid, assignment_id)
+        .await
+        .unwrap();
+    println!("Unlocked assignment: {:?}", unlocked_assignment);
+    
+    // Delete an assignment (destructive operation)
+    client
+        .delete_asset_assignment(asset_uuid, assignment_id)
+        .await
+        .unwrap();
+    println!("Assignment deleted");
+}
+```
+
 
 
 ## Configuration

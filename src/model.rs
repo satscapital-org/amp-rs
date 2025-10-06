@@ -220,13 +220,23 @@ pub struct Distribution {
     pub transactions: Vec<Transaction>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CreateAssetAssignmentRequest {
-    pub registered_user_id: i64,
+    pub registered_user: i64,
     pub amount: i64,
-    pub is_locked: bool,
-    pub vesting_timestamp: Option<i64>,
-    pub comment: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vesting_timestamp: Option<i64>, // Unix timestamp in seconds, nullable
+    #[serde(default = "default_ready_for_distribution")]
+    pub ready_for_distribution: bool, // Defaults to false
+}
+
+fn default_ready_for_distribution() -> bool {
+    false
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateAssetAssignmentRequestWrapper {
+    pub assignments: Vec<CreateAssetAssignmentRequest>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -234,7 +244,7 @@ pub struct Assignment {
     pub id: i64,
     pub registered_user: i64,
     pub amount: i64,
-    pub receiving_address: String,
+    pub receiving_address: Option<String>,
     pub distribution_uuid: Option<String>,
     pub ready_for_distribution: bool,
     pub vesting_datetime: Option<String>,
@@ -242,6 +252,11 @@ pub struct Assignment {
     pub has_vested: bool,
     pub is_distributed: bool,
     pub creator: i64,
+    #[serde(rename = "GAID")]
+    pub gaid: Option<String>,
+    // Legacy field for backward compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub investor: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

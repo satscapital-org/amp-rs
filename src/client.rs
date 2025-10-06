@@ -1316,6 +1316,19 @@ impl ApiClient {
         .await
     }
 
+    /// Gets the treasury addresses for a specific asset
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to get treasury addresses for
+    ///
+    /// # Returns
+    /// A vector of treasury addresses as strings
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset does not exist
+    /// - The request fails
+    /// - The response cannot be parsed
     pub async fn get_asset_treasury_addresses(
         &self,
         asset_uuid: &str,
@@ -1328,6 +1341,21 @@ impl ApiClient {
         .await
     }
 
+    /// Adds treasury addresses to a specific asset
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to add treasury addresses to
+    /// * `addresses` - A slice of address strings to add as treasury addresses
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on success
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset does not exist
+    /// - The addresses are invalid
+    /// - The request fails
+    /// - Insufficient permissions
     pub async fn add_asset_treasury_addresses(
         &self,
         asset_uuid: &str,
@@ -1539,15 +1567,33 @@ impl ApiClient {
             .await
     }
 
-    pub async fn create_asset_assignment(
+    pub async fn get_asset_assignments(
         &self,
         asset_uuid: &str,
-        request: &CreateAssetAssignmentRequest,
-    ) -> Result<Assignment, Error> {
+    ) -> Result<Vec<Assignment>, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "assignments"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn create_asset_assignments(
+        &self,
+        asset_uuid: &str,
+        requests: &[CreateAssetAssignmentRequest],
+    ) -> Result<Vec<Assignment>, Error> {
+        use crate::model::CreateAssetAssignmentRequestWrapper;
+        
+        let wrapper = CreateAssetAssignmentRequestWrapper {
+            assignments: requests.to_vec(),
+        };
+        
         self.request_json(
             Method::POST,
-            &["assets", asset_uuid, "assignments"],
-            Some(request),
+            &["assets", asset_uuid, "assignments", "create"],
+            Some(&wrapper),
         )
         .await
     }
@@ -1648,6 +1694,78 @@ impl ApiClient {
         self.request_empty(
             Method::PUT,
             &["managers", &manager_id.to_string(), "unlock"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Deletes a specific asset assignment.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `assignment_id` - The ID of the assignment to delete
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    pub async fn delete_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        assignment_id: &str,
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::DELETE,
+            &["assets", asset_uuid, "assignments", assignment_id, "delete"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Locks a specific asset assignment.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `assignment_id` - The ID of the assignment to lock
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    pub async fn lock_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        assignment_id: &str,
+    ) -> Result<Assignment, Error> {
+        self.request_json(
+            Method::PUT,
+            &["assets", asset_uuid, "assignments", assignment_id, "lock"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Unlocks a specific asset assignment.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `assignment_id` - The ID of the assignment to unlock
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    pub async fn unlock_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        assignment_id: &str,
+    ) -> Result<Assignment, Error> {
+        self.request_json(
+            Method::PUT,
+            &["assets", asset_uuid, "assignments", assignment_id, "unlock"],
             None::<&()>,
         )
         .await
