@@ -48,10 +48,10 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
                                             .is_some();
                                         let vesting_timestamp_valid = assignment
                                             .get("vesting_timestamp")
-                                            .map_or(true, |v| v.is_null() || v.is_i64()); // Optional field
+                                            .is_none_or(|v| v.is_null() || v.is_i64()); // Optional field
                                         let ready_for_distribution_valid = assignment
                                             .get("ready_for_distribution")
-                                            .map_or(true, serde_json::Value::is_boolean); // Optional field with default
+                                            .is_none_or(serde_json::Value::is_boolean); // Optional field with default
 
                                         if !(has_registered_user
                                             && has_amount
@@ -103,10 +103,10 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
             // Custom matcher to validate multiple assignments
             .matches(|req| {
                 let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
-                body.map_or(false, |json| {
+                body.is_ok_and(|json| {
                     json.get("assignments")
                         .and_then(|v| v.as_array())
-                        .map_or(false, |assignments| assignments.len() > 1)
+                        .is_some_and(|assignments| assignments.len() > 1)
                 })
             });
         then.status(200)

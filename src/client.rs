@@ -320,6 +320,7 @@ impl RetryClient {
     /// Returns `TokenError::Timeout` if the request times out
     /// Returns `TokenError::RateLimited` if rate limited and retries are exhausted
     /// Returns `TokenError::ObtainFailed` if all retry attempts fail
+    #[allow(clippy::cognitive_complexity)]
     pub async fn execute_with_retry<F>(
         &self,
         request_builder: F,
@@ -662,7 +663,7 @@ impl TokenManager {
     /// Internal method to obtain a new authentication token without acquiring semaphore
     ///
     /// This method should only be called from contexts where the token operation semaphore
-    /// has already been acquired (e.g., from within get_token()).
+    /// has already been acquired (e.g., from within `get_token()`).
     ///
     /// # Errors
     /// Returns an error if:
@@ -717,11 +718,8 @@ impl TokenManager {
         let token_data = TokenData::new(token_response.token.clone(), expires_at);
 
         // Atomic token update - hold the lock for the minimal time needed
-        {
-            let mut token_guard = self.token_data.lock().await;
-            *token_guard = Some(token_data);
-            tracing::debug!("Token data updated atomically in storage");
-        }
+        *self.token_data.lock().await = Some(token_data);
+        tracing::debug!("Token data updated atomically in storage");
 
         tracing::info!("New authentication token obtained successfully");
         Ok(token_response.token)
@@ -747,8 +745,7 @@ impl TokenManager {
             .await
             .map_err(|e| {
                 Error::Token(TokenError::storage(format!(
-                    "Failed to acquire token operation semaphore: {}",
-                    e
+                    "Failed to acquire token operation semaphore: {e}"
                 )))
             })?;
 
@@ -758,7 +755,7 @@ impl TokenManager {
     /// Internal method to refresh the current authentication token without acquiring semaphore
     ///
     /// This method should only be called from contexts where the token operation semaphore
-    /// has already been acquired (e.g., from within get_token()).
+    /// has already been acquired (e.g., from within `get_token()`).
     ///
     /// # Errors
     /// Returns an error if both refresh and obtain operations fail
@@ -768,12 +765,9 @@ impl TokenManager {
         // Get the current token for refresh request
         let current_token = {
             let token_guard = self.token_data.lock().await;
-            match token_guard.as_ref() {
-                Some(token_data) => token_data.token.expose_secret().clone(),
-                None => {
-                    tracing::warn!("No token available for refresh, obtaining new token");
-                    return self.obtain_token_internal().await;
-                }
+            if let Some(token_data) = token_guard.as_ref() { token_data.token.expose_secret().clone() } else {
+                tracing::warn!("No token available for refresh, obtaining new token");
+                return self.obtain_token_internal().await;
             }
         };
 
@@ -790,7 +784,7 @@ impl TokenManager {
                 self.retry_client
                     .client()
                     .post(url.clone())
-                    .header(AUTHORIZATION, format!("token {}", current_token))
+                    .header(AUTHORIZATION, format!("token {current_token}"))
             })
             .await;
 
@@ -823,11 +817,8 @@ impl TokenManager {
                 let token_data = TokenData::new(token_response.token.clone(), expires_at);
 
                 // Atomic token update - hold the lock for the minimal time needed
-                {
-                    let mut token_guard = self.token_data.lock().await;
-                    *token_guard = Some(token_data);
-                    tracing::debug!("Refreshed token data updated atomically in storage");
-                }
+                *self.token_data.lock().await = Some(token_data);
+                tracing::debug!("Refreshed token data updated atomically in storage");
 
                 tracing::info!("Authentication token refreshed successfully");
                 Ok(token_response.token)
@@ -852,11 +843,13 @@ impl TokenManager {
     ///
     /// # Returns
     /// `Some(TokenInfo)` if a token exists, `None` if no token is stored
+    /// 
+    /// # Errors
+    /// Returns an error if token information retrieval fails
     pub async fn get_token_info(&self) -> Result<Option<TokenInfo>, Error> {
         tracing::debug!("Retrieving token information for debugging");
 
-        let token_guard = self.token_data.lock().await;
-        let token_info = token_guard.as_ref().map(TokenInfo::from);
+        let token_info = self.token_data.lock().await.as_ref().map(TokenInfo::from);
 
         match &token_info {
             Some(info) => {
@@ -881,12 +874,16 @@ impl TokenManager {
     ///
     /// This method removes the current token from storage, forcing the next
     /// `get_token()` call to obtain a fresh token.
+    /// 
+    /// # Errors
+    /// Returns an error if token clearing fails
     pub async fn clear_token(&self) -> Result<(), Error> {
         tracing::debug!("Clearing stored token from memory");
 
         let mut token_guard = self.token_data.lock().await;
         let had_token = token_guard.is_some();
         *token_guard = None;
+        drop(token_guard);
 
         if had_token {
             tracing::info!("Token successfully cleared from storage - next get_token() will obtain fresh token");
@@ -918,8 +915,7 @@ impl TokenManager {
             .await
             .map_err(|e| {
                 Error::Token(TokenError::storage(format!(
-                    "Failed to acquire token operation semaphore: {}",
-                    e
+                    "Failed to acquire token operation semaphore: {e}"
                 )))
             })?;
 
@@ -1009,7 +1005,7 @@ impl ApiClient {
     /// Obtains a new authentication token from the AMP API.
     ///
     /// **Note**: This method is deprecated in favor of the automatic token management
-    /// provided by `get_token()`. The TokenManager handles token acquisition internally
+    /// provided by `get_token()`. The `TokenManager` handles token acquisition internally
     /// with enhanced retry logic and error handling.
     ///
     /// # Errors
@@ -1065,7 +1061,7 @@ impl ApiClient {
 
     /// Gets a valid authentication token with automatic token management.
     ///
-    /// This method uses the integrated TokenManager to handle:
+    /// This method uses the integrated `TokenManager` to handle:
     /// - Proactive token refresh (5 minutes before expiry)
     /// - Automatic fallback from refresh to obtain on failure
     /// - Retry logic with exponential backoff
