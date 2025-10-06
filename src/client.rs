@@ -765,7 +765,9 @@ impl TokenManager {
         // Get the current token for refresh request
         let current_token = {
             let token_guard = self.token_data.lock().await;
-            if let Some(token_data) = token_guard.as_ref() { token_data.token.expose_secret().clone() } else {
+            if let Some(token_data) = token_guard.as_ref() {
+                token_data.token.expose_secret().clone()
+            } else {
                 tracing::warn!("No token available for refresh, obtaining new token");
                 return self.obtain_token_internal().await;
             }
@@ -843,7 +845,7 @@ impl TokenManager {
     ///
     /// # Returns
     /// `Some(TokenInfo)` if a token exists, `None` if no token is stored
-    /// 
+    ///
     /// # Errors
     /// Returns an error if token information retrieval fails
     pub async fn get_token_info(&self) -> Result<Option<TokenInfo>, Error> {
@@ -874,7 +876,7 @@ impl TokenManager {
     ///
     /// This method removes the current token from storage, forcing the next
     /// `get_token()` call to obtain a fresh token.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if token clearing fails
     pub async fn clear_token(&self) -> Result<(), Error> {
