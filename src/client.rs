@@ -45,7 +45,7 @@ pub enum Error {
 }
 
 /// Detailed error types for token management operations
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum TokenError {
     #[error("Token refresh failed: {0}")]
     RefreshFailed(String),
@@ -64,65 +64,75 @@ pub enum TokenError {
 }
 
 impl TokenError {
-    /// Creates a new RefreshFailed error
+    /// Creates a new `RefreshFailed` error
+    #[must_use]
     pub fn refresh_failed<S: Into<String>>(message: S) -> Self {
         Self::RefreshFailed(message.into())
     }
 
-    /// Creates a new ObtainFailed error
-    pub fn obtain_failed(attempts: u32, last_error: String) -> Self {
+    /// Creates a new `ObtainFailed` error
+    #[must_use]
+    pub const fn obtain_failed(attempts: u32, last_error: String) -> Self {
         Self::ObtainFailed {
             attempts,
             last_error,
         }
     }
 
-    /// Creates a new RateLimited error
-    pub fn rate_limited(retry_after_seconds: u64) -> Self {
+    /// Creates a new `RateLimited` error
+    #[must_use]
+    pub const fn rate_limited(retry_after_seconds: u64) -> Self {
         Self::RateLimited {
             retry_after_seconds,
         }
     }
 
     /// Creates a new Timeout error
-    pub fn timeout(timeout_seconds: u64) -> Self {
+    #[must_use]
+    pub const fn timeout(timeout_seconds: u64) -> Self {
         Self::Timeout { timeout_seconds }
     }
 
     /// Creates a new Serialization error
+    #[must_use]
     pub fn serialization<S: Into<String>>(message: S) -> Self {
         Self::Serialization(message.into())
     }
 
     /// Creates a new Storage error
+    #[must_use]
     pub fn storage<S: Into<String>>(message: S) -> Self {
         Self::Storage(message.into())
     }
 
     /// Creates a new Validation error
+    #[must_use]
     pub fn validation<S: Into<String>>(message: S) -> Self {
         Self::Validation(message.into())
     }
 
     /// Returns true if this error indicates a retryable condition
-    pub fn is_retryable(&self) -> bool {
+    #[must_use]
+    pub const fn is_retryable(&self) -> bool {
         matches!(
             self,
-            TokenError::RefreshFailed(_)
-                | TokenError::RateLimited { .. }
-                | TokenError::Timeout { .. }
+            Self::RefreshFailed(_)
+                | Self::RateLimited { .. }
+                | Self::Timeout { .. }
         )
     }
 
     /// Returns true if this error indicates a rate limiting condition
-    pub fn is_rate_limited(&self) -> bool {
-        matches!(self, TokenError::RateLimited { .. })
+    #[must_use]
+    pub const fn is_rate_limited(&self) -> bool {
+        matches!(self, Self::RateLimited { .. })
     }
 
     /// Returns the retry delay in seconds if this is a rate limited error
-    pub fn retry_after_seconds(&self) -> Option<u64> {
+    #[must_use]
+    pub const fn retry_after_seconds(&self) -> Option<u64> {
         match self {
-            TokenError::RateLimited {
+            Self::RateLimited {
                 retry_after_seconds,
             } => Some(*retry_after_seconds),
             _ => None,
@@ -133,7 +143,7 @@ impl TokenError {
 // Conversion from serde_json::Error for serialization errors
 impl From<serde_json::Error> for TokenError {
     fn from(err: serde_json::Error) -> Self {
-        TokenError::Serialization(err.to_string())
+        Self::Serialization(err.to_string())
     }
 }
 
@@ -162,7 +172,7 @@ impl Default for RetryConfig {
 }
 
 impl RetryConfig {
-    /// Creates a RetryConfig from environment variables with default fallbacks
+    /// Creates a `RetryConfig` from environment variables with default fallbacks
     ///
     /// Environment variables:
     /// - `API_RETRY_MAX_ATTEMPTS`: Maximum retry attempts (default: 3)
@@ -176,28 +186,28 @@ impl RetryConfig {
     pub fn from_env() -> Result<Self, Error> {
         let max_attempts = match env::var("API_RETRY_MAX_ATTEMPTS") {
             Ok(val) => val.parse::<u32>().map_err(|e| {
-                Error::InvalidRetryConfig(format!("Invalid API_RETRY_MAX_ATTEMPTS: {}", e))
+                Error::InvalidRetryConfig(format!("Invalid API_RETRY_MAX_ATTEMPTS: {e}"))
             })?,
             Err(_) => 3,
         };
 
         let base_delay_ms = match env::var("API_RETRY_BASE_DELAY_MS") {
             Ok(val) => val.parse::<u64>().map_err(|e| {
-                Error::InvalidRetryConfig(format!("Invalid API_RETRY_BASE_DELAY_MS: {}", e))
+                Error::InvalidRetryConfig(format!("Invalid API_RETRY_BASE_DELAY_MS: {e}"))
             })?,
             Err(_) => 1000,
         };
 
         let max_delay_ms = match env::var("API_RETRY_MAX_DELAY_MS") {
             Ok(val) => val.parse::<u64>().map_err(|e| {
-                Error::InvalidRetryConfig(format!("Invalid API_RETRY_MAX_DELAY_MS: {}", e))
+                Error::InvalidRetryConfig(format!("Invalid API_RETRY_MAX_DELAY_MS: {e}"))
             })?,
             Err(_) => 30000,
         };
 
         let timeout_seconds = match env::var("API_REQUEST_TIMEOUT_SECONDS") {
             Ok(val) => val.parse::<u64>().map_err(|e| {
-                Error::InvalidRetryConfig(format!("Invalid API_REQUEST_TIMEOUT_SECONDS: {}", e))
+                Error::InvalidRetryConfig(format!("Invalid API_REQUEST_TIMEOUT_SECONDS: {e}"))
             })?,
             Err(_) => 10,
         };
@@ -232,14 +242,15 @@ impl RetryConfig {
         })
     }
 
-    /// Creates a RetryConfig optimized for test environments
+    /// Creates a `RetryConfig` optimized for test environments
     ///
     /// Uses reduced values for faster test execution:
     /// - 2 retry attempts
     /// - 500ms base delay
     /// - 5000ms max delay
     /// - 5 second timeout
-    pub fn for_tests() -> Self {
+    #[must_use]
+    pub const fn for_tests() -> Self {
         Self {
             max_attempts: 2,
             base_delay_ms: 500,

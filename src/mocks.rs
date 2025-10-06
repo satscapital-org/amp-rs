@@ -16,6 +16,8 @@ pub fn mock_get_changelog(server: &MockServer) {
     });
 }
 
+/// # Panics
+/// Panics if the request body cannot be parsed as JSON
 pub fn mock_create_asset_assignments(server: &MockServer) {
     use serde_json::Value;
 
@@ -26,7 +28,7 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
             // Custom matcher to validate the request structure and data types
             .matches(|req| {
                 // Parse the request body
-                let body: Result<Value, _> = serde_json::from_slice(&req.body.as_ref().unwrap());
+                let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
                 match body {
                     Ok(json) => {
                         // Validate that the request is wrapped in an "assignments" array
@@ -38,20 +40,18 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
                                     for assignment in assignments_array {
                                         let has_registered_user = assignment
                                             .get("registered_user")
-                                            .and_then(|v| v.as_i64())
+                                            .and_then(serde_json::Value::as_i64)
                                             .is_some();
                                         let has_amount = assignment
                                             .get("amount")
-                                            .and_then(|v| v.as_i64())
+                                            .and_then(serde_json::Value::as_i64)
                                             .is_some();
                                         let vesting_timestamp_valid = assignment
                                             .get("vesting_timestamp")
-                                            .map(|v| v.is_null() || v.is_i64())
-                                            .unwrap_or(true); // Optional field
+                                            .map_or(true, |v| v.is_null() || v.is_i64()); // Optional field
                                         let ready_for_distribution_valid = assignment
                                             .get("ready_for_distribution")
-                                            .map(|v| v.is_boolean())
-                                            .unwrap_or(true); // Optional field with default
+                                            .map_or(true, serde_json::Value::is_boolean); // Optional field with default
 
                                         if !(has_registered_user
                                             && has_amount
@@ -91,6 +91,8 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
     });
 }
 
+/// # Panics
+/// Panics if the request body cannot be parsed as JSON
 pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
     use serde_json::Value;
 
@@ -100,20 +102,8 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
             .header("content-type", "application/json")
             // Custom matcher to validate multiple assignments
             .matches(|req| {
-                let body: Result<Value, _> = serde_json::from_slice(&req.body.as_ref().unwrap());
-                match body {
-                    Ok(json) => {
-                        if let Some(assignments) =
-                            json.get("assignments").and_then(|v| v.as_array())
-                        {
-                            // Specifically check for multiple assignments
-                            assignments.len() > 1
-                        } else {
-                            false
-                        }
-                    }
-                    Err(_) => false,
-                }
+                let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
+                body.map_or(false, |json| json.get("assignments").and_then(|v| v.as_array()).map_or(false, |assignments| assignments.len() > 1))
             });
         then.status(200)
             .header("content-type", "application/json")

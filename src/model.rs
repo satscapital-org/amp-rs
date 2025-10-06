@@ -230,7 +230,7 @@ pub struct CreateAssetAssignmentRequest {
     pub ready_for_distribution: bool, // Defaults to false
 }
 
-fn default_ready_for_distribution() -> bool {
+const fn default_ready_for_distribution() -> bool {
     false
 }
 
@@ -434,7 +434,8 @@ pub struct TokenData {
 }
 
 impl TokenData {
-    /// Creates a new TokenData instance
+    /// Creates a new `TokenData` instance
+    #[must_use]
     pub fn new(token: String, expires_at: DateTime<Utc>) -> Self {
         Self {
             token: Secret::new(token),
@@ -444,16 +445,19 @@ impl TokenData {
     }
 
     /// Checks if the token is expired
+    #[must_use]
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
 
     /// Checks if the token expires within the given threshold
+    #[must_use]
     pub fn expires_soon(&self, threshold: Duration) -> bool {
         Utc::now() + threshold > self.expires_at
     }
 
     /// Returns the age of the token
+    #[must_use]
     pub fn age(&self) -> Duration {
         Utc::now() - self.obtained_at
     }
@@ -489,8 +493,10 @@ impl From<&TokenData> for TokenInfo {
 
 /// Custom serialization module for Secret<String>
 pub mod secret_serde {
-    use super::*;
+    use super::{Serializer, Secret, Serialize, Deserializer, Deserialize};
 
+    /// # Errors
+    /// Returns an error if serialization fails
     pub fn serialize<S>(secret: &Secret<String>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -499,6 +505,8 @@ pub mod secret_serde {
         secret.expose_secret().serialize(serializer)
     }
 
+    /// # Errors
+    /// Returns an error if deserialization fails
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Secret<String>, D::Error>
     where
         D: Deserializer<'de>,
