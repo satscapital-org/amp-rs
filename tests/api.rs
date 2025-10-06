@@ -3,10 +3,10 @@ use amp_rs::ApiClient;
 use httpmock::prelude::*;
 use serial_test::serial;
 use std::env;
-use std::sync::Arc;
-use url::Url;
-use tokio::sync::{OnceCell, Mutex};
 use std::process::Command;
+use std::sync::Arc;
+use tokio::sync::{Mutex, OnceCell};
+use url::Url;
 
 // Shared token manager for live tests to avoid rate limiting issues
 static SHARED_TOKEN_MANAGER: OnceCell<Arc<amp_rs::client::TokenManager>> = OnceCell::const_new();
@@ -14,17 +14,21 @@ static ENV_SETUP_LOCK: OnceCell<Arc<Mutex<()>>> = OnceCell::const_new();
 
 async fn get_shared_client() -> Result<ApiClient, amp_rs::client::Error> {
     // Use a lock to ensure environment setup is atomic
-    let lock = ENV_SETUP_LOCK.get_or_init(|| async { Arc::new(Mutex::new(())) }).await;
+    let lock = ENV_SETUP_LOCK
+        .get_or_init(|| async { Arc::new(Mutex::new(())) })
+        .await;
     let _guard = lock.lock().await;
-    
+
     // Load environment variables from .env file to avoid mock test pollution
     // This ensures live tests always use the correct credentials from the .env file
     dotenvy::from_filename_override(".env").ok();
-    
+
     // Get or create the shared token manager (only created once with correct environment)
-    let token_manager = SHARED_TOKEN_MANAGER.get_or_init(|| async {
-        Arc::new(amp_rs::client::TokenManager::new().expect("Failed to create token manager"))
-    }).await;
+    let token_manager = SHARED_TOKEN_MANAGER
+        .get_or_init(|| async {
+            Arc::new(amp_rs::client::TokenManager::new().expect("Failed to create token manager"))
+        })
+        .await;
 
     ApiClient::with_token_manager(Arc::clone(token_manager))
 }
@@ -33,7 +37,7 @@ async fn get_shared_client() -> Result<ApiClient, amp_rs::client::Error> {
 async fn get_destination_address_for_gaid(gaid: &str) -> Result<String, String> {
     let output = Command::new("python3")
         .arg("gaid-scripts/address.py")
-        .arg("amp")  // Using 'amp' environment
+        .arg("amp") // Using 'amp' environment
         .arg(gaid)
         .output()
         .map_err(|e| format!("Failed to execute address.py: {}", e))?;
@@ -234,7 +238,10 @@ async fn test_issue_asset_live() {
     println!("Destination address: {}", destination_address);
 
     // Clean up: delete the created asset
-    println!("Cleaning up: deleting asset with UUID {}", issuance_response.asset_uuid);
+    println!(
+        "Cleaning up: deleting asset with UUID {}",
+        issuance_response.asset_uuid
+    );
     let delete_result = client.delete_asset(&issuance_response.asset_uuid).await;
     if let Err(e) = &delete_result {
         println!("Warning: Failed to delete asset: {:?}", e);
@@ -643,7 +650,10 @@ async fn test_add_category_live() {
 
     // Clean up: delete the created category
     let created_category = result.unwrap();
-    println!("Cleaning up: deleting category with ID {}", created_category.id);
+    println!(
+        "Cleaning up: deleting category with ID {}",
+        created_category.id
+    );
     let delete_result = client.delete_category(created_category.id).await;
     if let Err(e) = &delete_result {
         println!("Warning: Failed to delete category: {:?}", e);
@@ -800,8 +810,6 @@ async fn test_get_managers_mock() {
     dotenvy::from_filename_override(".env").ok();
 }
 
-
-
 #[tokio::test]
 async fn test_create_manager_mock() {
     dotenvy::from_filename_override(".env").ok();
@@ -877,12 +885,15 @@ async fn test_create_asset_assignments_live_slow() {
 
     // Check if user already exists
     let existing_users = client.get_registered_users().await.unwrap();
-    let existing_user = existing_users.iter().find(|u| {
-        u.gaid.as_ref().map_or(false, |gaid| gaid == user_gaid)
-    });
+    let existing_user = existing_users
+        .iter()
+        .find(|u| u.gaid.as_ref().map_or(false, |gaid| gaid == user_gaid));
 
     let user_id = if let Some(user) = existing_user {
-        println!("Reusing existing user with GAID {}: {} (ID: {})", user_gaid, user.name, user.id);
+        println!(
+            "Reusing existing user with GAID {}: {} (ID: {})",
+            user_gaid, user.name, user.id
+        );
         user.id
     } else {
         // Create new user if it doesn't exist
@@ -917,25 +928,37 @@ async fn test_create_asset_assignments_live_slow() {
     };
 
     // Add user to category before creating the asset
-    let user_category_result = client.add_registered_user_to_category(category_id, user_id).await;
+    let user_category_result = client
+        .add_registered_user_to_category(category_id, user_id)
+        .await;
     if let Err(e) = &user_category_result {
         println!("Warning: Failed to add user to category: {:?}", e);
     } else {
-        println!("Successfully added user to category {} before asset creation", category_id);
+        println!(
+            "Successfully added user to category {} before asset creation",
+            category_id
+        );
     }
 
     // 3. Get or reuse an existing asset that's already confirmed
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = if let Some(existing_asset) = assets.first() {
-        println!("Reusing existing asset: {} (UUID: {})", existing_asset.name, existing_asset.asset_uuid);
+        println!(
+            "Reusing existing asset: {} (UUID: {})",
+            existing_asset.name, existing_asset.asset_uuid
+        );
         existing_asset.asset_uuid.clone()
     } else {
         // If no assets exist, create one (this should be rare in a test environment)
         println!("No existing assets found, creating a new one...");
-        let destination_address = get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
-            .await
-            .expect("Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1");
-        let pubkey = "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
+        let destination_address =
+            get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
+                .await
+                .expect(
+                    "Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1",
+                );
+        let pubkey =
+            "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
 
         let issuance_request = amp_rs::model::IssuanceRequest {
             name: "Test Asset for Assignment".to_string(),
@@ -953,7 +976,10 @@ async fn test_create_asset_assignments_live_slow() {
         };
 
         let issued_asset = client.issue_asset(&issuance_request).await.unwrap();
-        println!("Created new asset: {} (UUID: {})", issued_asset.name, issued_asset.asset_uuid);
+        println!(
+            "Created new asset: {} (UUID: {})",
+            issued_asset.name, issued_asset.asset_uuid
+        );
         issued_asset.asset_uuid
     };
 
@@ -964,8 +990,6 @@ async fn test_create_asset_assignments_live_slow() {
     } else {
         println!("Successfully added asset to category {}", category_id);
     }
-
-
 
     // 6. Verify category membership by getting category details
     println!("\n=== CATEGORY MEMBERSHIP VERIFICATION ===");
@@ -978,18 +1002,18 @@ async fn test_create_asset_assignments_live_slow() {
             println!("  Description: {:?}", category.description);
             println!("  Registered Users: {:?}", category.registered_users);
             println!("  Assets: {:?}", category.assets);
-            
+
             // Check if user is in the category
             let user_is_member = category.registered_users.contains(&user_id);
             println!("\n=== MEMBERSHIP ANALYSIS ===");
             println!("Expected User ID: {}", user_id);
             println!("User is member of category: {}", user_is_member);
-            
+
             // Check if asset is in the category
             let asset_is_member = category.assets.contains(&asset_uuid);
             println!("Expected Asset UUID: {}", asset_uuid);
             println!("Asset is member of category: {}", asset_is_member);
-            
+
             if user_is_member && asset_is_member {
                 println!("✅ BOTH user and asset are properly recognized as category members");
             } else {
@@ -1011,17 +1035,20 @@ async fn test_create_asset_assignments_live_slow() {
     // 7. Create the assignment with a smaller amount
     let request = amp_rs::model::CreateAssetAssignmentRequest {
         registered_user: user_id,
-        amount: 1, // Use a very small amount to ensure treasury has enough
+        amount: 1,               // Use a very small amount to ensure treasury has enough
         vesting_timestamp: None, // No vesting for this test
         ready_for_distribution: false, // Default value
     };
 
     // Log the request for debugging
-    println!("Assignment creation request: {}", serde_json::to_string_pretty(&request).unwrap());
+    println!(
+        "Assignment creation request: {}",
+        serde_json::to_string_pretty(&request).unwrap()
+    );
     println!("Asset UUID: {}", asset_uuid);
     println!("User ID: {}", user_id);
     println!("Category ID: {}", category_id);
-    
+
     // Construct and log the expected URL path
     let expected_path = format!("assets/{}/assignments/create", asset_uuid);
     println!("Expected URL path: {}", expected_path);
@@ -1029,11 +1056,21 @@ async fn test_create_asset_assignments_live_slow() {
     println!("Asset UUID length: {}", asset_uuid.len());
 
     // Use the proper client method to create the assignment
-    println!("About to call client.create_asset_assignments with asset_uuid: {}", asset_uuid);
-    let created_assignments = match client.create_asset_assignments(&asset_uuid, &[request.clone()]).await {
+    println!(
+        "About to call client.create_asset_assignments with asset_uuid: {}",
+        asset_uuid
+    );
+    let created_assignments = match client
+        .create_asset_assignments(&asset_uuid, &[request.clone()])
+        .await
+    {
         Ok(assignments) => {
             println!("✅ Assignment creation succeeded!");
-            println!("Created {} assignment(s): {:?}", assignments.len(), assignments);
+            println!(
+                "Created {} assignment(s): {:?}",
+                assignments.len(),
+                assignments
+            );
             if let Some(assignment) = assignments.first() {
                 println!("First assignment ID: {}", assignment.id);
                 println!("Registered User: {}", assignment.registered_user);
@@ -1043,23 +1080,28 @@ async fn test_create_asset_assignments_live_slow() {
         }
         Err(e) => {
             println!("❌ Assignment creation failed: {:?}", e);
-            
+
             // Let's try to make a manual request to see what the actual response is
-            use reqwest::Method;
             use reqwest::header::AUTHORIZATION;
+            use reqwest::Method;
             use std::env;
-            
+
             println!("Making manual request to debug the response...");
             let base_url = env::var("AMP_API_BASE_URL")
                 .unwrap_or_else(|_| "https://amp-api.blockstream.com".to_string());
             let mut url = reqwest::Url::parse(&base_url).unwrap();
-            url.path_segments_mut().unwrap().extend(&["assets", &asset_uuid, "assignments", "create"]);
-            
+            url.path_segments_mut().unwrap().extend(&[
+                "assets",
+                &asset_uuid,
+                "assignments",
+                "create",
+            ]);
+
             let token = client.get_token().await.unwrap();
             let wrapper = amp_rs::model::CreateAssetAssignmentRequestWrapper {
                 assignments: vec![request.clone()],
             };
-            
+
             let http_client = reqwest::Client::new();
             let response = http_client
                 .request(Method::POST, url.clone())
@@ -1068,27 +1110,30 @@ async fn test_create_asset_assignments_live_slow() {
                 .send()
                 .await
                 .unwrap();
-            
+
             let status = response.status();
             let response_body = response.text().await.unwrap();
-            
+
             println!("Manual request URL: {}", url);
             println!("Manual request status: {}", status);
             println!("Manual request body: {}", response_body);
-            
+
             // No asset cleanup needed since we're reusing existing assets
-            
+
             panic!("Failed to create asset assignment: {:?}", e);
         }
     };
 
     // === CLEANUP SECTION ===
     println!("\n=== STARTING CLEANUP ===");
-    
+
     // Delete all created assignments (asset is reused, so no need to delete it)
     for assignment in &created_assignments {
         println!("Deleting assignment ID: {}", assignment.id);
-        match client.delete_asset_assignment(&asset_uuid, &assignment.id.to_string()).await {
+        match client
+            .delete_asset_assignment(&asset_uuid, &assignment.id.to_string())
+            .await
+        {
             Ok(()) => {
                 println!("✅ Successfully deleted assignment {}", assignment.id);
             }
@@ -1097,7 +1142,7 @@ async fn test_create_asset_assignments_live_slow() {
             }
         }
     }
-    
+
     println!("=== CLEANUP COMPLETED ===\n");
 }
 
@@ -1125,34 +1170,75 @@ async fn test_create_asset_assignments_mock() {
         ready_for_distribution: false, // Default value
     };
 
-    let result = client.create_asset_assignments(&asset_uuid, &[request]).await;
+    let result = client
+        .create_asset_assignments(&asset_uuid, &[request])
+        .await;
     assert!(result.is_ok(), "Assignment creation should succeed");
-    
+
     let assignments = result.unwrap();
-    
+
     // Validate response structure
-    assert_eq!(assignments.len(), 1, "Response should contain exactly one assignment");
-    
+    assert_eq!(
+        assignments.len(),
+        1,
+        "Response should contain exactly one assignment"
+    );
+
     let assignment = &assignments[0];
-    
+
     // Validate all required fields and their data types
-    assert_eq!(assignment.id, 10, "Assignment ID should match expected value");
-    assert_eq!(assignment.registered_user, 13, "Registered user should be an i64");
+    assert_eq!(
+        assignment.id, 10,
+        "Assignment ID should match expected value"
+    );
+    assert_eq!(
+        assignment.registered_user, 13,
+        "Registered user should be an i64"
+    );
     assert_eq!(assignment.amount, 100, "Amount should be an i64");
     assert_eq!(assignment.creator, 1, "Creator should be an i64");
-    assert_eq!(assignment.ready_for_distribution, true, "Ready for distribution should be a boolean");
-    assert_eq!(assignment.has_vested, true, "Has vested should be a boolean");
-    assert_eq!(assignment.is_distributed, false, "Is distributed should be a boolean");
-    
+    assert_eq!(
+        assignment.ready_for_distribution, true,
+        "Ready for distribution should be a boolean"
+    );
+    assert_eq!(
+        assignment.has_vested, true,
+        "Has vested should be a boolean"
+    );
+    assert_eq!(
+        assignment.is_distributed, false,
+        "Is distributed should be a boolean"
+    );
+
     // Validate optional fields
-    assert!(assignment.receiving_address.is_none(), "Receiving address should be None/null");
-    assert!(assignment.distribution_uuid.is_none(), "Distribution UUID should be None/null");
-    assert!(assignment.vesting_datetime.is_none(), "Vesting datetime should be None/null");
-    assert!(assignment.vesting_timestamp.is_none(), "Vesting timestamp should be None/null");
-    
+    assert!(
+        assignment.receiving_address.is_none(),
+        "Receiving address should be None/null"
+    );
+    assert!(
+        assignment.distribution_uuid.is_none(),
+        "Distribution UUID should be None/null"
+    );
+    assert!(
+        assignment.vesting_datetime.is_none(),
+        "Vesting datetime should be None/null"
+    );
+    assert!(
+        assignment.vesting_timestamp.is_none(),
+        "Vesting timestamp should be None/null"
+    );
+
     // Validate backward compatibility fields
-    assert_eq!(assignment.gaid, Some("GA3DS3emT12zDF4RGywBvJqZfhefNp".to_string()), "GAID should be present for backward compatibility");
-    assert_eq!(assignment.investor, Some(13), "Investor field should be present for backward compatibility");
+    assert_eq!(
+        assignment.gaid,
+        Some("GA3DS3emT12zDF4RGywBvJqZfhefNp".to_string()),
+        "GAID should be present for backward compatibility"
+    );
+    assert_eq!(
+        assignment.investor,
+        Some(13),
+        "Investor field should be present for backward compatibility"
+    );
 
     // Cleanup: reload .env file
     dotenvy::from_filename_override(".env").ok();
@@ -1191,25 +1277,52 @@ async fn test_create_asset_assignments_multiple_mock() {
         },
     ];
 
-    let result = client.create_asset_assignments(&asset_uuid, &requests).await;
-    assert!(result.is_ok(), "Multiple assignment creation should succeed");
-    
+    let result = client
+        .create_asset_assignments(&asset_uuid, &requests)
+        .await;
+    assert!(
+        result.is_ok(),
+        "Multiple assignment creation should succeed"
+    );
+
     let assignments = result.unwrap();
-    
+
     // Validate response structure
-    assert_eq!(assignments.len(), 2, "Response should contain exactly two assignments");
-    
+    assert_eq!(
+        assignments.len(),
+        2,
+        "Response should contain exactly two assignments"
+    );
+
     // Validate first assignment
     let assignment1 = &assignments[0];
-    assert_eq!(assignment1.id, 10, "First assignment ID should match expected value");
-    assert_eq!(assignment1.registered_user, 13, "First assignment registered user should be correct");
-    assert_eq!(assignment1.amount, 100, "First assignment amount should be correct");
-    
+    assert_eq!(
+        assignment1.id, 10,
+        "First assignment ID should match expected value"
+    );
+    assert_eq!(
+        assignment1.registered_user, 13,
+        "First assignment registered user should be correct"
+    );
+    assert_eq!(
+        assignment1.amount, 100,
+        "First assignment amount should be correct"
+    );
+
     // Validate second assignment
     let assignment2 = &assignments[1];
-    assert_eq!(assignment2.id, 11, "Second assignment ID should match expected value");
-    assert_eq!(assignment2.registered_user, 14, "Second assignment registered user should be correct");
-    assert_eq!(assignment2.amount, 200, "Second assignment amount should be correct");
+    assert_eq!(
+        assignment2.id, 11,
+        "Second assignment ID should match expected value"
+    );
+    assert_eq!(
+        assignment2.registered_user, 14,
+        "Second assignment registered user should be correct"
+    );
+    assert_eq!(
+        assignment2.amount, 200,
+        "Second assignment amount should be correct"
+    );
 
     // Cleanup: reload .env file
     dotenvy::from_filename_override(".env").ok();
@@ -1243,39 +1356,57 @@ async fn test_create_asset_assignments_multiple_live_slow() {
 
     // Check if users already exist
     let existing_users = client.get_registered_users().await.unwrap();
-    
+
     let existing_user_1203 = existing_users.iter().find(|u| u.id == 1203);
     let existing_user_1194 = existing_users.iter().find(|u| u.id == 1194);
 
     let user_id_1203 = if let Some(user) = existing_user_1203 {
-        println!("Reusing existing user 1203: {} (GAID: {:?})", user.name, user.gaid);
+        println!(
+            "Reusing existing user 1203: {} (GAID: {:?})",
+            user.name, user.gaid
+        );
         user.id
     } else {
         // Create new user with ID 1203 if it doesn't exist
-        println!("Creating new user with target ID 1203 and GAID {}", user_gaid_1203);
+        println!(
+            "Creating new user with target ID 1203 and GAID {}",
+            user_gaid_1203
+        );
         let new_user = amp_rs::model::RegisteredUserAdd {
             name: "Test User 1203 for Multiple Assignments".to_string(),
             gaid: Some(user_gaid_1203.to_string()),
             is_company: false,
         };
         let user = client.add_registered_user(&new_user).await.unwrap();
-        println!("Created new user: {} (ID: {}) with GAID: {:?}", user.name, user.id, user.gaid);
+        println!(
+            "Created new user: {} (ID: {}) with GAID: {:?}",
+            user.name, user.id, user.gaid
+        );
         user.id
     };
 
     let user_id_1194 = if let Some(user) = existing_user_1194 {
-        println!("Reusing existing user 1194: {} (GAID: {:?})", user.name, user.gaid);
+        println!(
+            "Reusing existing user 1194: {} (GAID: {:?})",
+            user.name, user.gaid
+        );
         user.id
     } else {
         // Create new user with ID 1194 if it doesn't exist
-        println!("Creating new user with target ID 1194 and GAID {}", user_gaid_1194);
+        println!(
+            "Creating new user with target ID 1194 and GAID {}",
+            user_gaid_1194
+        );
         let new_user = amp_rs::model::RegisteredUserAdd {
             name: "Test User 1194 for Multiple Assignments".to_string(),
             gaid: Some(user_gaid_1194.to_string()),
             is_company: false,
         };
         let user = client.add_registered_user(&new_user).await.unwrap();
-        println!("Created new user: {} (ID: {}) with GAID: {:?}", user.name, user.id, user.gaid);
+        println!(
+            "Created new user: {} (ID: {}) with GAID: {:?}",
+            user.name, user.id, user.gaid
+        );
         user.id
     };
 
@@ -1299,32 +1430,49 @@ async fn test_create_asset_assignments_multiple_live_slow() {
     };
 
     // Add both users to category before creating the asset
-    let user_category_result_1203 = client.add_registered_user_to_category(category_id, user_id_1203).await;
+    let user_category_result_1203 = client
+        .add_registered_user_to_category(category_id, user_id_1203)
+        .await;
     if let Err(e) = &user_category_result_1203 {
         println!("Warning: Failed to add user 1203 to category: {:?}", e);
     } else {
-        println!("Successfully added user 1203 to category {} before asset creation", category_id);
+        println!(
+            "Successfully added user 1203 to category {} before asset creation",
+            category_id
+        );
     }
 
-    let user_category_result_1194 = client.add_registered_user_to_category(category_id, user_id_1194).await;
+    let user_category_result_1194 = client
+        .add_registered_user_to_category(category_id, user_id_1194)
+        .await;
     if let Err(e) = &user_category_result_1194 {
         println!("Warning: Failed to add user 1194 to category: {:?}", e);
     } else {
-        println!("Successfully added user 1194 to category {} before asset creation", category_id);
+        println!(
+            "Successfully added user 1194 to category {} before asset creation",
+            category_id
+        );
     }
 
     // 3. Get or reuse an existing asset that's already confirmed
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = if let Some(existing_asset) = assets.first() {
-        println!("Reusing existing asset: {} (UUID: {})", existing_asset.name, existing_asset.asset_uuid);
+        println!(
+            "Reusing existing asset: {} (UUID: {})",
+            existing_asset.name, existing_asset.asset_uuid
+        );
         existing_asset.asset_uuid.clone()
     } else {
         // If no assets exist, create one (this should be rare in a test environment)
         println!("No existing assets found, creating a new one...");
-        let destination_address = get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
-            .await
-            .expect("Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1");
-        let pubkey = "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
+        let destination_address =
+            get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
+                .await
+                .expect(
+                    "Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1",
+                );
+        let pubkey =
+            "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
 
         let issuance_request = amp_rs::model::IssuanceRequest {
             name: "Test Asset for Multiple Assignments".to_string(),
@@ -1342,7 +1490,10 @@ async fn test_create_asset_assignments_multiple_live_slow() {
         };
 
         let issued_asset = client.issue_asset(&issuance_request).await.unwrap();
-        println!("Created new asset: {} (UUID: {})", issued_asset.name, issued_asset.asset_uuid);
+        println!(
+            "Created new asset: {} (UUID: {})",
+            issued_asset.name, issued_asset.asset_uuid
+        );
         issued_asset.asset_uuid
     };
 
@@ -1365,7 +1516,7 @@ async fn test_create_asset_assignments_multiple_live_slow() {
             println!("  Description: {:?}", category.description);
             println!("  Registered Users: {:?}", category.registered_users);
             println!("  Assets: {:?}", category.assets);
-            
+
             // Check if both users are in the category
             let user_1203_is_member = category.registered_users.contains(&user_id_1203);
             let user_1194_is_member = category.registered_users.contains(&user_id_1194);
@@ -1374,21 +1525,27 @@ async fn test_create_asset_assignments_multiple_live_slow() {
             println!("User 1203 is member of category: {}", user_1203_is_member);
             println!("Expected User ID 1194: {}", user_id_1194);
             println!("User 1194 is member of category: {}", user_1194_is_member);
-            
+
             // Check if asset is in the category
             let asset_is_member = category.assets.contains(&asset_uuid);
             println!("Expected Asset UUID: {}", asset_uuid);
             println!("Asset is member of category: {}", asset_is_member);
-            
+
             if user_1203_is_member && user_1194_is_member && asset_is_member {
                 println!("✅ ALL users and asset are properly recognized as category members");
             } else {
                 println!("❌ MEMBERSHIP ISSUE DETECTED:");
                 if !user_1203_is_member {
-                    println!("  - User 1203 ({}) is NOT found in category members", user_id_1203);
+                    println!(
+                        "  - User 1203 ({}) is NOT found in category members",
+                        user_id_1203
+                    );
                 }
                 if !user_1194_is_member {
-                    println!("  - User 1194 ({}) is NOT found in category members", user_id_1194);
+                    println!(
+                        "  - User 1194 ({}) is NOT found in category members",
+                        user_id_1194
+                    );
                 }
                 if !asset_is_member {
                     println!("  - Asset {} is NOT found in category members", asset_uuid);
@@ -1405,13 +1562,13 @@ async fn test_create_asset_assignments_multiple_live_slow() {
     let requests = vec![
         amp_rs::model::CreateAssetAssignmentRequest {
             registered_user: user_id_1203,
-            amount: 1, // Use very small amounts to ensure treasury has enough
+            amount: 1,               // Use very small amounts to ensure treasury has enough
             vesting_timestamp: None, // No vesting for this test
             ready_for_distribution: false, // Default value
         },
         amp_rs::model::CreateAssetAssignmentRequest {
             registered_user: user_id_1194,
-            amount: 2, // Use very small amounts to ensure treasury has enough
+            amount: 2,               // Use very small amounts to ensure treasury has enough
             vesting_timestamp: None, // No vesting for this test
             ready_for_distribution: false, // Default value
         },
@@ -1420,47 +1577,73 @@ async fn test_create_asset_assignments_multiple_live_slow() {
     // Log the requests for debugging
     println!("Multiple assignment creation requests:");
     for (i, request) in requests.iter().enumerate() {
-        println!("  Request {}: {}", i + 1, serde_json::to_string_pretty(&request).unwrap());
+        println!(
+            "  Request {}: {}",
+            i + 1,
+            serde_json::to_string_pretty(&request).unwrap()
+        );
     }
     println!("Asset UUID: {}", asset_uuid);
     println!("User ID 1203: {}", user_id_1203);
     println!("User ID 1194: {}", user_id_1194);
     println!("Category ID: {}", category_id);
-    
+
     // Construct and log the expected URL path
     let expected_path = format!("assets/{}/assignments/create", asset_uuid);
     println!("Expected URL path: {}", expected_path);
 
     // Use the proper client method to create multiple assignments simultaneously
-    println!("About to call client.create_asset_assignments with asset_uuid: {} and {} requests", asset_uuid, requests.len());
-    let created_assignments = match client.create_asset_assignments(&asset_uuid, &requests).await {
+    println!(
+        "About to call client.create_asset_assignments with asset_uuid: {} and {} requests",
+        asset_uuid,
+        requests.len()
+    );
+    let created_assignments = match client
+        .create_asset_assignments(&asset_uuid, &requests)
+        .await
+    {
         Ok(assignments) => {
             println!("✅ Multiple assignment creation succeeded!");
-            println!("Created {} assignment(s): {:?}", assignments.len(), assignments);
+            println!(
+                "Created {} assignment(s): {:?}",
+                assignments.len(),
+                assignments
+            );
             for (i, assignment) in assignments.iter().enumerate() {
-                println!("Assignment {}: ID={}, User={}, Amount={}", i + 1, assignment.id, assignment.registered_user, assignment.amount);
+                println!(
+                    "Assignment {}: ID={}, User={}, Amount={}",
+                    i + 1,
+                    assignment.id,
+                    assignment.registered_user,
+                    assignment.amount
+                );
             }
             assignments
         }
         Err(e) => {
             println!("❌ Multiple assignment creation failed: {:?}", e);
-            
+
             // Let's try to make a manual request to see what the actual response is
-            use reqwest::Method;
             use reqwest::header::AUTHORIZATION;
+            use reqwest::Method;
             use std::env;
-            
+
             println!("Making manual request to debug the response...");
             let base_url = env::var("AMP_API_BASE_URL")
                 .unwrap_or_else(|_| "https://amp-api.blockstream.com".to_string());
             let mut url = reqwest::Url::parse(&base_url).unwrap();
-            url.path_segments_mut().unwrap().extend(&["assets", &asset_uuid, "assignments", "create"]);
-            
+            url.path_segments_mut().unwrap().extend(&[
+                "assets",
+                &asset_uuid,
+                "assignments",
+                "create",
+            ]);
+
             let token = client.get_token().await.unwrap();
             let wrapper = amp_rs::model::CreateAssetAssignmentRequestWrapper {
                 assignments: requests.clone(),
             };
-            
+
             let http_client = reqwest::Client::new();
             let response = http_client
                 .request(Method::POST, url.clone())
@@ -1469,33 +1652,43 @@ async fn test_create_asset_assignments_multiple_live_slow() {
                 .send()
                 .await
                 .unwrap();
-            
+
             let status = response.status();
             let response_body = response.text().await.unwrap();
-            
+
             println!("Manual request URL: {}", url);
             println!("Manual request status: {}", status);
             println!("Manual request body: {}", response_body);
-            
+
             panic!("Failed to create multiple asset assignments: {:?}", e);
         }
     };
 
     // Validate that we created exactly 2 assignments
-    assert_eq!(created_assignments.len(), 2, "Should create exactly 2 assignments");
-    
+    assert_eq!(
+        created_assignments.len(),
+        2,
+        "Should create exactly 2 assignments"
+    );
+
     // Validate assignments contain the correct users (note: order might not be preserved)
-    let user_ids: Vec<i64> = created_assignments.iter().map(|a| a.registered_user).collect();
+    let user_ids: Vec<i64> = created_assignments
+        .iter()
+        .map(|a| a.registered_user)
+        .collect();
     assert!(user_ids.contains(&user_id_1203), "Should contain user 1203");
     assert!(user_ids.contains(&user_id_1194), "Should contain user 1194");
 
     // === CLEANUP SECTION ===
     println!("\n=== STARTING CLEANUP ===");
-    
+
     // Delete all created assignments (asset is reused, so no need to delete it)
     for assignment in &created_assignments {
         println!("Deleting assignment ID: {}", assignment.id);
-        match client.delete_asset_assignment(&asset_uuid, &assignment.id.to_string()).await {
+        match client
+            .delete_asset_assignment(&asset_uuid, &assignment.id.to_string())
+            .await
+        {
             Ok(()) => {
                 println!("✅ Successfully deleted assignment {}", assignment.id);
             }
@@ -1504,7 +1697,7 @@ async fn test_create_asset_assignments_multiple_live_slow() {
             }
         }
     }
-    
+
     println!("=== CLEANUP COMPLETED ===\n");
 }
 
@@ -1644,16 +1837,19 @@ async fn test_add_asset_treasury_addresses_live() {
             .get_asset_treasury_addresses(&asset_to_test.asset_uuid)
             .await
             .unwrap_or_default();
-        
+
         println!("Current treasury addresses: {:?}", current_addresses);
-        
+
         // Use different test addresses to avoid conflicts
         let test_addresses = vec![
-            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string(),
-            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27".to_string(),
-            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw28".to_string(),
+            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+                .to_string(),
+            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27"
+                .to_string(),
+            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw28"
+                .to_string(),
         ];
-        
+
         // Find an address that's not already added
         let mut address_to_add = None;
         for addr in &test_addresses {
@@ -1662,25 +1858,33 @@ async fn test_add_asset_treasury_addresses_live() {
                 break;
             }
         }
-        
+
         if let Some(new_address) = address_to_add {
             let treasury_addresses = vec![new_address.clone()];
-            
+
             let result = client
                 .add_asset_treasury_addresses(&asset_to_test.asset_uuid, &treasury_addresses)
                 .await;
-            
+
             match result {
                 Ok(_) => {
-                    println!("Successfully added treasury address {} to asset {}", new_address, asset_to_test.asset_uuid);
+                    println!(
+                        "Successfully added treasury address {} to asset {}",
+                        new_address, asset_to_test.asset_uuid
+                    );
                 }
                 Err(e) => {
                     let error_msg = format!("{:?}", e);
                     if error_msg.contains("already been added") {
-                        println!("Treasury address {} was already added to asset {} - test passes", new_address, asset_to_test.asset_uuid);
+                        println!(
+                            "Treasury address {} was already added to asset {} - test passes",
+                            new_address, asset_to_test.asset_uuid
+                        );
                     } else if error_msg.contains("Invalid value") {
                         println!("Treasury address format may not be valid for this network - skipping test");
-                        println!("This is expected in test environments with different address formats");
+                        println!(
+                            "This is expected in test environments with different address formats"
+                        );
                         return; // Skip the test rather than fail
                     } else {
                         println!("Unexpected error adding treasury addresses: {:?}", e);
@@ -1689,7 +1893,10 @@ async fn test_add_asset_treasury_addresses_live() {
                 }
             }
         } else {
-            println!("All test treasury addresses are already added to asset {}", asset_to_test.asset_uuid);
+            println!(
+                "All test treasury addresses are already added to asset {}",
+                asset_to_test.asset_uuid
+            );
             // Test passes if all addresses are already there - this means the functionality works
         }
     } else {
@@ -1708,8 +1915,10 @@ async fn test_add_asset_treasury_addresses_mock() {
 
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
     let treasury_addresses = vec![
-        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string(),
-        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27".to_string(),
+        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+            .to_string(),
+        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27"
+            .to_string(),
     ];
 
     let result = client
@@ -1742,7 +1951,10 @@ async fn test_get_asset_treasury_addresses_live() {
             .await;
         assert!(result.is_ok());
         let addresses = result.unwrap();
-        println!("Treasury addresses for asset {}: {:?}", asset_to_test.asset_uuid, addresses);
+        println!(
+            "Treasury addresses for asset {}: {:?}",
+            asset_to_test.asset_uuid, addresses
+        );
     } else {
         println!("Skipping test_get_asset_treasury_addresses because no assets were found.");
     }
@@ -1758,13 +1970,14 @@ async fn test_get_asset_treasury_addresses_mock() {
     mocks::mock_get_asset_treasury_addresses(&server);
 
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
-    let result = client
-        .get_asset_treasury_addresses("mock_asset_uuid")
-        .await;
+    let result = client.get_asset_treasury_addresses("mock_asset_uuid").await;
     assert!(result.is_ok());
     let addresses = result.unwrap();
     assert_eq!(addresses.len(), 2);
-    assert!(addresses.contains(&"vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string()));
+    assert!(addresses.contains(
+        &"vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+            .to_string()
+    ));
 
     // Cleanup: reload .env file
     dotenvy::from_filename_override(".env").ok();
@@ -1799,9 +2012,7 @@ async fn test_lock_asset_assignment_mock() {
     mocks::mock_lock_asset_assignment(&server);
 
     let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).unwrap();
-    let result = client
-        .lock_asset_assignment("mock_asset_uuid", "10")
-        .await;
+    let result = client.lock_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_ok());
     let assignment = result.unwrap();
     assert_eq!(assignment.id, 10);

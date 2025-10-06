@@ -37,16 +37,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(managers) => {
             println!("✅ Successfully retrieved managers list:");
             for (i, manager) in managers.iter().enumerate() {
-                println!("   Manager {}: {} (ID: {}, Locked: {})", 
-                    i + 1, 
-                    manager.username, 
-                    manager.id, 
+                println!(
+                    "   Manager {}: {} (ID: {}, Locked: {})",
+                    i + 1,
+                    manager.username,
+                    manager.id,
                     if manager.is_locked { "Yes" } else { "No" }
                 );
             }
-            
+
             if managers.len() == 1 {
-                println!("\n💡 Since there's only one manager, this is likely the current manager.");
+                println!(
+                    "\n💡 Since there's only one manager, this is likely the current manager."
+                );
             }
         }
         Err(e) => {

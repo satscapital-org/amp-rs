@@ -1,4 +1,4 @@
-use amp_rs::client::{RetryConfig, TokenManager, TokenError, RetryClient, Error};
+use amp_rs::client::{Error, RetryClient, RetryConfig, TokenError, TokenManager};
 use amp_rs::model::TokenData;
 use chrono::{Duration, Utc};
 use httpmock::prelude::*;
@@ -63,8 +63,8 @@ fn test_retry_config_from_env_custom_values() {
     env::remove_var("API_RETRY_BASE_DELAY_MS");
     env::remove_var("API_RETRY_MAX_DELAY_MS");
     env::remove_var("API_REQUEST_TIMEOUT_SECONDS");
-}#
-[test]
+}
+#[test]
 #[serial]
 fn test_retry_config_from_env_invalid_values() {
     dotenvy::dotenv().ok();
@@ -965,12 +965,10 @@ async fn test_token_manager_obtain_token_success() {
 
     // Mock successful token obtain
     let obtain_mock = server.mock(|when, then| {
-        when.method(POST)
-            .path("/user/obtain_token");
-        then.status(200)
-            .json_body(serde_json::json!({
-                "token": "new_token_456"
-            }));
+        when.method(POST).path("/user/obtain_token");
+        then.status(200).json_body(serde_json::json!({
+            "token": "new_token_456"
+        }));
     });
 
     // Create TokenManager with mock server URL
@@ -1083,12 +1081,18 @@ async fn test_token_manager_obtain_token_server_error() {
             assert_eq!(status, reqwest::StatusCode::UNAUTHORIZED);
             assert_eq!(error_text, "Authentication failed");
         }
-        Error::Token(TokenError::ObtainFailed { attempts, last_error }) => {
+        Error::Token(TokenError::ObtainFailed {
+            attempts,
+            last_error,
+        }) => {
             // The retry client wraps the error, which is also acceptable
             assert_eq!(attempts, 1); // Should not retry 401 errors
             assert!(last_error.contains("401") || last_error.contains("Unauthorized"));
         }
-        e => panic!("Expected TokenRequestFailed or ObtainFailed error, got: {}", e),
+        e => panic!(
+            "Expected TokenRequestFailed or ObtainFailed error, got: {}",
+            e
+        ),
     }
 
     obtain_mock.assert_hits(1); // Should not retry 401 errors
@@ -1119,17 +1123,19 @@ async fn test_token_manager_refresh_token_success() {
         when.method(POST)
             .path("/user/refresh_token")
             .header("authorization", "token current_token_123");
-        then.status(200)
-            .json_body(serde_json::json!({
-                "token": "refreshed_token_789"
-            }));
+        then.status(200).json_body(serde_json::json!({
+            "token": "refreshed_token_789"
+        }));
     });
 
     let config = RetryConfig::for_tests();
     let manager = TokenManager::with_config(config).unwrap();
 
     // Set an existing token
-    let token_data = TokenData::new("current_token_123".to_string(), Utc::now() + Duration::hours(1));
+    let token_data = TokenData::new(
+        "current_token_123".to_string(),
+        Utc::now() + Duration::hours(1),
+    );
     {
         let mut guard = manager.token_data.lock().await;
         *guard = Some(token_data);
@@ -1162,7 +1168,7 @@ async fn test_token_manager_refresh_token_no_existing_token_logic() {
     // The actual behavior depends on implementation - it might try to obtain a new token
     // or return an error. We'll just verify it doesn't panic.
     let result = manager.refresh_token().await;
-    
+
     // The result can be either success (if it falls back to obtain) or error
     // We just want to ensure it doesn't panic and returns a proper Result
     match result {

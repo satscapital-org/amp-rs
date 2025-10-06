@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get all assets
     println!("Fetching assets...");
     let assets = client.get_assets().await?;
-    
+
     if assets.is_empty() {
         println!("No assets found.");
         return Ok(());
@@ -30,23 +30,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get current treasury addresses
     println!("\nFetching current treasury addresses...");
-    let current_addresses = client.get_asset_treasury_addresses(&asset.asset_uuid).await?;
+    let current_addresses = client
+        .get_asset_treasury_addresses(&asset.asset_uuid)
+        .await?;
     println!("Current treasury addresses: {:?}", current_addresses);
 
     // Example treasury addresses to add (these are example Liquid addresses)
     let new_addresses = vec![
-        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string(),
-        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27".to_string(),
+        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+            .to_string(),
+        "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw27"
+            .to_string(),
     ];
 
     // Add treasury addresses
     println!("\nAdding treasury addresses...");
-    client.add_asset_treasury_addresses(&asset.asset_uuid, &new_addresses).await?;
-    println!("Successfully added {} treasury addresses", new_addresses.len());
+    client
+        .add_asset_treasury_addresses(&asset.asset_uuid, &new_addresses)
+        .await?;
+    println!(
+        "Successfully added {} treasury addresses",
+        new_addresses.len()
+    );
 
     // Fetch updated treasury addresses
     println!("\nFetching updated treasury addresses...");
-    let updated_addresses = client.get_asset_treasury_addresses(&asset.asset_uuid).await?;
+    let updated_addresses = client
+        .get_asset_treasury_addresses(&asset.asset_uuid)
+        .await?;
     println!("Updated treasury addresses: {:?}", updated_addresses);
 
     println!("\nTreasury addresses management completed successfully!");

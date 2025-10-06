@@ -18,7 +18,7 @@ pub fn mock_get_changelog(server: &MockServer) {
 
 pub fn mock_create_asset_assignments(server: &MockServer) {
     use serde_json::Value;
-    
+
     server.mock(|when, then| {
         when.method(POST)
             .path("/assets/mock_asset_uuid/assignments/create")
@@ -36,20 +36,28 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
                                 if !assignments_array.is_empty() {
                                     // Validate each assignment
                                     for assignment in assignments_array {
-                                        let has_registered_user = assignment.get("registered_user")
+                                        let has_registered_user = assignment
+                                            .get("registered_user")
                                             .and_then(|v| v.as_i64())
                                             .is_some();
-                                        let has_amount = assignment.get("amount")
+                                        let has_amount = assignment
+                                            .get("amount")
                                             .and_then(|v| v.as_i64())
                                             .is_some();
-                                        let vesting_timestamp_valid = assignment.get("vesting_timestamp")
+                                        let vesting_timestamp_valid = assignment
+                                            .get("vesting_timestamp")
                                             .map(|v| v.is_null() || v.is_i64())
                                             .unwrap_or(true); // Optional field
-                                        let ready_for_distribution_valid = assignment.get("ready_for_distribution")
+                                        let ready_for_distribution_valid = assignment
+                                            .get("ready_for_distribution")
                                             .map(|v| v.is_boolean())
                                             .unwrap_or(true); // Optional field with default
-                                        
-                                        if !(has_registered_user && has_amount && vesting_timestamp_valid && ready_for_distribution_valid) {
+
+                                        if !(has_registered_user
+                                            && has_amount
+                                            && vesting_timestamp_valid
+                                            && ready_for_distribution_valid)
+                                        {
                                             return false;
                                         }
                                     }
@@ -59,7 +67,7 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
                         }
                         false
                     }
-                    Err(_) => false
+                    Err(_) => false,
                 }
             });
         then.status(200)
@@ -85,7 +93,7 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
 
 pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
     use serde_json::Value;
-    
+
     server.mock(|when, then| {
         when.method(POST)
             .path("/assets/mock_asset_uuid/assignments/create")
@@ -95,14 +103,16 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                 let body: Result<Value, _> = serde_json::from_slice(&req.body.as_ref().unwrap());
                 match body {
                     Ok(json) => {
-                        if let Some(assignments) = json.get("assignments").and_then(|v| v.as_array()) {
+                        if let Some(assignments) =
+                            json.get("assignments").and_then(|v| v.as_array())
+                        {
                             // Specifically check for multiple assignments
                             assignments.len() > 1
                         } else {
                             false
                         }
                     }
-                    Err(_) => false
+                    Err(_) => false,
                 }
             });
         then.status(200)
@@ -143,8 +153,6 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
     });
 }
 
-
-
 pub fn mock_broadcast_transaction(server: &MockServer) {
     server.mock(|when, then| {
         when.method(POST).path("/tx/broadcast");
@@ -168,10 +176,6 @@ pub fn mock_get_broadcast_status(server: &MockServer) {
             }));
     });
 }
-
-
-
-
 
 pub fn mock_remove_asset_from_group(server: &MockServer) {
     server.mock(|when, then| {
@@ -211,8 +215,7 @@ pub fn mock_create_manager(server: &MockServer) {
 
 pub fn mock_obtain_token(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/user/obtain_token");
+        when.method(POST).path("/user/obtain_token");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -263,8 +266,7 @@ pub fn mock_obtain_token_server_error(server: &MockServer) {
 
 pub fn mock_refresh_token_failure(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/user/refresh_token");
+        when.method(POST).path("/user/refresh_token");
         then.status(401)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -510,12 +512,14 @@ pub fn mock_get_manager(server: &MockServer) {
 
 pub fn mock_manager_remove_asset(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST).path("/managers/1/assets/asset_uuid_1/remove");
+        when.method(POST)
+            .path("/managers/1/assets/asset_uuid_1/remove");
         then.status(200);
     });
-    
+
     server.mock(|when, then| {
-        when.method(POST).path("/managers/1/assets/asset_uuid_2/remove");
+        when.method(POST)
+            .path("/managers/1/assets/asset_uuid_2/remove");
         then.status(200);
     });
 }

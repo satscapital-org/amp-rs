@@ -403,8 +403,6 @@ pub struct BurnConfirmRequest {
     pub change_data: Vec<serde_json::Value>,
 }
 
-
-
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Permission {
@@ -420,17 +418,11 @@ pub enum Permission {
     Permissions,
 }
 
-
-
-
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BroadcastResponse {
     pub txid: String,
     pub hex: String,
 }
-
-
 
 /// Enhanced token data structure with secure storage and timestamp tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -515,5 +507,3 @@ pub mod secret_serde {
         Ok(Secret::new(s))
     }
 }
-
-

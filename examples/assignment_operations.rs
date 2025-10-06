@@ -44,7 +44,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Demonstrate lock operation
         println!("\n1. Locking assignment...");
-        match client.lock_asset_assignment(&asset.asset_uuid, &assignment_id).await {
+        match client
+            .lock_asset_assignment(&asset.asset_uuid, &assignment_id)
+            .await
+        {
             Ok(locked_assignment) => {
                 println!("✓ Assignment locked successfully");
                 println!("  Assignment ID: {}", locked_assignment.id);
@@ -55,7 +58,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Demonstrate unlock operation
         println!("\n2. Unlocking assignment...");
-        match client.unlock_asset_assignment(&asset.asset_uuid, &assignment_id).await {
+        match client
+            .unlock_asset_assignment(&asset.asset_uuid, &assignment_id)
+            .await
+        {
             Ok(unlocked_assignment) => {
                 println!("✓ Assignment unlocked successfully");
                 println!("  Assignment ID: {}", unlocked_assignment.id);

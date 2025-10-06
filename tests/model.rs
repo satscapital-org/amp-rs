@@ -95,8 +95,7 @@ fn test_token_data_serialization_roundtrip() {
     let json = serde_json::to_string(&original_token).expect("Serialization failed");
 
     // Deserialize back
-    let restored_token: TokenData =
-        serde_json::from_str(&json).expect("Deserialization failed");
+    let restored_token: TokenData = serde_json::from_str(&json).expect("Deserialization failed");
 
     // Verify all fields match
     assert_eq!(
@@ -169,8 +168,8 @@ fn test_secret_serde_module() {
 
     let restored: TestStruct = serde_json::from_str(&json).expect("Deserialization failed");
     assert_eq!(restored.secret_field.expose_secret(), "test_secret");
-}#
-[test]
+}
+#[test]
 fn test_create_asset_assignment_request_defaults() {
     use amp_rs::model::CreateAssetAssignmentRequest;
 
@@ -187,9 +186,9 @@ fn test_create_asset_assignment_request_defaults() {
 
     // Test deserialization with missing ready_for_distribution field
     let json_without_field = r#"{"registered_user":456,"amount":2000,"vesting_timestamp":null}"#;
-    let deserialized: CreateAssetAssignmentRequest = 
+    let deserialized: CreateAssetAssignmentRequest =
         serde_json::from_str(json_without_field).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized.registered_user, 456);
     assert_eq!(deserialized.amount, 2000);
     assert_eq!(deserialized.vesting_timestamp, None);
@@ -197,9 +196,9 @@ fn test_create_asset_assignment_request_defaults() {
 
     // Test with ready_for_distribution explicitly set to true
     let json_with_true = r#"{"registered_user":789,"amount":3000,"vesting_timestamp":1234567890,"ready_for_distribution":true}"#;
-    let deserialized_true: CreateAssetAssignmentRequest = 
+    let deserialized_true: CreateAssetAssignmentRequest =
         serde_json::from_str(json_with_true).expect("Deserialization failed");
-    
+
     assert_eq!(deserialized_true.registered_user, 789);
     assert_eq!(deserialized_true.amount, 3000);
     assert_eq!(deserialized_true.vesting_timestamp, Some(1234567890));

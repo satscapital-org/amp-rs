@@ -26,8 +26,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !managers.is_empty() {
                 println!("   Recent managers:");
                 for manager in managers.iter().take(5) {
-                    println!("   • {} (ID: {}, Locked: {})", 
-                        manager.username, manager.id, manager.is_locked);
+                    println!(
+                        "   • {} (ID: {}, Locked: {})",
+                        manager.username, manager.id, manager.is_locked
+                    );
                 }
                 if managers.len() > 5 {
                     println!("   ... and {} more", managers.len() - 5);
@@ -47,8 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !users.is_empty() {
                 println!("   Recent users:");
                 for user in users.iter().take(5) {
-                    println!("   • {} (ID: {}, GAID: {:?})", 
-                        user.name, user.id, user.gaid);
+                    println!(
+                        "   • {} (ID: {}, GAID: {:?})",
+                        user.name, user.id, user.gaid
+                    );
                 }
                 if users.len() > 5 {
                     println!("   ... and {} more", users.len() - 5);
@@ -88,8 +92,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !assets.is_empty() {
                 println!("   Recent assets:");
                 for asset in assets.iter().take(5) {
-                    println!("   • {} ({:?}) - Domain: {:?}", 
-                        asset.name, asset.ticker, asset.domain);
+                    println!(
+                        "   • {} ({:?}) - Domain: {:?}",
+                        asset.name, asset.ticker, asset.domain
+                    );
                 }
                 if assets.len() > 5 {
                     println!("   ... and {} more", assets.len() - 5);

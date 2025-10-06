@@ -23,9 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(managers) => {
             println!("✅ Found {} managers:", managers.len());
             for manager in &managers {
-                println!("   - ID: {}, Username: {}, Locked: {}, Assets: {}", 
-                    manager.id, 
-                    manager.username, 
+                println!(
+                    "   - ID: {}, Username: {}, Locked: {}, Assets: {}",
+                    manager.id,
+                    manager.username,
                     if manager.is_locked { "Yes" } else { "No" },
                     manager.assets.len()
                 );
@@ -34,14 +35,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // If we have managers, demonstrate operations on the first one
             if let Some(first_manager) = managers.first() {
                 let manager_id = first_manager.id;
-                
-                println!("\n🔍 Getting detailed info for manager ID {}...", manager_id);
+
+                println!(
+                    "\n🔍 Getting detailed info for manager ID {}...",
+                    manager_id
+                );
                 match client.get_manager(manager_id).await {
                     Ok(manager) => {
                         println!("✅ Manager details:");
                         println!("   - ID: {}", manager.id);
                         println!("   - Username: {}", manager.username);
-                        println!("   - Locked: {}", if manager.is_locked { "Yes" } else { "No" });
+                        println!(
+                            "   - Locked: {}",
+                            if manager.is_locked { "Yes" } else { "No" }
+                        );
                         println!("   - Assets: {:?}", manager.assets);
 
                         // If manager is locked, try to unlock
@@ -82,7 +89,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("❌ Failed to get current manager info: {}", e);
-            println!("💡 This might be expected if the current user doesn't have manager permissions");
+            println!(
+                "💡 This might be expected if the current user doesn't have manager permissions"
+            );
         }
     }
 

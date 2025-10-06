@@ -15,13 +15,11 @@ use secrecy::ExposeSecret;
 use secrecy::Secret;
 
 use crate::model::{
-    Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse, 
-    CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest, ChangePasswordResponse, 
-    CreateAssetAssignmentRequest, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint, 
+    Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse,
+    CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest, ChangePasswordResponse,
+    CreateAssetAssignmentRequest, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint,
     Ownership, Password, TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
-
-
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -555,8 +553,16 @@ impl TokenManager {
         }
 
         // Slow path: token needs refresh/obtain, acquire semaphore for thread safety
-        let _permit = self.token_operation_semaphore.acquire().await
-            .map_err(|e| Error::Token(TokenError::storage(format!("Failed to acquire token operation semaphore: {}", e))))?;
+        let _permit = self
+            .token_operation_semaphore
+            .acquire()
+            .await
+            .map_err(|e| {
+                Error::Token(TokenError::storage(format!(
+                    "Failed to acquire token operation semaphore: {}",
+                    e
+                )))
+            })?;
 
         tracing::debug!("Acquired token operation semaphore for thread-safe token management");
 
@@ -565,7 +571,9 @@ impl TokenManager {
             let token_guard = self.token_data.lock().await;
             if let Some(ref token_data) = *token_guard {
                 if !token_data.expires_soon(Duration::minutes(5)) {
-                    tracing::debug!("Token was updated by another thread, using existing valid token");
+                    tracing::debug!(
+                        "Token was updated by another thread, using existing valid token"
+                    );
                     return Ok(token_data.token.expose_secret().clone());
                 }
             }
@@ -628,8 +636,16 @@ impl TokenManager {
     /// - All retry attempts fail
     /// - Response parsing fails
     pub async fn obtain_token(&self) -> Result<String, Error> {
-        let _permit = self.token_operation_semaphore.acquire().await
-            .map_err(|e| Error::Token(TokenError::storage(format!("Failed to acquire token operation semaphore: {}", e))))?;
+        let _permit = self
+            .token_operation_semaphore
+            .acquire()
+            .await
+            .map_err(|e| {
+                Error::Token(TokenError::storage(format!(
+                    "Failed to acquire token operation semaphore: {}",
+                    e
+                )))
+            })?;
 
         self.obtain_token_internal().await
     }
@@ -716,8 +732,16 @@ impl TokenManager {
     /// # Errors
     /// Returns an error if both refresh and obtain operations fail
     pub async fn refresh_token(&self) -> Result<String, Error> {
-        let _permit = self.token_operation_semaphore.acquire().await
-            .map_err(|e| Error::Token(TokenError::storage(format!("Failed to acquire token operation semaphore: {}", e))))?;
+        let _permit = self
+            .token_operation_semaphore
+            .acquire()
+            .await
+            .map_err(|e| {
+                Error::Token(TokenError::storage(format!(
+                    "Failed to acquire token operation semaphore: {}",
+                    e
+                )))
+            })?;
 
         self.refresh_token_internal().await
     }
@@ -770,7 +794,11 @@ impl TokenManager {
                         .await
                         .unwrap_or_else(|_| "Unknown error".to_string());
 
-                    tracing::warn!("Token refresh failed with status {}: {}", status, error_text);
+                    tracing::warn!(
+                        "Token refresh failed with status {}: {}",
+                        status,
+                        error_text
+                    );
 
                     // If refresh fails, fall back to obtaining a new token
                     return self.obtain_token_internal().await;
@@ -796,7 +824,10 @@ impl TokenManager {
                 Ok(token_response.token)
             }
             Err(e) => {
-                tracing::warn!("Token refresh request failed: {}, falling back to obtain", e);
+                tracing::warn!(
+                    "Token refresh request failed: {}, falling back to obtain",
+                    e
+                );
                 // Fall back to obtaining a new token
                 self.obtain_token_internal().await
             }
@@ -872,8 +903,16 @@ impl TokenManager {
     pub async fn force_refresh(&self) -> Result<String, Error> {
         tracing::info!("Forcing token refresh - bypassing normal proactive refresh logic");
 
-        let _permit = self.token_operation_semaphore.acquire().await
-            .map_err(|e| Error::Token(TokenError::storage(format!("Failed to acquire token operation semaphore: {}", e))))?;
+        let _permit = self
+            .token_operation_semaphore
+            .acquire()
+            .await
+            .map_err(|e| {
+                Error::Token(TokenError::storage(format!(
+                    "Failed to acquire token operation semaphore: {}",
+                    e
+                )))
+            })?;
 
         // Check if we have a token to refresh
         let has_token = {
@@ -933,7 +972,10 @@ impl ApiClient {
     /// Returns an error if token manager initialization fails.
     pub fn with_base_url(base_url: Url) -> Result<Self, Error> {
         let config = RetryConfig::from_env()?;
-        let token_manager = Arc::new(TokenManager::with_config_and_base_url(config, base_url.clone())?);
+        let token_manager = Arc::new(TokenManager::with_config_and_base_url(
+            config,
+            base_url.clone(),
+        )?);
         Ok(Self {
             client: Client::new(),
             base_url,
@@ -1196,8 +1238,6 @@ impl ApiClient {
         .await
     }
 
-
-
     pub async fn get_broadcast_status(&self, txid: &str) -> Result<BroadcastResponse, Error> {
         self.request_json(Method::GET, &["tx", "broadcast", txid], None::<&()>)
             .await
@@ -1207,18 +1247,6 @@ impl ApiClient {
         self.request_json(Method::POST, &["tx", "broadcast"], Some(tx_hex))
             .await
     }
-
-
-
-
-
-
-
-
-
-
-
-
 
     pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(
@@ -1567,10 +1595,7 @@ impl ApiClient {
             .await
     }
 
-    pub async fn get_asset_assignments(
-        &self,
-        asset_uuid: &str,
-    ) -> Result<Vec<Assignment>, Error> {
+    pub async fn get_asset_assignments(&self, asset_uuid: &str) -> Result<Vec<Assignment>, Error> {
         self.request_json(
             Method::GET,
             &["assets", asset_uuid, "assignments"],
@@ -1585,19 +1610,20 @@ impl ApiClient {
         requests: &[CreateAssetAssignmentRequest],
     ) -> Result<Vec<Assignment>, Error> {
         use crate::model::CreateAssetAssignmentRequestWrapper;
-        
+
         // Submit all requests in a single API call
         let wrapper = CreateAssetAssignmentRequestWrapper {
             assignments: requests.to_vec(),
         };
-        
-        let assignments: Vec<Assignment> = self.request_json(
-            Method::POST,
-            &["assets", asset_uuid, "assignments", "create"],
-            Some(&wrapper),
-        )
-        .await?;
-        
+
+        let assignments: Vec<Assignment> = self
+            .request_json(
+                Method::POST,
+                &["assets", asset_uuid, "assignments", "create"],
+                Some(&wrapper),
+            )
+            .await?;
+
         Ok(assignments)
     }
 
@@ -1613,8 +1639,12 @@ impl ApiClient {
     /// - The server returns an error status
     /// - The response cannot be parsed as JSON
     pub async fn get_manager(&self, manager_id: i64) -> Result<crate::model::Manager, Error> {
-        self.request_json(Method::GET, &["managers", &manager_id.to_string()], None::<&()>)
-            .await
+        self.request_json(
+            Method::GET,
+            &["managers", &manager_id.to_string()],
+            None::<&()>,
+        )
+        .await
     }
 
     /// Removes a manager's permissions to modify a specific asset.
@@ -1635,7 +1665,13 @@ impl ApiClient {
     ) -> Result<(), Error> {
         self.request_empty(
             Method::POST,
-            &["managers", &manager_id.to_string(), "assets", asset_uuid, "remove"],
+            &[
+                "managers",
+                &manager_id.to_string(),
+                "assets",
+                asset_uuid,
+                "remove",
+            ],
             None::<&()>,
         )
         .await
@@ -1780,4 +1816,3 @@ fn get_amp_api_base_url() -> Result<Url, Error> {
         .unwrap_or_else(|_| "https://amp-test.blockstream.com/api".to_string());
     Url::parse(&url_str).map_err(Error::from)
 }
-

@@ -24,10 +24,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ask for confirmation before cleanup
     println!("\n⚠️  WARNING: The following operations will DELETE resources!");
     println!("Do you want to proceed with cleanup? (y/N): ");
-    
+
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
-    
+
     if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
         println!("\n🧹 Starting cleanup operations...\n");
         cleanup_all_resources(&client).await?;
@@ -46,9 +46,10 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
         Ok(managers) => {
             println!("📊 Total managers: {}", managers.len());
             for (i, manager) in managers.iter().enumerate() {
-                println!("  {}. ID: {}, Username: {}, Locked: {}", 
-                    i + 1, 
-                    manager.id, 
+                println!(
+                    "  {}. ID: {}, Username: {}, Locked: {}",
+                    i + 1,
+                    manager.id,
                     manager.username,
                     manager.is_locked
                 );
@@ -66,10 +67,11 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
         Ok(users) => {
             println!("📊 Total registered users: {}", users.len());
             for (i, user) in users.iter().enumerate() {
-                println!("  {}. ID: {}, Name: {}, GAID: {:?}, Company: {}", 
-                    i + 1, 
-                    user.id, 
-                    user.name, 
+                println!(
+                    "  {}. ID: {}, Name: {}, GAID: {:?}, Company: {}",
+                    i + 1,
+                    user.id,
+                    user.name,
                     user.gaid,
                     user.is_company
                 );
@@ -87,10 +89,11 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
         Ok(categories) => {
             println!("📊 Total categories: {}", categories.len());
             for (i, category) in categories.iter().enumerate() {
-                println!("  {}. ID: {}, Name: {}, Description: {:?}", 
-                    i + 1, 
-                    category.id, 
-                    category.name, 
+                println!(
+                    "  {}. ID: {}, Name: {}, Description: {:?}",
+                    i + 1,
+                    category.id,
+                    category.name,
                     category.description
                 );
             }
@@ -107,10 +110,11 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
         Ok(assets) => {
             println!("📊 Total assets: {}", assets.len());
             for (i, asset) in assets.iter().enumerate() {
-                println!("  {}. UUID: {}, Name: {}, Ticker: {:?}, Domain: {:?}", 
-                    i + 1, 
-                    asset.asset_uuid, 
-                    asset.name, 
+                println!(
+                    "  {}. UUID: {}, Name: {}, Ticker: {:?}, Domain: {:?}",
+                    i + 1,
+                    asset.asset_uuid,
+                    asset.name,
                     asset.ticker,
                     asset.domain
                 );
@@ -125,13 +129,13 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
 async fn cleanup_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     // Delete all assets first (they may depend on other resources)
     delete_all_assets(client).await?;
-    
+
     // Delete categories
     delete_all_categories(client).await?;
-    
+
     // Delete registered users
     delete_all_registered_users(client).await?;
-    
+
     // Unlock and revoke assets from managers
     revoke_all_manager_assets(client).await?;
 
@@ -143,7 +147,7 @@ async fn cleanup_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::er
 
 async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("🗑️  Deleting all assets...");
-    
+
     match client.get_assets().await {
         Ok(assets) => {
             if assets.is_empty() {
@@ -156,7 +160,10 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
             let mut failed_count = 0;
 
             for asset in assets {
-                print!("   Deleting asset '{}' (UUID: {})... ", asset.name, asset.asset_uuid);
+                print!(
+                    "   Deleting asset '{}' (UUID: {})... ",
+                    asset.name, asset.asset_uuid
+                );
                 match client.delete_asset(&asset.asset_uuid).await {
                     Ok(_) => {
                         println!("✅");
@@ -169,7 +176,10 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
                 }
             }
 
-            println!("   📊 Assets deleted: {}, Failed: {}", deleted_count, failed_count);
+            println!(
+                "   📊 Assets deleted: {}, Failed: {}",
+                deleted_count, failed_count
+            );
         }
         Err(e) => println!("   ❌ Failed to list assets for deletion: {}", e),
     }
@@ -179,7 +189,7 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
 
 async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("🗑️  Deleting all categories...");
-    
+
     match client.get_categories().await {
         Ok(categories) => {
             if categories.is_empty() {
@@ -192,7 +202,10 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
             let mut failed_count = 0;
 
             for category in categories {
-                print!("   Deleting category '{}' (ID: {})... ", category.name, category.id);
+                print!(
+                    "   Deleting category '{}' (ID: {})... ",
+                    category.name, category.id
+                );
                 match client.delete_category(category.id).await {
                     Ok(_) => {
                         println!("✅");
@@ -205,7 +218,10 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
                 }
             }
 
-            println!("   📊 Categories deleted: {}, Failed: {}", deleted_count, failed_count);
+            println!(
+                "   📊 Categories deleted: {}, Failed: {}",
+                deleted_count, failed_count
+            );
         }
         Err(e) => println!("   ❌ Failed to list categories for deletion: {}", e),
     }
@@ -215,7 +231,7 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
 
 async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("🗑️  Deleting all registered users...");
-    
+
     match client.get_registered_users().await {
         Ok(users) => {
             if users.is_empty() {
@@ -241,7 +257,10 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
                 }
             }
 
-            println!("   📊 Users deleted: {}, Failed: {}", deleted_count, failed_count);
+            println!(
+                "   📊 Users deleted: {}, Failed: {}",
+                deleted_count, failed_count
+            );
         }
         Err(e) => println!("   ❌ Failed to list registered users for deletion: {}", e),
     }
@@ -251,7 +270,7 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
 
 async fn revoke_all_manager_assets(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("🗑️  Unlocking managers and revoking their assets...");
-    
+
     match client.get_managers().await {
         Ok(managers) => {
             if managers.is_empty() {
@@ -265,8 +284,11 @@ async fn revoke_all_manager_assets(client: &ApiClient) -> Result<(), Box<dyn std
             let mut failed_count = 0;
 
             for manager in managers {
-                print!("   Processing manager '{}' (ID: {})... ", manager.username, manager.id);
-                
+                print!(
+                    "   Processing manager '{}' (ID: {})... ",
+                    manager.username, manager.id
+                );
+
                 // First unlock if locked
                 if manager.is_locked {
                     match client.unlock_manager(manager.id).await {
@@ -281,7 +303,7 @@ async fn revoke_all_manager_assets(client: &ApiClient) -> Result<(), Box<dyn std
                         }
                     }
                 }
-                
+
                 // Then revoke all assets from manager
                 match client.revoke_manager(manager.id).await {
                     Ok(_) => {
@@ -295,7 +317,10 @@ async fn revoke_all_manager_assets(client: &ApiClient) -> Result<(), Box<dyn std
                 }
             }
 
-            println!("   📊 Managers: {} unlocked, {} assets revoked, {} failed", unlocked_count, revoked_count, failed_count);
+            println!(
+                "   📊 Managers: {} unlocked, {} assets revoked, {} failed",
+                unlocked_count, revoked_count, failed_count
+            );
         }
         Err(e) => println!("   ❌ Failed to list managers for asset revocation: {}", e),
     }
