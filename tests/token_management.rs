@@ -5,6 +5,7 @@ use httpmock::prelude::*;
 use httpmock::Mock;
 use secrecy::ExposeSecret;
 use serde_json::json;
+use serial_test::serial;
 use std::env;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
@@ -653,8 +654,11 @@ async fn test_token_manager_timeout_handling() {
 
 // Live API tests (only run when AMP_TESTS=live)
 #[tokio::test]
+#[serial]
 async fn test_token_manager_live_obtain_token() {
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env file to avoid mock test pollution
+    dotenvy::from_filename_override(".env").ok();
+    
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -680,8 +684,11 @@ async fn test_token_manager_live_obtain_token() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_token_manager_live_refresh_token() {
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env file to avoid mock test pollution
+    dotenvy::from_filename_override(".env").ok();
+    
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -706,8 +713,11 @@ async fn test_token_manager_live_refresh_token() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_token_manager_live_get_token_with_proactive_refresh() {
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env file to avoid mock test pollution
+    dotenvy::from_filename_override(".env").ok();
+    
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;
@@ -738,8 +748,11 @@ async fn test_token_manager_live_get_token_with_proactive_refresh() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_token_manager_live_concurrent_access() {
-    dotenvy::dotenv().ok();
+    // Load environment variables from .env file to avoid mock test pollution
+    dotenvy::from_filename_override(".env").ok();
+    
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");
         return;

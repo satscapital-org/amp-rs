@@ -1586,25 +1586,19 @@ impl ApiClient {
     ) -> Result<Vec<Assignment>, Error> {
         use crate::model::CreateAssetAssignmentRequestWrapper;
         
-        let mut all_assignments = Vec::new();
+        // Submit all requests in a single API call
+        let wrapper = CreateAssetAssignmentRequestWrapper {
+            assignments: requests.to_vec(),
+        };
         
-        // Submit each request separately since the API is restricted to a single element per call
-        for request in requests {
-            let wrapper = CreateAssetAssignmentRequestWrapper {
-                assignments: vec![request.clone()],
-            };
-            
-            let mut assignments: Vec<Assignment> = self.request_json(
-                Method::POST,
-                &["assets", asset_uuid, "assignments", "create"],
-                Some(&wrapper),
-            )
-            .await?;
-            
-            all_assignments.append(&mut assignments);
-        }
+        let assignments: Vec<Assignment> = self.request_json(
+            Method::POST,
+            &["assets", asset_uuid, "assignments", "create"],
+            Some(&wrapper),
+        )
+        .await?;
         
-        Ok(all_assignments)
+        Ok(assignments)
     }
 
     /// Gets a specific manager by ID.
