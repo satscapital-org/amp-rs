@@ -209,7 +209,8 @@ pub fn mock_create_manager(server: &MockServer) {
 
 pub fn mock_obtain_token(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST).path("/user/obtain_token");
+        when.method(POST)
+            .path("/user/obtain_token");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({

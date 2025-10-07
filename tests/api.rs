@@ -106,10 +106,9 @@ async fn test_get_changelog_mock() {
     setup_mock_test().await;
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_changelog(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let changelog = client.get_changelog().await;
 
     assert!(changelog.is_ok());
@@ -145,10 +144,9 @@ async fn test_get_assets_mock() {
     setup_mock_test().await;
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_assets(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let assets = client.get_assets().await;
 
     assert!(assets.is_ok());
@@ -189,11 +187,10 @@ async fn test_get_asset_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_assets(&server);
     mocks::mock_get_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let assets = client.get_assets().await.unwrap();
 
     if let Some(asset_to_test) = assets.first() {
@@ -275,10 +272,9 @@ async fn test_issue_asset_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_issue_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset".to_string(),
         amount: 1000,
@@ -344,11 +340,10 @@ async fn test_edit_asset_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_assets(&server);
     mocks::mock_edit_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let assets = client.get_assets().await.unwrap();
 
     if let Some(asset_to_edit) = assets.first() {
@@ -425,11 +420,10 @@ async fn test_delete_asset_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_issue_asset(&server);
     mocks::mock_delete_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset to Delete".to_string(),
         amount: 1000,
@@ -480,10 +474,9 @@ async fn test_get_registered_users_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_registered_users(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let registered_users = client.get_registered_users().await;
 
     assert!(registered_users.is_ok());
@@ -525,11 +518,10 @@ async fn test_get_registered_user_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_registered_users(&server);
     mocks::mock_get_registered_user(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let registered_users = client.get_registered_users().await.unwrap();
 
     if let Some(user_to_test) = registered_users.first() {
@@ -578,10 +570,9 @@ async fn test_add_registered_user_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_add_registered_user(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let new_user = amp_rs::model::RegisteredUserAdd {
         name: "Test User".to_string(),
         gaid: None,
@@ -627,10 +618,9 @@ async fn test_get_categories_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_categories(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let categories = client.get_categories().await;
 
     assert!(categories.is_ok());
@@ -695,10 +685,9 @@ async fn test_add_category_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_add_category(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let new_category = amp_rs::model::CategoryAdd {
         name: "Test Category".to_string(),
         description: Some("Test category description".to_string()),
@@ -743,10 +732,9 @@ async fn test_validate_gaid_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_validate_gaid(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.validate_gaid(gaid).await;
     assert!(result.is_ok());
@@ -786,10 +774,9 @@ async fn test_get_gaid_address_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_gaid_address(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.get_gaid_address(gaid).await;
     assert!(result.is_ok());
@@ -830,10 +817,9 @@ async fn test_get_managers_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_managers(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let managers = client.get_managers().await;
 
     assert!(managers.is_ok());
@@ -851,10 +837,9 @@ async fn test_create_manager_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_create_manager(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let new_manager = amp_rs::model::ManagerCreate {
         username: "test_manager".to_string(),
         password: "password".to_string(),
@@ -878,10 +863,9 @@ async fn test_broadcast_transaction_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_broadcast_transaction(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.broadcast_transaction("mock_tx_hex").await;
     assert!(result.is_ok());
     let res = result.unwrap();
@@ -1191,12 +1175,11 @@ async fn test_create_asset_assignments_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_assets(&server);
     mocks::mock_get_registered_users(&server);
     mocks::mock_create_asset_assignments(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = assets.first().unwrap().asset_uuid.clone();
     let users = client.get_registered_users().await.unwrap();
@@ -1291,12 +1274,11 @@ async fn test_create_asset_assignments_multiple_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_assets(&server);
     mocks::mock_get_registered_users(&server);
     mocks::mock_create_asset_assignments_multiple(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = assets.first().unwrap().asset_uuid.clone();
     let users = client.get_registered_users().await.unwrap();
@@ -1750,10 +1732,9 @@ async fn test_get_broadcast_status_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_broadcast_status(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.get_broadcast_status("mock_txid").await;
     assert!(result.is_ok());
     let res = result.unwrap();
@@ -1770,10 +1751,9 @@ async fn test_get_manager_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_manager(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.get_manager(1).await;
     assert!(result.is_ok());
     let manager = result.unwrap();
@@ -1793,10 +1773,9 @@ async fn test_manager_remove_asset_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_manager_remove_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.manager_remove_asset(1, "asset_uuid_1").await;
     assert!(result.is_ok());
 
@@ -1816,7 +1795,7 @@ async fn test_revoke_manager_mock() {
     mocks::mock_get_manager(&server);
     mocks::mock_manager_remove_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.revoke_manager(1).await;
     assert!(result.is_ok());
 
@@ -1832,10 +1811,9 @@ async fn test_get_current_manager_raw_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_current_manager_raw(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.get_current_manager_raw().await;
     assert!(result.is_ok());
     let manager_json = result.unwrap();
@@ -1854,10 +1832,9 @@ async fn test_unlock_manager_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_unlock_manager(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.unlock_manager(1).await;
     assert!(result.is_ok());
 
@@ -1963,10 +1940,9 @@ async fn test_add_asset_treasury_addresses_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_add_asset_treasury_addresses(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let treasury_addresses = vec![
         "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
             .to_string(),
@@ -2021,10 +1997,9 @@ async fn test_get_asset_treasury_addresses_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_get_asset_treasury_addresses(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.get_asset_treasury_addresses("mock_asset_uuid").await;
     assert!(result.is_ok());
     let addresses = result.unwrap();
@@ -2046,10 +2021,9 @@ async fn test_delete_asset_assignment_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_delete_asset_assignment(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client
         .delete_asset_assignment("mock_asset_uuid", "10")
         .await;
@@ -2067,10 +2041,9 @@ async fn test_lock_asset_assignment_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_lock_asset_assignment(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.lock_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_ok());
     let assignment = result.unwrap();
@@ -2088,10 +2061,9 @@ async fn test_unlock_asset_assignment_mock() {
     
     
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_unlock_asset_assignment(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client
         .unlock_asset_assignment("mock_asset_uuid", "10")
         .await;
@@ -2110,10 +2082,9 @@ async fn test_lock_asset_mock() {
     
     std::env::set_var("AMP_PASSWORD", "mock_password");
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_lock_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.lock_asset("mock_asset_uuid").await;
     assert!(result.is_ok());
     let asset = result.unwrap();
@@ -2131,10 +2102,9 @@ async fn test_unlock_asset_mock() {
     
     std::env::set_var("AMP_PASSWORD", "mock_password");
     let server = MockServer::start();
-    mocks::mock_obtain_token(&server);
     mocks::mock_unlock_asset(&server);
 
-    let client = ApiClient::with_base_url(Url::parse(&server.base_url()).unwrap()).await.unwrap();
+    let client = ApiClient::with_mock_token(Url::parse(&server.base_url()).unwrap(), "mock_token".to_string()).await.unwrap();
     let result = client.unlock_asset("mock_asset_uuid").await;
     assert!(result.is_ok());
     let asset = result.unwrap();

@@ -570,6 +570,24 @@ impl TokenManager {
         Ok(manager)
     }
 
+    /// Creates a new `TokenManager` with a pre-set mock token (for testing)
+    ///
+    /// # Errors
+    /// This method is infallible but returns Result for API consistency
+    pub async fn with_mock_token(config: RetryConfig, base_url: Url, mock_token: String) -> Result<Self, Error> {
+        let expires_at = Utc::now() + Duration::hours(24); // Mock token valid for 24 hours
+        let token_data = TokenData::new(mock_token, expires_at);
+        
+        let manager = Self {
+            token_data: Arc::new(Mutex::new(Some(token_data))),
+            retry_client: RetryClient::new(config),
+            base_url,
+            token_operation_semaphore: Arc::new(Semaphore::new(1)),
+        };
+
+        Ok(manager)
+    }
+
     /// Gets a valid authentication token with proactive refresh logic
     ///
     /// This method implements thread-safe token management logic:
@@ -1278,6 +1296,22 @@ impl ApiClient {
     /// Returns an error if the base URL cannot be obtained from environment variables.
     pub fn with_token_manager(token_manager: Arc<TokenManager>) -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
+        Ok(Self {
+            client: Client::new(),
+            base_url,
+            token_manager,
+        })
+    }
+
+    /// Creates a new API client for testing with a mock token manager that always returns a fixed token.
+    /// This bypasses all token acquisition and management logic.
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible but returns Result for API consistency.
+    pub async fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
+        let config = RetryConfig::from_env().unwrap_or_default();
+        let token_manager = Arc::new(TokenManager::with_mock_token(config, base_url.clone(), mock_token).await?);
         Ok(Self {
             client: Client::new(),
             base_url,
