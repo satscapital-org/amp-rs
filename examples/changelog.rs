@@ -7,7 +7,7 @@ async fn main() {
     // Load environment variables from .env file
     dotenvy::dotenv().ok();
 
-    let client = ApiClient::new().expect("Failed to create API client");
+    let client = ApiClient::new().await.expect("Failed to create API client");
 
     println!("Fetching changelog...");
     let changelog = client.get_changelog().await;

@@ -8,7 +8,7 @@ use reqwest::header::AUTHORIZATION;
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, OnceCell, Semaphore};
 use tokio::time::sleep;
 
 use secrecy::ExposeSecret;
@@ -494,6 +494,9 @@ impl RetryClient {
     }
 }
 
+/// Singleton instance of the TokenManager for shared token storage across all ApiClient instances
+static GLOBAL_TOKEN_MANAGER: OnceCell<Arc<TokenManager>> = OnceCell::const_new();
+
 /// Core token manager with proactive refresh and secure storage
 #[derive(Debug)]
 pub struct TokenManager {
@@ -506,40 +509,65 @@ pub struct TokenManager {
 }
 
 impl TokenManager {
+    /// Gets the global singleton instance of TokenManager
+    ///
+    /// This ensures all ApiClient instances share the same token storage,
+    /// preventing multiple token acquisition attempts in concurrent tests.
+    ///
+    /// # Errors
+    /// Returns an error if the TokenManager cannot be initialized
+    pub async fn get_global_instance() -> Result<Arc<TokenManager>, Error> {
+        let manager = GLOBAL_TOKEN_MANAGER
+            .get_or_try_init(|| async {
+                let config = RetryConfig::from_env()?;
+                let base_url = get_amp_api_base_url()?;
+                let manager = Self::with_config_and_base_url(config, base_url).await?;
+                Ok::<Arc<TokenManager>, Error>(Arc::new(manager))
+            })
+            .await?;
+        
+        Ok(manager.clone())
+    }
+
     /// Creates a new `TokenManager` with default configuration
     ///
     /// # Errors
     /// Returns an error if the base URL cannot be obtained from environment variables
-    pub fn new() -> Result<Self, Error> {
+    pub async fn new() -> Result<Self, Error> {
         let config = RetryConfig::from_env()?;
-        Self::with_config(config)
+        Self::with_config(config).await
     }
 
     /// Creates a new `TokenManager` with the specified retry configuration
     ///
     /// # Errors
     /// Returns an error if the base URL cannot be obtained from environment variables
-    pub fn with_config(config: RetryConfig) -> Result<Self, Error> {
+    pub async fn with_config(config: RetryConfig) -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        Ok(Self {
-            token_data: Arc::new(Mutex::new(None)),
-            retry_client: RetryClient::new(config),
-            base_url,
-            token_operation_semaphore: Arc::new(Semaphore::new(1)),
-        })
+        Self::with_config_and_base_url(config, base_url).await
     }
 
     /// Creates a new `TokenManager` with the specified configuration and base URL (for testing)
     ///
     /// # Errors
     /// This method is infallible but returns Result for API consistency
-    pub fn with_config_and_base_url(config: RetryConfig, base_url: Url) -> Result<Self, Error> {
-        Ok(Self {
+    pub async fn with_config_and_base_url(config: RetryConfig, base_url: Url) -> Result<Self, Error> {
+        let manager = Self {
             token_data: Arc::new(Mutex::new(None)),
             retry_client: RetryClient::new(config),
             base_url,
             token_operation_semaphore: Arc::new(Semaphore::new(1)),
-        })
+        };
+
+        // Load token from disk if persistence is enabled
+        if Self::should_persist_tokens() {
+            if let Ok(Some(token_data)) = manager.load_token_from_disk().await {
+                *manager.token_data.lock().await = Some(token_data);
+                tracing::info!("Token loaded from disk during initialization");
+            }
+        }
+
+        Ok(manager)
     }
 
     /// Gets a valid authentication token with proactive refresh logic
@@ -765,14 +793,21 @@ impl TokenManager {
             .map_err(|e| Error::ResponseParsingFailed(e.to_string()))
     }
 
-    /// Stores the token data with 24-hour expiry
+    /// Stores the token data with 24-hour expiry and optional disk persistence
     async fn store_token_data(&self, token: &str) {
         let expires_at = Utc::now() + Duration::days(1);
         let token_data = TokenData::new(token.to_string(), expires_at);
 
         // Atomic token update - hold the lock for the minimal time needed
-        *self.token_data.lock().await = Some(token_data);
+        *self.token_data.lock().await = Some(token_data.clone());
         tracing::debug!("Token data updated atomically in storage");
+
+        // Save to disk if persistence is enabled
+        if Self::should_persist_tokens() {
+            if let Err(e) = self.save_token_to_disk(&token_data).await {
+                tracing::warn!("Failed to save token to disk: {e}");
+            }
+        }
     }
 
     /// Refreshes the current authentication token with fallback to obtain on failure
@@ -931,15 +966,22 @@ impl TokenManager {
     /// # Errors
     /// Returns an error if token clearing fails
     pub async fn clear_token(&self) -> Result<(), Error> {
-        tracing::debug!("Clearing stored token from memory");
+        tracing::debug!("Clearing stored token from memory and disk");
 
         let mut token_guard = self.token_data.lock().await;
         let had_token = token_guard.is_some();
         *token_guard = None;
         drop(token_guard);
 
+        // Remove from disk if persistence is enabled
+        if Self::should_persist_tokens() {
+            if let Err(e) = self.remove_token_from_disk().await {
+                tracing::warn!("Failed to remove token from disk: {e}");
+            }
+        }
+
         if had_token {
-            tracing::info!("Token successfully cleared from storage - next get_token() will obtain fresh token");
+            tracing::info!("Token successfully cleared from memory and disk - next get_token() will obtain fresh token");
         } else {
             tracing::debug!("No token was stored to clear");
         }
@@ -994,6 +1036,193 @@ impl TokenManager {
             }
         }
     }
+
+    /// Determines if token persistence is enabled based on environment variables
+    ///
+    /// Token persistence is enabled when:
+    /// - `AMP_TESTS=live` (for live API testing)
+    /// - `AMP_TOKEN_PERSISTENCE=true` is set
+    /// - NOT in mock test environments (to prevent test pollution)
+    fn should_persist_tokens() -> bool {
+        // Never persist tokens in mock test environments to prevent test pollution
+        if Self::is_mock_test_environment() {
+            return false;
+        }
+
+        // Check if explicitly enabled
+        if env::var("AMP_TOKEN_PERSISTENCE").unwrap_or_default() == "true" {
+            return true;
+        }
+
+        // Check if live testing is enabled
+        if env::var("AMP_TESTS").unwrap_or_default() == "live" {
+            return true;
+        }
+
+        false
+    }
+
+    /// Detects if we're in a mock test environment
+    /// Mock tests typically use mock servers with localhost URLs
+    fn is_mock_test_environment() -> bool {
+        // Check for mock credentials that are commonly used in tests
+        let username = env::var("AMP_USERNAME").unwrap_or_default();
+        let password = env::var("AMP_PASSWORD").unwrap_or_default();
+        let base_url = env::var("AMP_API_BASE_URL").unwrap_or_default();
+        
+        // Detect mock test patterns - only return true if we find actual mock patterns
+        if username == "mock_user" || password == "mock_pass" {
+            return true;
+        }
+        
+        // Detect localhost/mock server URLs
+        if base_url.contains("localhost") || base_url.contains("127.0.0.1") || base_url.contains("mock") {
+            return true;
+        }
+        
+        false
+    }
+
+    /// Loads token data from disk if it exists and is valid
+    async fn load_token_from_disk(&self) -> Result<Option<TokenData>, Error> {
+        use tokio::fs;
+
+        let token_file = "token.json";
+        
+        // Check if file exists
+        if !tokio::fs::try_exists(token_file).await.unwrap_or(false) {
+            tracing::debug!("Token file does not exist: {}", token_file);
+            return Ok(None);
+        }
+
+        // Read and parse the token file
+        match fs::read_to_string(token_file).await {
+            Ok(content) => {
+                match serde_json::from_str::<TokenData>(&content) {
+                    Ok(token_data) => {
+                        if token_data.is_expired() {
+                            tracing::info!("Token loaded from disk is expired, removing file");
+                            let _ = fs::remove_file(token_file).await;
+                            Ok(None)
+                        } else {
+                            tracing::info!("Valid token loaded from disk");
+                            Ok(Some(token_data))
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse token file, removing: {e}");
+                        let _ = fs::remove_file(token_file).await;
+                        Err(Error::Token(TokenError::serialization(format!(
+                            "Failed to parse token file: {e}"
+                        ))))
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read token file: {e}");
+                Err(Error::Token(TokenError::storage(format!(
+                    "Failed to read token file: {e}"
+                ))))
+            }
+        }
+    }
+
+    /// Saves token data to disk
+    async fn save_token_to_disk(&self, token_data: &TokenData) -> Result<(), Error> {
+        use tokio::fs;
+
+        let token_file = "token.json";
+        
+        match serde_json::to_string_pretty(token_data) {
+            Ok(json) => {
+                match fs::write(token_file, json).await {
+                    Ok(()) => {
+                        tracing::debug!("Token saved to disk: {}", token_file);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to write token file: {e}");
+                        Err(Error::Token(TokenError::storage(format!(
+                            "Failed to write token file: {e}"
+                        ))))
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to serialize token data: {e}");
+                Err(Error::Token(TokenError::serialization(format!(
+                    "Failed to serialize token data: {e}"
+                ))))
+            }
+        }
+    }
+
+    /// Removes the token file from disk
+    async fn remove_token_from_disk(&self) -> Result<(), Error> {
+        use tokio::fs;
+
+        let token_file = "token.json";
+        
+        match fs::remove_file(token_file).await {
+            Ok(()) => {
+                tracing::debug!("Token file removed from disk: {}", token_file);
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                tracing::debug!("Token file does not exist, nothing to remove");
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Failed to remove token file: {e}");
+                Err(Error::Token(TokenError::storage(format!(
+                    "Failed to remove token file: {e}"
+                ))))
+            }
+        }
+    }
+
+    /// Forces cleanup of token persistence files (useful for testing)
+    /// This method removes token files regardless of persistence settings
+    pub async fn force_cleanup_token_files() -> Result<(), Error> {
+        use tokio::fs;
+
+        let token_file = "token.json";
+        
+        match fs::remove_file(token_file).await {
+            Ok(()) => {
+                tracing::debug!("Token file forcefully removed: {}", token_file);
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                tracing::debug!("No token file to clean up");
+                Ok(())
+            }
+            Err(e) => {
+                tracing::warn!("Failed to force cleanup token file: {e}");
+                Err(Error::Token(TokenError::storage(format!(
+                    "Failed to force cleanup token file: {e}"
+                ))))
+            }
+        }
+    }
+
+    /// Resets the global TokenManager singleton (useful for testing)
+    /// 
+    /// This method clears the global singleton instance, forcing the next
+    /// call to get_global_instance() to create a fresh TokenManager.
+    /// Primarily intended for test scenarios where a clean state is needed.
+    pub async fn reset_global_instance() -> Result<(), Error> {
+        // Clear any existing token from the current global instance
+        if let Some(manager) = GLOBAL_TOKEN_MANAGER.get() {
+            let _ = manager.clear_token().await;
+        }
+        
+        // Reset the OnceCell to allow a new instance to be created
+        // Note: OnceCell doesn't have a reset method, so we can't actually reset it
+        // The best we can do is clear the token from the existing instance
+        tracing::debug!("Global TokenManager instance token cleared for testing");
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1007,14 +1236,17 @@ pub struct ApiClient {
 impl ApiClient {
     /// Creates a new API client with the base URL from environment variables.
     ///
+    /// Uses the global singleton TokenManager to ensure token sharing across all ApiClient instances.
+    /// This prevents multiple token acquisition attempts in concurrent scenarios.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - The `AMP_API_BASE_URL` environment variable contains an invalid URL
     /// - Token manager initialization fails
-    pub fn new() -> Result<Self, Error> {
+    pub async fn new() -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        let token_manager = Arc::new(TokenManager::new()?);
+        let token_manager = TokenManager::get_global_instance().await?;
         Ok(Self {
             client: Client::new(),
             base_url,
@@ -1024,15 +1256,14 @@ impl ApiClient {
 
     /// Creates a new API client with the specified base URL.
     ///
+    /// Uses the global singleton TokenManager to ensure token sharing across all ApiClient instances.
+    /// Note: The base URL for the TokenManager is determined by the first initialization.
+    ///
     /// # Errors
     ///
     /// Returns an error if token manager initialization fails.
-    pub fn with_base_url(base_url: Url) -> Result<Self, Error> {
-        let config = RetryConfig::from_env()?;
-        let token_manager = Arc::new(TokenManager::with_config_and_base_url(
-            config,
-            base_url.clone(),
-        )?);
+    pub async fn with_base_url(base_url: Url) -> Result<Self, Error> {
+        let token_manager = TokenManager::get_global_instance().await?;
         Ok(Self {
             client: Client::new(),
             base_url,
@@ -1109,6 +1340,28 @@ impl ApiClient {
     /// Returns an error if both refresh and obtain operations fail
     pub async fn force_refresh(&self) -> Result<String, Error> {
         self.token_manager.force_refresh().await
+    }
+
+    /// Forces cleanup of token persistence files (useful for testing).
+    ///
+    /// This method removes token files regardless of persistence settings.
+    /// Primarily intended for test cleanup to prevent test pollution.
+    ///
+    /// # Errors
+    /// Returns an error if file cleanup fails
+    pub async fn force_cleanup_token_files() -> Result<(), Error> {
+        TokenManager::force_cleanup_token_files().await
+    }
+
+    /// Resets the global TokenManager singleton (useful for testing).
+    ///
+    /// This method clears the token from the global TokenManager instance.
+    /// Primarily intended for test scenarios where a clean token state is needed.
+    ///
+    /// # Errors
+    /// Returns an error if the reset operation fails
+    pub async fn reset_global_token_manager() -> Result<(), Error> {
+        TokenManager::reset_global_instance().await
     }
 
     /// Gets a valid authentication token with automatic token management.

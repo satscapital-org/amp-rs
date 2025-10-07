@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let client = ApiClient::new()?;
+    let client = ApiClient::new().await?;
 
     println!("🔧 Manager Operations Example");
     println!("=============================\n");

@@ -11,6 +11,10 @@ path = "src/lib.rs"
 name = "changelog"
 path = "examples/changelog.rs"
 
+[[example]]
+name = "token_persistence"
+path = "examples/token_persistence.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -31,4 +35,5 @@ rand = "0.8"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 serial_test = "3.0"
+tracing-subscriber = "0.3"
 

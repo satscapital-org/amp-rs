@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let client = ApiClient::new()?;
+    let client = ApiClient::new().await?;
 
     println!("Assignment Operations Example");
     println!("============================");

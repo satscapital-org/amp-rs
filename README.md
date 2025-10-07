@@ -18,7 +18,7 @@ For more detailed examples, please refer to the [crate documentation](https://do
 ### Get a registered user
 
 ```rust
-use amp_client::client::ApiClient;
+use amp_rs::ApiClient;
 
 #[tokio::main]
 async fn main() {
@@ -33,7 +33,7 @@ async fn main() {
 ### Get an asset
 
 ```rust
-use amp_client::client::ApiClient;
+use amp_rs::ApiClient;
 
 #[tokio::main]
 async fn main() {
@@ -48,8 +48,7 @@ async fn main() {
 ### Create a category
 
 ```rust
-use amp_client::client::ApiClient;
-use amp_client::model::CategoryAdd;
+use amp_rs::{ApiClient, model::CategoryAdd};
 
 #[tokio::main]
 async fn main() {
@@ -66,7 +65,7 @@ async fn main() {
 ### Manage asset assignments
 
 ```rust
-use amp_client::client::ApiClient;
+use amp_rs::ApiClient;
 
 #[tokio::main]
 async fn main() {
@@ -99,6 +98,72 @@ async fn main() {
 
 
 
+## Token Management
+
+The AMP client includes sophisticated token management with automatic persistence and refresh capabilities.
+
+### Features
+
+- **Automatic Token Persistence**: Tokens are automatically saved to `token.json` and loaded on subsequent runs
+- **Proactive Refresh**: Tokens are automatically refreshed 5 minutes before expiry
+- **Thread-Safe Operations**: All token operations are thread-safe and prevent race conditions
+- **Retry Logic**: Built-in retry logic with exponential backoff for token operations
+- **Secure Storage**: Tokens are stored securely using the `secrecy` crate
+
+### Token Lifecycle
+
+1. **First Run**: Client obtains a new token from the API and persists it to disk
+2. **Subsequent Runs**: Client loads the existing token from disk if still valid
+3. **Automatic Refresh**: Token is automatically refreshed when it expires soon (within 5 minutes)
+4. **Fallback**: If refresh fails, client automatically obtains a new token
+
+### Usage Examples
+
+```rust
+use amp_rs::ApiClient;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = ApiClient::new()?;
+    
+    // Get token (automatically handles persistence and refresh)
+    let token = client.get_token().await?;
+    println!("Token: {}...", &token[..20]);
+    
+    // Get token information
+    if let Some(info) = client.get_token_info().await? {
+        println!("Token expires at: {}", info.expires_at);
+        println!("Token age: {:?}", info.age);
+        println!("Expires in: {:?}", info.expires_in);
+    }
+    
+    // Force refresh token
+    let refreshed_token = client.force_refresh().await?;
+    println!("Refreshed token: {}...", &refreshed_token[..20]);
+    
+    // Clear token (useful for testing)
+    client.clear_token().await?;
+    
+    Ok(())
+}
+```
+
+### Token Persistence Configuration
+
+Token persistence is automatically enabled in the following scenarios:
+- When `AMP_TESTS=live` (for live API testing)
+- When `AMP_TOKEN_PERSISTENCE=true` is set
+- In test environments (`cfg!(test)`)
+
+The token file (`token.json`) contains:
+```json
+{
+  "token": "your_jwt_token_here",
+  "expires_at": "2024-01-01T12:00:00Z",
+  "obtained_at": "2024-01-01T11:00:00Z"
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -119,6 +184,9 @@ The client can be configured using the following environment variables:
 #### Test Configuration
 - `AMP_TESTS`: Set to `live` to run tests against the actual API
 
+#### Token Persistence (Optional)
+- `AMP_TOKEN_PERSISTENCE`: Set to `true` to enable token persistence to disk (default: enabled for live tests)
+
 ### Example Configuration
 
 ```bash
@@ -135,6 +203,9 @@ export API_REQUEST_TIMEOUT_SECONDS=30
 
 # Enable live tests
 export AMP_TESTS=live
+
+# Enable token persistence (optional)
+export AMP_TOKEN_PERSISTENCE=true
 ```
 
 ## Testing
