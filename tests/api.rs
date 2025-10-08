@@ -15,7 +15,7 @@ static ENV_SETUP_LOCK: OnceCell<Arc<Mutex<()>>> = OnceCell::const_new();
 async fn setup_mock_test() {
     // Force cleanup any token files to prevent test pollution
     let _ = ApiClient::force_cleanup_token_files().await;
-    
+
     // Set mock credentials
     std::env::set_var("AMP_USERNAME", "mock_user");
     std::env::set_var("AMP_PASSWORD", "mock_pass");
@@ -25,7 +25,7 @@ async fn setup_mock_test() {
 async fn cleanup_mock_test() {
     // Force cleanup any token files created during test
     let _ = ApiClient::force_cleanup_token_files().await;
-    
+
     // Reload .env file to restore original environment
     dotenvy::from_filename_override(".env").ok();
 }
@@ -104,7 +104,7 @@ async fn test_get_changelog_live() {
 async fn test_get_changelog_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
+
     let server = MockServer::start();
     mocks::mock_get_changelog(&server);
 
@@ -142,7 +142,7 @@ async fn test_get_assets_live() {
 async fn test_get_assets_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
+
     let server = MockServer::start();
     mocks::mock_get_assets(&server);
 
@@ -184,8 +184,8 @@ async fn test_get_asset_live() {
 async fn test_get_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_assets(&server);
     mocks::mock_get_asset(&server);
@@ -269,8 +269,8 @@ async fn test_issue_asset_live() {
 async fn test_issue_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_issue_asset(&server);
 
@@ -337,8 +337,8 @@ async fn test_edit_asset_live() {
 async fn test_edit_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_assets(&server);
     mocks::mock_edit_asset(&server);
@@ -417,8 +417,8 @@ async fn test_delete_asset_live() {
 async fn test_delete_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_issue_asset(&server);
     mocks::mock_delete_asset(&server);
@@ -471,8 +471,8 @@ async fn test_get_registered_users_live() {
 async fn test_get_registered_users_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_registered_users(&server);
 
@@ -515,8 +515,8 @@ async fn test_get_registered_user_live() {
 async fn test_get_registered_user_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_registered_users(&server);
     mocks::mock_get_registered_user(&server);
@@ -567,8 +567,8 @@ async fn test_add_registered_user_live() {
 async fn test_add_registered_user_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_add_registered_user(&server);
 
@@ -615,8 +615,8 @@ async fn test_get_categories_live() {
 async fn test_get_categories_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_categories(&server);
 
@@ -682,8 +682,8 @@ async fn test_add_category_live() {
 async fn test_add_category_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_add_category(&server);
 
@@ -729,8 +729,8 @@ async fn test_validate_gaid_live() {
 async fn test_validate_gaid_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_validate_gaid(&server);
 
@@ -771,8 +771,8 @@ async fn test_get_gaid_address_live() {
 async fn test_get_gaid_address_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_gaid_address(&server);
 
@@ -814,8 +814,8 @@ async fn test_get_managers_live() {
 async fn test_get_managers_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_managers(&server);
 
@@ -834,8 +834,8 @@ async fn test_get_managers_mock() {
 async fn test_create_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_create_manager(&server);
 
@@ -860,8 +860,8 @@ async fn test_create_manager_mock() {
 async fn test_broadcast_transaction_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_broadcast_transaction(&server);
 
@@ -877,8 +877,7 @@ async fn test_broadcast_transaction_mock() {
 }
 
 #[tokio::test]
-#[ignore] // Slow test - requires blockchain confirmation (up to 180 seconds)
-async fn test_create_asset_assignments_live_slow() {
+async fn test_create_asset_assignments_live() {
     // This test demonstrates the complete flow for creating asset assignments:
     // 1. Issues a new asset
     // 2. Adds treasury addresses
@@ -1172,8 +1171,8 @@ async fn test_create_asset_assignments_live_slow() {
 async fn test_create_asset_assignments_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_assets(&server);
     mocks::mock_get_registered_users(&server);
@@ -1271,8 +1270,8 @@ async fn test_create_asset_assignments_mock() {
 async fn test_create_asset_assignments_multiple_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_assets(&server);
     mocks::mock_get_registered_users(&server);
@@ -1353,8 +1352,7 @@ async fn test_create_asset_assignments_multiple_mock() {
 }
 
 #[tokio::test]
-#[ignore] // Slow test - requires blockchain confirmation (up to 180 seconds)
-async fn test_create_asset_assignments_multiple_live_slow() {
+async fn test_create_asset_assignments_multiple_live() {
     // This test demonstrates the complete flow for creating multiple asset assignments:
     // 1. Issues a new asset
     // 2. Adds treasury addresses
@@ -1729,8 +1727,8 @@ async fn test_create_asset_assignments_multiple_live_slow() {
 async fn test_get_broadcast_status_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_broadcast_status(&server);
 
@@ -1748,8 +1746,8 @@ async fn test_get_broadcast_status_mock() {
 async fn test_get_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_manager(&server);
 
@@ -1770,8 +1768,8 @@ async fn test_get_manager_mock() {
 async fn test_manager_remove_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_manager_remove_asset(&server);
 
@@ -1788,8 +1786,8 @@ async fn test_manager_remove_asset_mock() {
 async fn test_revoke_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_obtain_token(&server);
     mocks::mock_get_manager(&server);
@@ -1808,8 +1806,8 @@ async fn test_revoke_manager_mock() {
 async fn test_get_current_manager_raw_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_current_manager_raw(&server);
 
@@ -1829,8 +1827,8 @@ async fn test_get_current_manager_raw_mock() {
 async fn test_unlock_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_unlock_manager(&server);
 
@@ -1937,8 +1935,8 @@ async fn test_add_asset_treasury_addresses_live() {
 async fn test_add_asset_treasury_addresses_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_add_asset_treasury_addresses(&server);
 
@@ -1994,8 +1992,8 @@ async fn test_get_asset_treasury_addresses_live() {
 async fn test_get_asset_treasury_addresses_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_get_asset_treasury_addresses(&server);
 
@@ -2018,8 +2016,8 @@ async fn test_get_asset_treasury_addresses_mock() {
 async fn test_delete_asset_assignment_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_delete_asset_assignment(&server);
 
@@ -2038,8 +2036,8 @@ async fn test_delete_asset_assignment_mock() {
 async fn test_lock_asset_assignment_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_lock_asset_assignment(&server);
 
@@ -2058,8 +2056,8 @@ async fn test_lock_asset_assignment_mock() {
 async fn test_unlock_asset_assignment_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
-    
+
+
     let server = MockServer::start();
     mocks::mock_unlock_asset_assignment(&server);
 
@@ -2079,7 +2077,7 @@ async fn test_unlock_asset_assignment_mock() {
 async fn test_lock_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
+
     std::env::set_var("AMP_PASSWORD", "mock_password");
     let server = MockServer::start();
     mocks::mock_lock_asset(&server);
@@ -2099,7 +2097,7 @@ async fn test_lock_asset_mock() {
 async fn test_unlock_asset_mock() {
     // Setup mock test environment
     setup_mock_test().await;
-    
+
     std::env::set_var("AMP_PASSWORD", "mock_password");
     let server = MockServer::start();
     mocks::mock_unlock_asset(&server);
