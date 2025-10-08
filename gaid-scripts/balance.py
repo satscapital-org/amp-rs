@@ -81,8 +81,8 @@ def main():
 
     # Environment-specific mnemonics - DO NOT use these for real funds!
     mnemonics = {
-        'dev': "brick jump above ten cargo hobby forum deer remove curve lion embrace ecology trim increase purchase menu curve prosper blame blanket combine color pelican",
-        'test': "blanket awful machine pudding soft feature toe panel primary biology salon remove aspect creek thank true ridge milk right father drive economy gold filter",
+        'dev': "vote ball voice juice visit license music off paddle hold suffer beach someone hover wheat boring protect broccoli issue opinion uniform media update arrange",
+        'test': "hood novel finish couch rack pistol march army gun bring universe unknown hurry famous vote enact inspire whisper violin blur chief into engage cigar",
         'amp': "perfect grit monkey disorder cliff exhibit meat giant dream secret liberty walnut later caught snow wasp bulb bind feature couple vault flower credit bundle"
     }
 
@@ -169,17 +169,17 @@ def main():
                 # The balance response is just asset_id -> satoshi amount (integer)
                 if not isinstance(satoshi_value, (int, float)):
                     continue
-                    
+
                 satoshi_amount = int(satoshi_value)
-                
+
                 # Skip zero balances
                 if satoshi_amount == 0:
                     continue
-                
+
                 # For L-BTC on Liquid testnet, the asset ID is this specific hash
                 # On mainnet it would be different
                 lbtc_asset_id = '144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49'
-                
+
                 if asset_id == 'btc' or asset_id == lbtc_asset_id:
                     asset_name = 'L-BTC'
                     # Convert satoshi to BTC (1 BTC = 100,000,000 satoshi)
@@ -196,9 +196,9 @@ def main():
                         'satoshi': satoshi_amount,
                         'asset_id': asset_id
                     }
-                
+
                 total_satoshi += satoshi_amount
-                
+
                 if verbose:
                     if asset_name == 'L-BTC':
                         print(f"  {asset_name}: {satoshi_amount} satoshi ({btc_amount:.8f} L-BTC)")
