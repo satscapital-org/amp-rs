@@ -150,7 +150,8 @@ impl TokenEnvironment {
                         // This should never happen since detect() never returns Auto
                         tracing::error!("Unexpected Auto environment from detect()");
                         Err(Error::Token(TokenError::validation(
-                            "Environment detection returned Auto, which should not happen".to_string()
+                            "Environment detection returned Auto, which should not happen"
+                                .to_string(),
                         )))
                     }
                 }
@@ -202,16 +203,16 @@ impl TokenEnvironment {
 pub trait TokenStrategy: Send + Sync + std::fmt::Debug {
     /// Gets a valid authentication token
     async fn get_token(&self) -> Result<String, Error>;
-    
+
     /// Clears stored token (for testing)
     async fn clear_token(&self) -> Result<(), Error>;
-    
+
     /// Returns whether this strategy should persist tokens
     fn should_persist(&self) -> bool;
-    
+
     /// Returns the strategy type for debugging
     fn strategy_type(&self) -> &'static str;
-    
+
     /// Returns self as Any for downcasting (used internally)
     fn as_any(&self) -> &dyn std::any::Any;
 }
@@ -248,20 +249,20 @@ impl TokenStrategy for MockTokenStrategy {
         tracing::debug!("Using mock token strategy - returning pre-set token");
         Ok(self.token.clone())
     }
-    
+
     async fn clear_token(&self) -> Result<(), Error> {
         tracing::debug!("Mock token strategy - clear_token is a no-op");
         Ok(())
     }
-    
+
     fn should_persist(&self) -> bool {
         false
     }
-    
+
     fn strategy_type(&self) -> &'static str {
         "mock"
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -275,14 +276,14 @@ pub struct LiveTokenStrategy {
 
 impl LiveTokenStrategy {
     /// Creates a new live token strategy using the global `TokenManager` instance
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the `TokenManager` cannot be initialized
     pub async fn new() -> Result<Self, Error> {
         let token_manager = TokenManager::get_global_instance().await?;
         Ok(Self { token_manager })
     }
-    
+
     /// Creates a new live token strategy with a custom `TokenManager`
     #[must_use]
     pub const fn with_token_manager(token_manager: Arc<TokenManager>) -> Self {
@@ -290,17 +291,18 @@ impl LiveTokenStrategy {
     }
 
     /// Creates a live token strategy with custom retry configuration
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the `TokenManager` cannot be initialized
     pub async fn with_config(config: RetryConfig) -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        let token_manager = Arc::new(TokenManager::with_config_and_base_url(config, base_url).await?);
+        let token_manager =
+            Arc::new(TokenManager::with_config_and_base_url(config, base_url).await?);
         Ok(Self { token_manager })
     }
 
     /// Creates a live token strategy optimized for testing
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the `TokenManager` cannot be initialized
     pub async fn for_testing() -> Result<Self, Error> {
@@ -309,7 +311,7 @@ impl LiveTokenStrategy {
     }
 
     /// Gets current token information for debugging and monitoring
-    /// 
+    ///
     /// # Errors
     /// Returns an error if token information retrieval fails
     pub async fn get_token_info(&self) -> Result<Option<TokenInfo>, Error> {
@@ -323,19 +325,19 @@ impl TokenStrategy for LiveTokenStrategy {
         tracing::debug!("Using live token strategy - full token management");
         self.token_manager.get_token().await
     }
-    
+
     async fn clear_token(&self) -> Result<(), Error> {
         self.token_manager.clear_token().await
     }
-    
+
     fn should_persist(&self) -> bool {
         true
     }
-    
+
     fn strategy_type(&self) -> &'static str {
         "live"
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -845,7 +847,7 @@ impl TokenManager {
                 Ok::<Arc<TokenManager>, Error>(Arc::new(manager))
             })
             .await?;
-        
+
         Ok(manager.clone())
     }
 
@@ -871,7 +873,10 @@ impl TokenManager {
     ///
     /// # Errors
     /// This method is infallible but returns Result for API consistency
-    pub async fn with_config_and_base_url(config: RetryConfig, base_url: Url) -> Result<Self, Error> {
+    pub async fn with_config_and_base_url(
+        config: RetryConfig,
+        base_url: Url,
+    ) -> Result<Self, Error> {
         let manager = Self {
             token_data: Arc::new(Mutex::new(None)),
             retry_client: RetryClient::new(config),
@@ -894,10 +899,14 @@ impl TokenManager {
     ///
     /// # Errors
     /// This method is infallible but returns Result for API consistency
-    pub async fn with_mock_token(config: RetryConfig, base_url: Url, mock_token: String) -> Result<Self, Error> {
+    pub async fn with_mock_token(
+        config: RetryConfig,
+        base_url: Url,
+        mock_token: String,
+    ) -> Result<Self, Error> {
         let expires_at = Utc::now() + Duration::hours(24); // Mock token valid for 24 hours
         let token_data = TokenData::new(mock_token, expires_at);
-        
+
         let manager = Self {
             token_data: Arc::new(Mutex::new(Some(token_data))),
             retry_client: RetryClient::new(config),
@@ -1384,7 +1393,7 @@ impl TokenManager {
     fn should_persist_tokens() -> bool {
         // Use the new environment detection logic
         let environment = TokenEnvironment::detect();
-        
+
         // Never persist tokens in mock environments to prevent test pollution
         if environment.is_mock() {
             tracing::debug!("Token persistence disabled - mock environment detected");
@@ -1399,18 +1408,19 @@ impl TokenManager {
 
         // Use environment-based persistence setting
         let should_persist = environment.should_persist_tokens();
-        tracing::debug!("Token persistence setting from environment: {}", should_persist);
+        tracing::debug!(
+            "Token persistence setting from environment: {}",
+            should_persist
+        );
         should_persist
     }
-
-
 
     /// Loads token data from disk if it exists and is valid
     async fn load_token_from_disk(&self) -> Result<Option<TokenData>, Error> {
         use tokio::fs;
 
         let token_file = "token.json";
-        
+
         // Check if file exists
         if !tokio::fs::try_exists(token_file).await.unwrap_or(false) {
             tracing::debug!("Token file does not exist: {}", token_file);
@@ -1419,27 +1429,25 @@ impl TokenManager {
 
         // Read and parse the token file
         match fs::read_to_string(token_file).await {
-            Ok(content) => {
-                match serde_json::from_str::<TokenData>(&content) {
-                    Ok(token_data) => {
-                        if token_data.is_expired() {
-                            tracing::info!("Token loaded from disk is expired, removing file");
-                            let _ = fs::remove_file(token_file).await;
-                            Ok(None)
-                        } else {
-                            tracing::info!("Valid token loaded from disk");
-                            Ok(Some(token_data))
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to parse token file, removing: {e}");
+            Ok(content) => match serde_json::from_str::<TokenData>(&content) {
+                Ok(token_data) => {
+                    if token_data.is_expired() {
+                        tracing::info!("Token loaded from disk is expired, removing file");
                         let _ = fs::remove_file(token_file).await;
-                        Err(Error::Token(TokenError::serialization(format!(
-                            "Failed to parse token file: {e}"
-                        ))))
+                        Ok(None)
+                    } else {
+                        tracing::info!("Valid token loaded from disk");
+                        Ok(Some(token_data))
                     }
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("Failed to parse token file, removing: {e}");
+                    let _ = fs::remove_file(token_file).await;
+                    Err(Error::Token(TokenError::serialization(format!(
+                        "Failed to parse token file: {e}"
+                    ))))
+                }
+            },
             Err(e) => {
                 tracing::warn!("Failed to read token file: {e}");
                 Err(Error::Token(TokenError::storage(format!(
@@ -1454,22 +1462,20 @@ impl TokenManager {
         use tokio::fs;
 
         let token_file = "token.json";
-        
+
         match serde_json::to_string_pretty(token_data) {
-            Ok(json) => {
-                match fs::write(token_file, json).await {
-                    Ok(()) => {
-                        tracing::debug!("Token saved to disk: {}", token_file);
-                        Ok(())
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to write token file: {e}");
-                        Err(Error::Token(TokenError::storage(format!(
-                            "Failed to write token file: {e}"
-                        ))))
-                    }
+            Ok(json) => match fs::write(token_file, json).await {
+                Ok(()) => {
+                    tracing::debug!("Token saved to disk: {}", token_file);
+                    Ok(())
                 }
-            }
+                Err(e) => {
+                    tracing::error!("Failed to write token file: {e}");
+                    Err(Error::Token(TokenError::storage(format!(
+                        "Failed to write token file: {e}"
+                    ))))
+                }
+            },
             Err(e) => {
                 tracing::error!("Failed to serialize token data: {e}");
                 Err(Error::Token(TokenError::serialization(format!(
@@ -1484,7 +1490,7 @@ impl TokenManager {
         use tokio::fs;
 
         let token_file = "token.json";
-        
+
         match fs::remove_file(token_file).await {
             Ok(()) => {
                 tracing::debug!("Token file removed from disk: {}", token_file);
@@ -1509,7 +1515,7 @@ impl TokenManager {
         use tokio::fs;
 
         let token_file = "token.json";
-        
+
         match fs::remove_file(token_file).await {
             Ok(()) => {
                 tracing::debug!("Token file forcefully removed: {}", token_file);
@@ -1529,7 +1535,7 @@ impl TokenManager {
     }
 
     /// Resets the global TokenManager singleton (useful for testing)
-    /// 
+    ///
     /// This method clears the global singleton instance, forcing the next
     /// call to get_global_instance() to create a fresh TokenManager.
     /// Primarily intended for test scenarios where a clean state is needed.
@@ -1538,7 +1544,7 @@ impl TokenManager {
         if let Some(manager) = GLOBAL_TOKEN_MANAGER.get() {
             let _ = manager.clear_token().await;
         }
-        
+
         // Reset the OnceCell to allow a new instance to be created
         // Note: OnceCell doesn't have a reset method, so we can't actually reset it
         // The best we can do is clear the token from the existing instance
@@ -1570,16 +1576,16 @@ impl ApiClient {
     pub async fn new() -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
         let client = Client::new();
-        
+
         // Automatic strategy selection based on environment
         let token_strategy = TokenEnvironment::create_auto_strategy(None).await?;
-        
+
         tracing::info!(
             "Created ApiClient with {} strategy for base URL: {}",
             token_strategy.strategy_type(),
             base_url
         );
-        
+
         Ok(Self {
             client,
             base_url,
@@ -1596,16 +1602,16 @@ impl ApiClient {
     /// Returns an error if token strategy initialization fails.
     pub async fn with_base_url(base_url: Url) -> Result<Self, Error> {
         let client = Client::new();
-        
+
         // Automatic strategy selection based on environment
         let token_strategy = TokenEnvironment::create_auto_strategy(None).await?;
-        
+
         tracing::info!(
             "Created ApiClient with {} strategy for base URL: {}",
             token_strategy.strategy_type(),
             base_url
         );
-        
+
         Ok(Self {
             client,
             base_url,
@@ -1620,13 +1626,13 @@ impl ApiClient {
     /// Returns an error if the base URL cannot be obtained from environment variables.
     pub fn with_token_strategy(token_strategy: Box<dyn TokenStrategy>) -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        
+
         tracing::info!(
             "Created ApiClient with explicit {} strategy for base URL: {}",
             token_strategy.strategy_type(),
             base_url
         );
-        
+
         Ok(Self {
             client: Client::new(),
             base_url,
@@ -1641,13 +1647,14 @@ impl ApiClient {
     /// Returns an error if the base URL cannot be obtained from environment variables.
     pub fn with_token_manager(token_manager: Arc<TokenManager>) -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
-        let token_strategy: Box<dyn TokenStrategy> = Box::new(LiveTokenStrategy::with_token_manager(token_manager));
-        
+        let token_strategy: Box<dyn TokenStrategy> =
+            Box::new(LiveTokenStrategy::with_token_manager(token_manager));
+
         tracing::info!(
             "Created ApiClient with custom token manager for base URL: {}",
             base_url
         );
-        
+
         Ok(Self {
             client: Client::new(),
             base_url,
@@ -1663,13 +1670,14 @@ impl ApiClient {
     /// This method is infallible but returns Result for API consistency.
     pub async fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
         let client = Client::new();
-        let token_strategy: Box<dyn TokenStrategy> = Box::new(MockTokenStrategy::new(mock_token.clone()));
-        
+        let token_strategy: Box<dyn TokenStrategy> =
+            Box::new(MockTokenStrategy::new(mock_token.clone()));
+
         tracing::info!(
             "Created ApiClient with explicit mock token strategy for base URL: {}",
             base_url
         );
-        
+
         Ok(Self {
             client,
             base_url,
@@ -1712,11 +1720,18 @@ impl ApiClient {
     /// Returns an error if token information retrieval fails
     pub async fn get_token_info(&self) -> Result<Option<TokenInfo>, Error> {
         // Only live strategies support detailed token information
-        if let Some(live_strategy) = self.token_strategy.as_any().downcast_ref::<LiveTokenStrategy>() {
+        if let Some(live_strategy) = self
+            .token_strategy
+            .as_any()
+            .downcast_ref::<LiveTokenStrategy>()
+        {
             live_strategy.get_token_info().await
         } else {
             // Mock strategies don't provide detailed token information
-            tracing::debug!("Token info not available for {} strategy", self.token_strategy.strategy_type());
+            tracing::debug!(
+                "Token info not available for {} strategy",
+                self.token_strategy.strategy_type()
+            );
             Ok(None)
         }
     }
@@ -1745,8 +1760,6 @@ impl ApiClient {
         self.token_strategy.clear_token().await?;
         self.token_strategy.get_token().await
     }
-
-
 
     /// Resets the global TokenManager singleton (useful for testing).
     ///
@@ -2688,11 +2701,11 @@ mod tests {
         let config = RetryConfig::for_tests();
         let base_url = Url::parse("http://localhost:8080").unwrap();
         let mock_token = "test_live_token".to_string();
-        
+
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
                 .await
-                .unwrap()
+                .unwrap(),
         );
 
         let strategy = LiveTokenStrategy::with_token_manager(token_manager);
@@ -2713,11 +2726,11 @@ mod tests {
         let config = RetryConfig::for_tests();
         let base_url = Url::parse("http://localhost:8080").unwrap();
         let mock_token = "test_clear_token".to_string();
-        
+
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
                 .await
-                .unwrap()
+                .unwrap(),
         );
 
         let strategy = LiveTokenStrategy::with_token_manager(token_manager);
@@ -2754,14 +2767,14 @@ mod tests {
     async fn test_strategy_debug_formatting() {
         let mock_strategy = MockTokenStrategy::new("debug_test_token".to_string());
         let debug_output = format!("{:?}", mock_strategy);
-        
+
         // Verify debug output contains expected information
         assert!(debug_output.contains("MockTokenStrategy"));
         assert!(debug_output.contains("debug_test_token"));
     }
 
     // Environment Detection Tests
-    
+
     #[test]
     fn test_token_environment_detect_live_via_amp_tests() {
         // Set up environment for live test detection
@@ -2861,23 +2874,67 @@ mod tests {
     #[test]
     fn test_has_mock_credentials() {
         // Test mock username detection
-        assert!(TokenEnvironment::has_mock_credentials("mock_user", "real_pass", ""));
-        assert!(TokenEnvironment::has_mock_credentials("Mock_User", "real_pass", ""));
-        assert!(TokenEnvironment::has_mock_credentials("user_mock", "real_pass", ""));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "mock_user",
+            "real_pass",
+            ""
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "Mock_User",
+            "real_pass",
+            ""
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "user_mock",
+            "real_pass",
+            ""
+        ));
 
         // Test mock password detection
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "mock_pass", ""));
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "Mock_Pass", ""));
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "pass_mock", ""));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "mock_pass",
+            ""
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "Mock_Pass",
+            ""
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "pass_mock",
+            ""
+        ));
 
         // Test mock URL detection
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "real_pass", "http://localhost:8080"));
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "real_pass", "http://127.0.0.1:3000"));
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "real_pass", "http://mock-server.com"));
-        assert!(TokenEnvironment::has_mock_credentials("real_user", "real_pass", "http://Mock-Server.com"));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "real_pass",
+            "http://localhost:8080"
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "real_pass",
+            "http://127.0.0.1:3000"
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "real_pass",
+            "http://mock-server.com"
+        ));
+        assert!(TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "real_pass",
+            "http://Mock-Server.com"
+        ));
 
         // Test non-mock credentials
-        assert!(!TokenEnvironment::has_mock_credentials("real_user", "real_pass", "https://amp-test.blockstream.com"));
+        assert!(!TokenEnvironment::has_mock_credentials(
+            "real_user",
+            "real_pass",
+            "https://amp-test.blockstream.com"
+        ));
         assert!(!TokenEnvironment::has_mock_credentials("", "", ""));
     }
 
@@ -2885,11 +2942,11 @@ mod tests {
     fn test_token_environment_should_persist_tokens() {
         assert!(!TokenEnvironment::Mock.should_persist_tokens());
         assert!(TokenEnvironment::Live.should_persist_tokens());
-        
+
         // Auto should delegate to detect()
         env::set_var("AMP_TESTS", "live");
         assert!(TokenEnvironment::Auto.should_persist_tokens());
-        
+
         env::set_var("AMP_USERNAME", "mock_user");
         env::set_var("AMP_PASSWORD", "some_password");
         env::remove_var("AMP_TESTS");
@@ -2905,10 +2962,10 @@ mod tests {
     fn test_token_environment_is_mock_and_is_live() {
         assert!(TokenEnvironment::Mock.is_mock());
         assert!(!TokenEnvironment::Mock.is_live());
-        
+
         assert!(!TokenEnvironment::Live.is_mock());
         assert!(TokenEnvironment::Live.is_live());
-        
+
         // Auto should delegate to detect()
         env::set_var("AMP_USERNAME", "mock_user");
         env::set_var("AMP_PASSWORD", "some_password");
@@ -2937,17 +2994,14 @@ mod tests {
 
         assert_eq!(strategy.strategy_type(), "mock");
         assert!(!strategy.should_persist());
-        
+
         let token = strategy.get_token().await.unwrap();
         assert_eq!(token, mock_token);
     }
 
     #[tokio::test]
     async fn test_token_environment_create_strategy_live() {
-        let strategy = TokenEnvironment::Live
-            .create_strategy(None)
-            .await
-            .unwrap();
+        let strategy = TokenEnvironment::Live.create_strategy(None).await.unwrap();
 
         assert_eq!(strategy.strategy_type(), "live");
         assert!(strategy.should_persist());
@@ -3015,9 +3069,11 @@ mod tests {
         env::set_var("AMP_PASSWORD", "some_password");
         env::remove_var("AMP_TESTS");
         env::remove_var("AMP_API_BASE_URL");
-        
+
         let auto_mock_token = "auto_standalone_mock".to_string();
-        let strategy = create_auto_token_strategy(Some(auto_mock_token.clone())).await.unwrap();
+        let strategy = create_auto_token_strategy(Some(auto_mock_token.clone()))
+            .await
+            .unwrap();
         assert_eq!(strategy.strategy_type(), "mock");
         let token = strategy.get_token().await.unwrap();
         assert_eq!(token, auto_mock_token);
@@ -3026,8 +3082,10 @@ mod tests {
         let env_mock_token = "env_mock".to_string();
         let strategy = create_token_strategy_for_environment(
             TokenEnvironment::Mock,
-            Some(env_mock_token.clone())
-        ).await.unwrap();
+            Some(env_mock_token.clone()),
+        )
+        .await
+        .unwrap();
         assert_eq!(strategy.strategy_type(), "mock");
         let token = strategy.get_token().await.unwrap();
         assert_eq!(token, env_mock_token);

@@ -107,8 +107,9 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                     json.get("assignments")
                         .and_then(|v| v.as_array())
                         .is_some_and(|assignments| {
-                            assignments.len() == 1 && 
-                            assignments[0].get("amount").and_then(|v| v.as_i64()) == Some(100)
+                            assignments.len() == 1
+                                && assignments[0].get("amount").and_then(|v| v.as_i64())
+                                    == Some(100)
                         })
                 })
             });
@@ -144,8 +145,9 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                     json.get("assignments")
                         .and_then(|v| v.as_array())
                         .is_some_and(|assignments| {
-                            assignments.len() == 1 && 
-                            assignments[0].get("amount").and_then(|v| v.as_i64()) == Some(200)
+                            assignments.len() == 1
+                                && assignments[0].get("amount").and_then(|v| v.as_i64())
+                                    == Some(200)
                         })
                 })
             });
@@ -233,8 +235,7 @@ pub fn mock_create_manager(server: &MockServer) {
 
 pub fn mock_obtain_token(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(POST)
-            .path("/user/obtain_token");
+        when.method(POST).path("/user/obtain_token");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({

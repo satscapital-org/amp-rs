@@ -182,8 +182,6 @@ fn test_retry_config_partial_env_vars() {
     env::remove_var("API_RETRY_BASE_DELAY_MS");
 }
 
-
-
 // RetryClient Tests
 #[test]
 fn test_retry_client_creation() {
@@ -584,5 +582,3 @@ async fn test_retry_client_exhausted_retries() {
 
     always_fail_mock.assert_hits(2); // Should be called max_attempts times
 }
-
-

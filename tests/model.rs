@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use secrecy::{ExposeSecret, Secret};
+use serde::{Deserialize, Serialize};
 
 #[test]
 fn test_secret_serde_module() {
