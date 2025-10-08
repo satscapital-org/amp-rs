@@ -96,22 +96,24 @@ pub fn mock_create_asset_assignments(server: &MockServer) {
 pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
     use serde_json::Value;
 
+    // Mock for first assignment call (user 13, amount 100)
     server.mock(|when, then| {
         when.method(POST)
             .path("/assets/mock_asset_uuid/assignments/create")
             .header("content-type", "application/json")
-            // Custom matcher to validate multiple assignments
             .matches(|req| {
                 let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
                 body.is_ok_and(|json| {
                     json.get("assignments")
                         .and_then(|v| v.as_array())
-                        .is_some_and(|assignments| assignments.len() > 1)
+                        .is_some_and(|assignments| {
+                            assignments.len() == 1 && 
+                            assignments[0].get("amount").and_then(|v| v.as_i64()) == Some(100)
+                        })
                 })
             });
         then.status(200)
             .header("content-type", "application/json")
-            // Response with multiple assignments
             .json_body(json!([
                 {
                     "id": 10,
@@ -127,7 +129,29 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                     "creator": 1,
                     "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
                     "investor": 13
-                },
+                }
+            ]));
+    });
+
+    // Mock for second assignment call (user 14, amount 200)
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/assignments/create")
+            .header("content-type", "application/json")
+            .matches(|req| {
+                let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
+                body.is_ok_and(|json| {
+                    json.get("assignments")
+                        .and_then(|v| v.as_array())
+                        .is_some_and(|assignments| {
+                            assignments.len() == 1 && 
+                            assignments[0].get("amount").and_then(|v| v.as_i64()) == Some(200)
+                        })
+                })
+            });
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([
                 {
                     "id": 11,
                     "registered_user": 14,
