@@ -140,7 +140,17 @@ pub struct RegisteredUserAdd {
 
 #[derive(Debug, Serialize)]
 pub struct RegisteredUserEdit {
-    pub name: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GaidRequest {
+    pub gaid: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CategoriesRequest {
+    pub categories: Vec<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -319,11 +329,13 @@ pub struct Outpoint {
 pub type LostOutputs = Vec<Outpoint>;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Balance {
-    pub confirmed_balance: Vec<Ownership>,
-    pub lost_outputs: LostOutputs,
-    pub reissuance_lost_outputs: LostOutputs,
+pub struct GaidBalanceEntry {
+    pub asset_uuid: String,
+    pub asset_id: String,
+    pub balance: i64,
 }
+
+pub type Balance = Vec<GaidBalanceEntry>;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AssetLostOutputs {
@@ -401,6 +413,11 @@ pub struct BurnCreate {
 pub struct BurnConfirmRequest {
     pub tx_data: serde_json::Value,
     pub change_data: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SetAssetMemoRequest {
+    pub memo: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]

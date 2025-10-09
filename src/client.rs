@@ -17,9 +17,10 @@ use secrecy::Secret;
 
 use crate::model::{
     Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse,
-    CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest, ChangePasswordResponse,
-    CreateAssetAssignmentRequest, EditAssetRequest, IssuanceRequest, IssuanceResponse, Outpoint,
-    Ownership, Password, TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
+    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
+    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
+    GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, SetAssetMemoRequest,
+    TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
 /// Token environment detection for automatic strategy selection
@@ -2075,6 +2076,64 @@ impl ApiClient {
             .await
     }
 
+    /// Gets the memo for a specific asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to retrieve the memo for
+    ///
+    /// # Returns
+    /// The memo string associated with the asset
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The asset does not exist
+    /// - The response cannot be parsed
+    pub async fn get_asset_memo(&self, asset_uuid: &str) -> Result<String, Error> {
+        self.request_json(Method::GET, &["assets", asset_uuid, "memo"], None::<&()>)
+            .await
+    }
+
+    /// Sets a memo for the specified asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to set the memo for
+    /// * `memo` - The memo string to associate with the asset
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on success.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The asset does not exist
+    /// - The memo cannot be set due to validation errors
+    ///
+    /// # Example
+    /// ```rust
+    /// # use amp_rs::ApiClient;
+    /// # async fn example(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.set_asset_memo("asset-uuid-123", "This is a memo for the asset").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn set_asset_memo(&self, asset_uuid: &str, memo: &str) -> Result<(), Error> {
+        let request = SetAssetMemoRequest {
+            memo: memo.to_string(),
+        };
+
+        self.request_empty(
+            Method::POST,
+            &["assets", asset_uuid, "memo", "set"],
+            Some(request),
+        )
+        .await
+    }
+
     pub async fn blacklist_asset_utxos(
         &self,
         asset_uuid: &str,
@@ -2201,6 +2260,207 @@ impl ApiClient {
             None::<&()>,
         )
         .await
+    }
+
+    pub async fn edit_registered_user(
+        &self,
+        registered_user_id: i64,
+        edit_data: &crate::model::RegisteredUserEdit,
+    ) -> Result<crate::model::RegisteredUserResponse, Error> {
+        self.request_json(
+            Method::PUT,
+            &["registered_users", &registered_user_id.to_string(), "edit"],
+            Some(edit_data),
+        )
+        .await
+    }
+
+    pub async fn get_registered_user_summary(
+        &self,
+        registered_user_id: i64,
+    ) -> Result<crate::model::RegisteredUserSummary, Error> {
+        self.request_json(
+            Method::GET,
+            &[
+                "registered_users",
+                &registered_user_id.to_string(),
+                "summary",
+            ],
+            None::<&()>,
+        )
+        .await
+    }
+
+    pub async fn get_registered_user_gaids(
+        &self,
+        registered_user_id: i64,
+    ) -> Result<Vec<String>, Error> {
+        self.request_json(
+            Method::GET,
+            &["registered_users", &registered_user_id.to_string(), "gaids"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Associates a GAID with a registered user.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user
+    /// * `gaid` - The GAID to associate with the user
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The registered user ID is invalid
+    /// - The GAID is invalid or already associated
+    pub async fn add_gaid_to_registered_user(
+        &self,
+        registered_user_id: i64,
+        gaid: &str,
+    ) -> Result<(), Error> {
+        let request = GaidRequest {
+            gaid: gaid.to_string(),
+        };
+
+        self.request_empty(
+            Method::POST,
+            &[
+                "registered_users",
+                &registered_user_id.to_string(),
+                "gaids",
+                "add",
+            ],
+            Some(request),
+        )
+        .await
+    }
+
+    /// Sets an existing GAID as the default for a registered user.
+    ///
+    /// This method allows you to designate a specific GAID as the primary/default
+    /// GAID for a registered user. The GAID must already be associated with the user.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user
+    /// * `gaid` - The GAID to set as default
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the operation is successful.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The registered user ID is invalid
+    /// - The GAID is not associated with the user
+    pub async fn set_default_gaid_for_registered_user(
+        &self,
+        registered_user_id: i64,
+        gaid: &str,
+    ) -> Result<(), Error> {
+        let request = GaidRequest {
+            gaid: gaid.to_string(),
+        };
+
+        self.request_empty(
+            Method::POST,
+            &[
+                "registered_users",
+                &registered_user_id.to_string(),
+                "gaids",
+                "set-default",
+            ],
+            Some(request),
+        )
+        .await
+    }
+
+    /// Retrieves the registered user associated with a GAID
+    ///
+    /// # Arguments
+    /// * `gaid` - The GAID to look up
+    ///
+    /// # Returns
+    /// Returns the registered user data if the GAID is associated with a user
+    ///
+    /// # Errors
+    /// This function will return an error if:
+    /// - The GAID has no associated user
+    /// - The GAID is invalid
+    /// - Network or authentication errors occur
+    pub async fn get_gaid_registered_user(
+        &self,
+        gaid: &str,
+    ) -> Result<crate::model::RegisteredUserResponse, Error> {
+        self.request_json(
+            Method::GET,
+            &["gaids", gaid, "registered_user"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Gets the balance information for a specific GAID.
+    ///
+    /// This method retrieves all asset balances associated with the given GAID,
+    /// including confirmed balances and any lost outputs.
+    ///
+    /// # Arguments
+    /// * `gaid` - The GAID to query balance for
+    ///
+    /// # Returns
+    /// Returns a `Balance` struct containing confirmed balances and lost outputs
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The GAID is invalid
+    /// - Network or authentication errors occur
+    /// - The response cannot be parsed
+    pub async fn get_gaid_balance(&self, gaid: &str) -> Result<Balance, Error> {
+        self.request_json(Method::GET, &["gaids", gaid, "balance"], None::<&()>)
+            .await
+    }
+
+    /// Retrieves the specific asset balance for a GAID
+    ///
+    /// # Arguments
+    /// * `gaid` - The GAID to query
+    /// * `asset_uuid` - The UUID of the asset to query
+    ///
+    /// # Returns
+    /// Returns the specific asset balance information
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The GAID is invalid
+    /// - The asset UUID is invalid
+    /// - Network or authentication errors occur
+    /// - The response cannot be parsed
+    pub async fn get_gaid_asset_balance(
+        &self,
+        gaid: &str,
+        asset_uuid: &str,
+    ) -> Result<Ownership, Error> {
+        // Try to get the response as a GaidBalanceEntry first, then convert to Ownership
+        let balance_entry: GaidBalanceEntry = self
+            .request_json(
+                Method::GET,
+                &["gaids", gaid, "balance", asset_uuid],
+                None::<&()>,
+            )
+            .await?;
+
+        // Convert GaidBalanceEntry to Ownership format
+        Ok(Ownership {
+            owner: gaid.to_string(),
+            amount: balance_entry.balance,
+            gaid: Some(gaid.to_string()),
+        })
     }
 
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
@@ -2570,6 +2830,76 @@ impl ApiClient {
             Method::PUT,
             &["assets", asset_uuid, "assignments", assignment_id, "unlock"],
             None::<&()>,
+        )
+        .await
+    }
+
+    /// Adds categories to a registered user.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user
+    /// * `categories` - A slice of category IDs to add to the user
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The registered user ID is invalid
+    /// - Any category ID is invalid
+    pub async fn add_categories_to_registered_user(
+        &self,
+        registered_user_id: i64,
+        categories: &[i64],
+    ) -> Result<(), Error> {
+        let request_body = CategoriesRequest {
+            categories: categories.to_vec(),
+        };
+
+        self.request_empty(
+            Method::PUT,
+            &[
+                "registered_users",
+                &registered_user_id.to_string(),
+                "categories",
+                "add",
+            ],
+            Some(request_body),
+        )
+        .await
+    }
+
+    /// Removes categories from a registered user
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user
+    /// * `categories` - A slice of category IDs to remove from the user
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the categories are successfully removed, or an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The registered user ID is invalid
+    /// - Any category ID is not associated with the user
+    pub async fn remove_categories_from_registered_user(
+        &self,
+        registered_user_id: i64,
+        categories: &[i64],
+    ) -> Result<(), Error> {
+        let request_body = CategoriesRequest {
+            categories: categories.to_vec(),
+        };
+
+        self.request_empty(
+            Method::PUT,
+            &[
+                "registered_users",
+                &registered_user_id.to_string(),
+                "categories",
+                "delete",
+            ],
+            Some(request_body),
         )
         .await
     }

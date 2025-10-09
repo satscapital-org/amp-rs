@@ -5,6 +5,14 @@ use std::env;
 const PROTECTED_CATEGORY_ID: i64 = 28273;
 const PROTECTED_USER_IDS: &[i64] = &[1194, 1203];
 
+// Test environment resources that should be preserved
+const TEST_CATEGORY_NAME: &str = "Test Environment Category";
+const TEST_USER_GAIDS: &[&str] = &[
+    "GAbzSbgCZ6M6WU85rseKTrfehPsjt",
+    "GAQzmXM7jVaKAwtHGXHENgn5KUUmL",
+];
+const TEST_ASSET_NAME: &str = "Test Environment Asset";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from .env file if it exists
@@ -46,10 +54,12 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     match client.get_assets().await {
         Ok(assets) => {
             let locked_count = assets.iter().filter(|a| a.is_locked).count();
+            let test_assets_count = assets.iter().filter(|a| a.name == TEST_ASSET_NAME).count();
             println!(
-                "💰 Assets to delete: {} ({} locked)",
-                assets.len(),
-                locked_count
+                "💰 Assets to delete: {} ({} locked, {} test assets protected)",
+                assets.len() - test_assets_count,
+                locked_count,
+                test_assets_count
             );
             if !assets.is_empty() {
                 let mut total_assignments = 0;
@@ -96,12 +106,17 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
         Ok(categories) => {
             let deletable_categories: Vec<_> = categories
                 .iter()
-                .filter(|cat| cat.id != PROTECTED_CATEGORY_ID)
+                .filter(|cat| cat.id != PROTECTED_CATEGORY_ID && cat.name != TEST_CATEGORY_NAME)
                 .collect();
+            let test_categories_count = categories
+                .iter()
+                .filter(|cat| cat.name == TEST_CATEGORY_NAME)
+                .count();
             println!(
-                "📁 Categories to delete: {} (excluding protected category ID {})",
+                "📁 Categories to delete: {} (excluding protected category ID {} and {} test categories)",
                 deletable_categories.len(),
-                PROTECTED_CATEGORY_ID
+                PROTECTED_CATEGORY_ID,
+                test_categories_count
             );
             if !deletable_categories.is_empty() {
                 for category in deletable_categories.iter().take(3) {
@@ -120,12 +135,26 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
         Ok(users) => {
             let deletable_users: Vec<_> = users
                 .iter()
-                .filter(|user| !PROTECTED_USER_IDS.contains(&user.id))
+                .filter(|user| {
+                    !PROTECTED_USER_IDS.contains(&user.id)
+                        && !TEST_USER_GAIDS
+                            .iter()
+                            .any(|&gaid| user.gaid.as_ref() == Some(&gaid.to_string()))
+                })
                 .collect();
+            let test_users_count = users
+                .iter()
+                .filter(|user| {
+                    TEST_USER_GAIDS
+                        .iter()
+                        .any(|&gaid| user.gaid.as_ref() == Some(&gaid.to_string()))
+                })
+                .count();
             println!(
-                "👤 Registered users to delete: {} (excluding protected user IDs {:?})",
+                "👤 Registered users to delete: {} (excluding protected user IDs {:?} and {} test users)",
                 deletable_users.len(),
-                PROTECTED_USER_IDS
+                PROTECTED_USER_IDS,
+                test_users_count
             );
             if !deletable_users.is_empty() {
                 for user in deletable_users.iter().take(3) {
@@ -185,8 +214,18 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     let mut total_assignment_errors = 0;
     let mut unlocked_count = 0;
     let mut unlock_error_count = 0;
+    let mut protected_assets = 0;
 
     for asset in assets {
+        // Skip test environment asset
+        if asset.name == TEST_ASSET_NAME {
+            println!(
+                "   Skipping protected test asset '{}' (UUID: {})... 🛡️",
+                asset.name, asset.asset_uuid
+            );
+            protected_assets += 1;
+            continue;
+        }
         println!(
             "   Processing asset '{}' ({:?})...",
             asset.name, asset.ticker
@@ -231,8 +270,8 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     }
 
     println!(
-        "   📊 Assets: {} deleted, {} errors",
-        asset_success_count, asset_error_count
+        "   📊 Assets: {} deleted, {} errors, {} protected",
+        asset_success_count, asset_error_count, protected_assets
     );
     println!(
         "   📊 Assignments: {} deleted, {} errors",
@@ -302,7 +341,7 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
 
     let deletable_categories: Vec<_> = categories
         .into_iter()
-        .filter(|cat| cat.id != PROTECTED_CATEGORY_ID)
+        .filter(|cat| cat.id != PROTECTED_CATEGORY_ID && cat.name != TEST_CATEGORY_NAME)
         .collect();
 
     if deletable_categories.is_empty() {
@@ -318,7 +357,7 @@ async fn delete_all_categories(client: &ApiClient) -> Result<(), Box<dyn std::er
     let mut protected_count = 0;
 
     for category in deletable_categories {
-        if category.id == PROTECTED_CATEGORY_ID {
+        if category.id == PROTECTED_CATEGORY_ID || category.name == TEST_CATEGORY_NAME {
             println!(
                 "   Skipping protected category '{}' (ID: {})... 🛡️",
                 category.name, category.id
@@ -360,7 +399,12 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
 
     let deletable_users: Vec<_> = users
         .into_iter()
-        .filter(|user| !PROTECTED_USER_IDS.contains(&user.id))
+        .filter(|user| {
+            !PROTECTED_USER_IDS.contains(&user.id)
+                && !TEST_USER_GAIDS
+                    .iter()
+                    .any(|&gaid| user.gaid.as_ref() == Some(&gaid.to_string()))
+        })
         .collect();
 
     if deletable_users.is_empty() {
@@ -376,10 +420,16 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
     let mut protected_count = 0;
 
     for user in deletable_users {
-        if PROTECTED_USER_IDS.contains(&user.id) {
+        if PROTECTED_USER_IDS.contains(&user.id)
+            || TEST_USER_GAIDS
+                .iter()
+                .any(|&gaid| user.gaid.as_ref() == Some(&gaid.to_string()))
+        {
             println!(
-                "   Skipping protected user '{}' (ID: {})... 🛡️",
-                user.name, user.id
+                "   Skipping protected user '{}' (ID: {}) with GAID: {}... 🛡️",
+                user.name,
+                user.id,
+                user.gaid.as_ref().unwrap_or(&"None".to_string())
             );
             protected_count += 1;
             continue;

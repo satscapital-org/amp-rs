@@ -691,3 +691,180 @@ pub fn mock_unlock_asset(server: &MockServer) {
             }));
     });
 }
+
+pub fn mock_edit_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/registered_users/1/edit")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "name": "Updated User Name",
+                "GAID": "mock_gaid",
+                "is_company": false,
+                "categories": [],
+                "creator": 1
+            }));
+    });
+}
+
+pub fn mock_get_registered_user_summary(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/registered_users/1/summary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_uuid": "mock_asset_uuid",
+                "asset_id": "mock_asset_id",
+                "assignments": [{
+                    "id": 1,
+                    "registered_user": 1,
+                    "amount": 1000,
+                    "receiving_address": null,
+                    "distribution_uuid": null,
+                    "ready_for_distribution": true,
+                    "vesting_datetime": null,
+                    "vesting_timestamp": null,
+                    "has_vested": true,
+                    "is_distributed": false,
+                    "creator": 1,
+                    "GAID": "mock_gaid",
+                    "investor": 1
+                }],
+                "assignments_sum": 1000,
+                "distributions": [],
+                "distributions_sum": 0,
+                "balance": 1000
+            }));
+    });
+}
+
+pub fn mock_get_registered_user_gaids(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/registered_users/1/gaids");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([
+                "GA44YYwPM8vuRMmjFL8i5kSqXhoTW2",
+                "GAbYScu6jkWUND2jo3L4KJxyvo55d"
+            ]));
+    });
+}
+
+pub fn mock_add_gaid_to_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/registered_users/1/gaids/add")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({}));
+    });
+}
+
+pub fn mock_set_default_gaid_for_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/registered_users/1/gaids/set-default")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({}));
+    });
+}
+
+pub fn mock_get_gaid_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/gaids/GA44YYwPM8vuRMmjFL8i5kSqXhoTW2/registered_user");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "name": "Mock User",
+                "GAID": "GA44YYwPM8vuRMmjFL8i5kSqXhoTW2",
+                "is_company": false,
+                "categories": [],
+                "creator": 1
+            }));
+    });
+}
+
+pub fn mock_get_gaid_balance(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/gaids/GA44YYwPM8vuRMmjFL8i5kSqXhoTW2/balance");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([
+                {
+                    "asset_uuid": "716cb816-6cc7-469d-a41f-f4ed1c0d2dce",
+                    "asset_id": "5b72739ee4097c32e9eb2fa5f43fd51b35e13323e58c511d6da91adbc4ac24ca",
+                    "balance": 0
+                },
+                {
+                    "asset_uuid": "5fd36bad-f0af-4b13-a0b5-fb1a91b751a4",
+                    "asset_id": "ae4bfd3b5dc9d6d1dc77e1c8840fa06b4e9abeabec024cf1d9efb96935757be0",
+                    "balance": 0
+                }
+            ]));
+    });
+}
+
+pub fn mock_get_gaid_asset_balance(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/gaids/GA44YYwPM8vuRMmjFL8i5kSqXhoTW2/balance/mock_asset_uuid");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_uuid": "mock_asset_uuid",
+                "asset_id": "mock_asset_id",
+                "balance": 100000
+            }));
+    });
+}
+
+pub fn mock_add_categories_to_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/registered_users/1/categories/add")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({}));
+    });
+}
+
+pub fn mock_remove_categories_from_registered_user(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/registered_users/1/categories/delete")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({}));
+    });
+}
+
+pub fn mock_get_asset_memo(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/memo");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!("Sample memo for mock asset"));
+    });
+}
+
+pub fn mock_set_asset_memo(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/memo/set")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({}));
+    });
+}

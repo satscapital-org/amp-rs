@@ -1,0 +1,10 @@
+- [ ] Add error handling tests for edge cases
+  - Create mock tests for invalid registered user IDs
+  - Create mock tests for invalid GAIDs
+  - Create mock tests for invalid asset UUIDs
+  - Create mock tests for invalid category IDs
+  - Create mock tests for authentication failures
+  - Create mock tests for network errors and retry scenarios
+  - Verify proper error types are returned for each failure mode
+  - Each test must use setup_mock_test() and cleanup_mock_test() helpers
+  - Each test must call cleanup_mock_test() in a defer/finally block or at test end to ensure cleanup occurs even if test fails

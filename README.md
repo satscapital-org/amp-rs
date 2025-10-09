@@ -15,6 +15,20 @@ amp_client = "0.1.0"
 
 For more detailed examples, please refer to the [crate documentation](https://docs.rs/amp-client).
 
+### Running Examples
+
+You can run the included examples using cargo:
+
+```bash
+# Show a summary of all assets issued by your credentials
+cargo run --example asset_summary
+
+# View the API changelog
+cargo run --example changelog
+```
+
+Make sure to set up your `.env` file with the required credentials first.
+
 ### Get a registered user
 
 ```rust

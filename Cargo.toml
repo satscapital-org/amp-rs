@@ -15,6 +15,10 @@ path = "examples/changelog.rs"
 name = "token_persistence"
 path = "examples/token_persistence.rs"
 
+[[example]]
+name = "asset_summary"
+path = "examples/asset_summary.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
