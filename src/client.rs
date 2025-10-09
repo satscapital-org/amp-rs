@@ -19,8 +19,8 @@ use crate::model::{
     Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse,
     CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
     ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
-    GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, SetAssetMemoRequest,
-    TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
+    GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
+    SetAssetMemoRequest, TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
 /// Token environment detection for automatic strategy selection
