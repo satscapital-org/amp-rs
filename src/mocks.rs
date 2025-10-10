@@ -558,6 +558,98 @@ pub fn mock_get_current_manager_raw(server: &MockServer) {
     });
 }
 
+pub fn mock_lock_manager(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/lock");
+        then.status(200);
+    });
+}
+
+pub fn mock_lock_manager_invalid_id(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/999999/lock");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Manager not found"
+            }));
+    });
+}
+
+pub fn mock_lock_manager_server_error(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/lock");
+        then.status(500)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Internal server error"
+            }));
+    });
+}
+
+pub fn mock_add_asset_to_manager(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/assets/mock_asset_uuid/add");
+        then.status(200);
+    });
+}
+
+pub fn mock_add_asset_to_manager_invalid_manager_id(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/999999/assets/mock_asset_uuid/add");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Manager not found"
+            }));
+    });
+}
+
+pub fn mock_add_asset_to_manager_invalid_asset_uuid(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/assets/invalid_asset_uuid/add");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Asset not found"
+            }));
+    });
+}
+
+pub fn mock_add_asset_to_manager_server_error(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT).path("/managers/1/assets/mock_asset_uuid/add");
+        then.status(500)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Internal server error"
+            }));
+    });
+}
+
+pub fn mock_get_asset_assignment(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/assignments/10");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 10,
+                "registered_user": 13,
+                "amount": 100,
+                "receiving_address": null,
+                "distribution_uuid": null,
+                "ready_for_distribution": true,
+                "vesting_datetime": null,
+                "vesting_timestamp": null,
+                "has_vested": true,
+                "is_distributed": false,
+                "creator": 1,
+                "GAID": "GA3DS3emT12zDF4RGywBvJqZfhefNp",
+                "investor": 13
+            }));
+    });
+}
+
 pub fn mock_unlock_manager(server: &MockServer) {
     server.mock(|when, then| {
         when.method(PUT).path("/managers/1/unlock");
@@ -897,6 +989,49 @@ pub fn mock_remove_asset_from_category(server: &MockServer) {
                 "description": "A mock category",
                 "registered_users": [],
                 "assets": []
+            }));
+    });
+}
+pub fn mock_get_asset_assignment_invalid_asset_uuid(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/invalid_asset_uuid/assignments/10");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Asset not found"
+            }));
+    });
+}
+
+pub fn mock_get_asset_assignment_invalid_assignment_id(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/assignments/999999");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Assignment not found"
+            }));
+    });
+}
+
+pub fn mock_get_asset_assignment_non_existent(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/non_existent_asset/assignments/non_existent_assignment");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Assignment not found"
+            }));
+    });
+}
+
+pub fn mock_get_asset_assignment_server_error(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/assignments/10");
+        then.status(500)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Internal server error"
             }));
     });
 }

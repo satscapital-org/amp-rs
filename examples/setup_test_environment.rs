@@ -1,38 +1,10 @@
 use amp_rs::model::{
-    CategoryAdd, CreateAssetAssignmentRequest, IssuanceRequest, RegisteredUserAdd,
+    CategoryAdd, IssuanceRequest, RegisteredUserAdd,
 };
 use amp_rs::ApiClient;
 use std::env;
-use std::process::Command;
 
-/// Helper function to get a destination address for a specific GAID using address.py
-async fn get_destination_address_for_gaid(gaid: &str) -> Result<String, String> {
-    let output = Command::new("python3")
-        .arg("gaid-scripts/address.py")
-        .arg("amp") // Using 'amp' environment
-        .arg(gaid)
-        .output()
-        .map_err(|e| format!("Failed to execute address.py: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("address.py failed: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let json_response: serde_json::Value = serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
-
-    if let Some(error) = json_response.get("error") {
-        return Err(format!("address.py returned error: {}", error));
-    }
-
-    json_response
-        .get("address")
-        .and_then(|addr| addr.as_str())
-        .map(|addr| addr.to_string())
-        .ok_or_else(|| "No address found in response".to_string())
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

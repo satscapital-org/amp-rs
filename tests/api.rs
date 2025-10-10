@@ -2430,6 +2430,509 @@ async fn test_get_current_manager_raw_mock() {
 }
 
 #[tokio::test]
+async fn test_lock_manager_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_lock_manager(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    let result = client.lock_manager(1).await;
+    assert!(result.is_ok());
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_lock_manager_invalid_id_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_lock_manager_invalid_id(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with invalid manager ID (999999)
+    let result = client.lock_manager(999999).await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_lock_manager_server_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_lock_manager_server_error(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test server error scenario
+    let result = client.lock_manager(1).await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("500"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_lock_manager_network_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    // Create client with invalid URL to simulate network error
+    let client = ApiClient::with_mock_token(
+        Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test network error scenario
+    let result = client.lock_manager(1).await;
+    assert!(result.is_err());
+    
+    // Verify the error is Reqwest variant (network error)
+    match result.unwrap_err() {
+        amp_rs::client::Error::Reqwest(_) => {
+            // This is expected for network errors
+        }
+        other => panic!("Expected Reqwest error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_add_asset_to_manager(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
+    assert!(result.is_ok());
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+
+    // Get existing managers and use the first available one
+    let managers = client.get_managers().await
+        .expect("Failed to get managers");
+    
+    if managers.is_empty() {
+        println!("Skipping test: No managers available");
+        return;
+    }
+
+    let test_manager = &managers[0];
+    println!("Using existing manager: {} (ID: {})", test_manager.username, test_manager.id);
+
+    // Find preserved "Test Environment Asset" or use first available asset
+    let assets = client.get_assets().await
+        .expect("Failed to get assets");
+    
+    let test_asset = assets.iter()
+        .find(|asset| asset.name == "Test Environment Asset")
+        .or_else(|| assets.first());
+    
+    if let Some(asset) = test_asset {
+        println!("Using asset: {} (UUID: {})", asset.name, asset.asset_uuid);
+        
+        // Call add_asset_to_manager method with manager ID and asset UUID
+        println!("Adding asset to manager...");
+        let add_result = client.add_asset_to_manager(test_manager.id, &asset.asset_uuid).await;
+        assert!(add_result.is_ok(), "Failed to add asset to manager: {:?}", add_result.err());
+        
+        println!("Successfully added asset to manager");
+
+        // Verify the operation by checking if the manager now has access to the asset
+        // We can do this by getting the manager details and checking their assets
+        let updated_manager = client.get_manager(test_manager.id).await
+            .expect("Failed to get updated manager state");
+        
+        // Check if the asset is now in the manager's asset list
+        let has_asset = updated_manager.assets.iter()
+            .any(|manager_asset| manager_asset == &asset.asset_uuid);
+        
+        if has_asset {
+            println!("Verified: Manager now has access to the asset");
+        } else {
+            println!("Note: Asset may have been added but not immediately visible in manager's asset list");
+        }
+    } else {
+        println!("Skipping test: No assets available for testing");
+    }
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_invalid_manager_id_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_add_asset_to_manager_invalid_manager_id(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with invalid manager ID (999999)
+    let result = client.add_asset_to_manager(999999, "mock_asset_uuid").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_invalid_asset_uuid_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_add_asset_to_manager_invalid_asset_uuid(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with invalid asset UUID
+    let result = client.add_asset_to_manager(1, "invalid_asset_uuid").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_server_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_add_asset_to_manager_server_error(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test server error scenario
+    let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("500"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_manager_network_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    // Create client with invalid URL to simulate network error
+    let client = ApiClient::with_mock_token(
+        Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test network error scenario
+    let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
+    assert!(result.is_err());
+    
+    // Verify the error is Reqwest variant (network error)
+    match result.unwrap_err() {
+        amp_rs::client::Error::Reqwest(_) => {
+            // This is expected for network errors
+        }
+        other => panic!("Expected Reqwest error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_invalid_asset_uuid_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_get_asset_assignment_invalid_asset_uuid(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with invalid asset UUID
+    let result = client.get_asset_assignment("invalid_asset_uuid", "10").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_invalid_assignment_id_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_get_asset_assignment_invalid_assignment_id(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with invalid assignment ID (999999)
+    let result = client.get_asset_assignment("mock_asset_uuid", "999999").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_non_existent_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_get_asset_assignment_non_existent(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test with non-existent asset and assignment
+    let result = client.get_asset_assignment("non_existent_asset", "non_existent_assignment").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("404"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_server_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_get_asset_assignment_server_error(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test server error scenario
+    let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
+    assert!(result.is_err());
+    
+    // Verify the error is RequestFailed variant
+    match result.unwrap_err() {
+        amp_rs::client::Error::RequestFailed(msg) => {
+            assert!(msg.contains("500"));
+        }
+        other => panic!("Expected RequestFailed error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_network_error() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    // Create client with invalid URL to simulate network error
+    let client = ApiClient::with_mock_token(
+        Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    
+    // Test network error scenario
+    let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
+    assert!(result.is_err());
+    
+    // Verify the error is Reqwest variant (network error)
+    match result.unwrap_err() {
+        amp_rs::client::Error::Reqwest(_) => {
+            // This is expected for network errors
+        }
+        other => panic!("Expected Reqwest error, got: {:?}", other),
+    }
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_get_asset_assignment_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_get_asset_assignment(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
+    assert!(result.is_ok());
+    let assignment = result.unwrap();
+    assert_eq!(assignment.id, 10);
+    assert_eq!(assignment.registered_user, 13);
+    assert_eq!(assignment.amount, 100);
+    assert_eq!(assignment.ready_for_distribution, true);
+    assert_eq!(assignment.has_vested, true);
+    assert_eq!(assignment.is_distributed, false);
+    assert_eq!(assignment.creator, 1);
+    assert_eq!(assignment.gaid, Some("GA3DS3emT12zDF4RGywBvJqZfhefNp".to_string()));
+    assert_eq!(assignment.investor, Some(13));
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
 async fn test_unlock_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
@@ -2450,6 +2953,65 @@ async fn test_unlock_manager_mock() {
     // Setup mock test environment
     setup_mock_test().await;
 }
+
+#[tokio::test]
+async fn test_lock_manager_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+
+    // Get existing managers and use the first available one
+    let managers = client.get_managers().await
+        .expect("Failed to get managers");
+    
+    if managers.is_empty() {
+        println!("Skipping test: No managers available");
+        return;
+    }
+
+    let test_manager = &managers[0];
+    println!("Using existing manager: {} (ID: {})", test_manager.username, test_manager.id);
+
+    // If the manager is already locked, unlock it first to ensure we can test locking
+    if test_manager.is_locked {
+        println!("Manager is already locked, unlocking first");
+        let unlock_result = client.unlock_manager(test_manager.id).await;
+        assert!(unlock_result.is_ok(), "Failed to unlock manager: {:?}", unlock_result.err());
+        println!("Successfully unlocked manager");
+    }
+
+    // Call lock_manager method with the manager ID
+    println!("Locking manager with ID: {}", test_manager.id);
+    let lock_result = client.lock_manager(test_manager.id).await;
+    assert!(lock_result.is_ok(), "Failed to lock manager: {:?}", lock_result.err());
+    
+    println!("Successfully locked manager");
+
+    // Verify the manager is locked by getting its current state
+    let updated_manager = client.get_manager(test_manager.id).await
+        .expect("Failed to get updated manager state");
+    assert!(updated_manager.is_locked, "Manager should be locked after lock operation");
+    println!("Verified manager is locked");
+
+    // Clean up by unlocking the manager to restore original state
+    println!("Cleaning up: unlocking manager with ID {}", test_manager.id);
+    let unlock_result = client.unlock_manager(test_manager.id).await;
+    if let Err(e) = &unlock_result {
+        println!("Warning: Failed to unlock manager: {:?}", e);
+    } else {
+        println!("Successfully unlocked manager (restored to original state)");
+    }
+}
+
 #[tokio::test]
 #[serial]
 async fn test_add_asset_treasury_addresses_live() {
@@ -3812,4 +4374,204 @@ async fn test_get_gaid_asset_balance_live() {
 
     // No cleanup needed as this is a read-only operation using existing test data
     println!("✓ Test completed successfully - no cleanup required for read-only operation");
+}
+#[tokio::test]
+async fn test_get_asset_assignment_live() {
+    // This test demonstrates the complete workflow for testing get_asset_assignment:
+    // 1. Uses create_asset_assignment workflow for setup (get/create user, category, asset, create assignment)
+    // 2. Calls get_asset_assignment method with asset UUID and assignment ID
+    // 3. Verifies returned assignment data matches created assignment
+    // 4. Uses create_asset_assignment cleanup to delete created assignments
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+
+    // === SETUP PHASE: Use create_asset_assignment workflow ===
+    println!("=== SETUP PHASE ===");
+
+    // 1. Get or create a registered user with a specific GAID
+    let user_gaid = "GA3DS3emT12zDF4RGywBvJqZfhefNp";
+
+    // Check if user already exists
+    let existing_users = client.get_registered_users().await.unwrap();
+    let existing_user = existing_users
+        .iter()
+        .find(|u| u.gaid.as_ref().map_or(false, |gaid| gaid == user_gaid));
+
+    let user_id = if let Some(user) = existing_user {
+        println!(
+            "Reusing existing user with GAID {}: {} (ID: {})",
+            user_gaid, user.name, user.id
+        );
+        user.id
+    } else {
+        // Create new user if it doesn't exist
+        println!("Creating new user with GAID {}", user_gaid);
+        let new_user = amp_rs::model::RegisteredUserAdd {
+            name: "Test User for Assignment (Persistent)".to_string(),
+            gaid: Some(user_gaid.to_string()),
+            is_company: false,
+        };
+        let user = client.add_registered_user(&new_user).await.unwrap();
+        println!("Created new user: {} (ID: {})", user.name, user.id);
+        user.id
+    };
+
+    // 2. Get or create a category and add the user to it
+    let categories = client.get_categories().await.unwrap();
+    let category_id = if let Some(existing_category) = categories.first() {
+        // Use existing category if available
+        existing_category.id
+    } else {
+        // Create a new category
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let new_category = amp_rs::model::CategoryAdd {
+            name: format!("Test Category for Assignment {}", timestamp),
+            description: Some("Category for testing asset assignments".to_string()),
+        };
+        let category = client.add_category(&new_category).await.unwrap();
+        category.id
+    };
+
+    // Add user to category before creating the asset
+    let user_category_result = client
+        .add_registered_user_to_category(category_id, user_id)
+        .await;
+    if let Err(e) = &user_category_result {
+        println!("Warning: Failed to add user to category: {:?}", e);
+    } else {
+        println!(
+            "Successfully added user to category {} before asset creation",
+            category_id
+        );
+    }
+
+    // 3. Get or reuse an existing asset that's already confirmed
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = if let Some(existing_asset) = assets.first() {
+        println!(
+            "Reusing existing asset: {} (UUID: {})",
+            existing_asset.name, existing_asset.asset_uuid
+        );
+        existing_asset.asset_uuid.clone()
+    } else {
+        // If no assets exist, create one (this should be rare in a test environment)
+        println!("No existing assets found, creating a new one...");
+        let destination_address =
+            get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
+                .await
+                .expect(
+                    "Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1",
+                );
+        let pubkey =
+            "02963a059e1ab729b653b78360626657e40dfb0237b754007acd43e8e0141a1bb4".to_string();
+
+        let issuance_request = amp_rs::model::IssuanceRequest {
+            name: "Test Asset for Assignment".to_string(),
+            amount: 1000000000000,
+            destination_address: destination_address.clone(),
+            domain: "test.asset".to_string(),
+            ticker: "TAS".to_string(),
+            pubkey,
+            precision: Some(8),
+            is_confidential: Some(true),
+            is_reissuable: Some(false),
+            reissuance_amount: None,
+            reissuance_address: None,
+            transfer_restricted: Some(true),
+        };
+
+        let issued_asset = client.issue_asset(&issuance_request).await.unwrap();
+        println!(
+            "Created new asset: {} (UUID: {})",
+            issued_asset.name, issued_asset.asset_uuid
+        );
+        issued_asset.asset_uuid
+    };
+
+    // 4. Add the asset to the same category as the user if not already added
+    let asset_category_result = client.add_asset_to_category(category_id, &asset_uuid).await;
+    if let Err(e) = &asset_category_result {
+        println!("Note: Asset may already be in category: {:?}", e);
+    } else {
+        println!("Successfully added asset to category {}", category_id);
+    }
+
+    // 5. Create the assignment
+    let request = amp_rs::model::CreateAssetAssignmentRequest {
+        registered_user: user_id,
+        amount: 1,               // Use a very small amount to ensure treasury has enough
+        vesting_timestamp: None, // No vesting for this test
+        ready_for_distribution: false, // Default value
+    };
+
+    println!("Creating assignment for testing get_asset_assignment...");
+    let created_assignments = client
+        .create_asset_assignments(&asset_uuid, &[request.clone()])
+        .await
+        .expect("Failed to create assignment for testing");
+
+    assert!(!created_assignments.is_empty(), "Should have created at least one assignment");
+    let created_assignment = &created_assignments[0];
+    println!("✅ Created assignment with ID: {}", created_assignment.id);
+
+    // === TEST PHASE: Call get_asset_assignment method ===
+    println!("\n=== TEST PHASE ===");
+    
+    let assignment_id = created_assignment.id.to_string();
+    println!("Calling get_asset_assignment with asset_uuid: {}, assignment_id: {}", asset_uuid, assignment_id);
+    
+    let retrieved_assignment = client
+        .get_asset_assignment(&asset_uuid, &assignment_id)
+        .await
+        .expect("Failed to retrieve assignment");
+
+    // === VERIFICATION PHASE: Verify returned assignment data matches created assignment ===
+    println!("\n=== VERIFICATION PHASE ===");
+    
+    assert_eq!(retrieved_assignment.id, created_assignment.id, "Assignment ID should match");
+    assert_eq!(retrieved_assignment.registered_user, created_assignment.registered_user, "Registered user should match");
+    assert_eq!(retrieved_assignment.amount, created_assignment.amount, "Amount should match");
+    assert_eq!(retrieved_assignment.ready_for_distribution, created_assignment.ready_for_distribution, "Ready for distribution should match");
+    assert_eq!(retrieved_assignment.creator, created_assignment.creator, "Creator should match");
+    
+    println!("✅ Retrieved assignment matches created assignment:");
+    println!("  ID: {}", retrieved_assignment.id);
+    println!("  Registered User: {}", retrieved_assignment.registered_user);
+    println!("  Amount: {}", retrieved_assignment.amount);
+    println!("  Ready for Distribution: {}", retrieved_assignment.ready_for_distribution);
+    println!("  Creator: {}", retrieved_assignment.creator);
+
+    // === CLEANUP PHASE: Use create_asset_assignment cleanup ===
+    println!("\n=== CLEANUP PHASE ===");
+
+    // Delete all created assignments (asset is reused, so no need to delete it)
+    for assignment in &created_assignments {
+        println!("Deleting assignment ID: {}", assignment.id);
+        match client
+            .delete_asset_assignment(&asset_uuid, &assignment.id.to_string())
+            .await
+        {
+            Ok(()) => {
+                println!("✅ Successfully deleted assignment {}", assignment.id);
+            }
+            Err(e) => {
+                println!("❌ Failed to delete assignment {}: {:?}", assignment.id, e);
+            }
+        }
+    }
+
+    println!("✅ Test completed successfully - get_asset_assignment method works correctly");
 }

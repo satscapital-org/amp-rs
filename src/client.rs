@@ -2669,6 +2669,61 @@ impl ApiClient {
         Ok(all_assignments)
     }
 
+    /// Gets a specific asset assignment by asset UUID and assignment ID.
+    ///
+    /// This method sends a GET request to retrieve detailed information about a specific asset
+    /// assignment. Asset assignments represent the allocation of assets to users or entities,
+    /// including information such as the assigned amount, recipient details, and assignment status.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset for which to retrieve the assignment
+    /// * `assignment_id` - The ID of the specific assignment to retrieve
+    ///
+    /// # Returns
+    /// Returns an `Assignment` struct containing the assignment details including:
+    /// - Assignment ID and amount
+    /// - Recipient information
+    /// - Assignment status and metadata
+    /// - Creation and modification timestamps
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The asset UUID is invalid or does not exist
+    /// - The assignment ID is invalid or does not exist
+    /// - The assignment is not accessible to the current user
+    /// - The response cannot be parsed as a valid Assignment
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Retrieve assignment with ID "123" for asset "550e8400-e29b-41d4-a716-446655440000"
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let assignment_id = "123";
+    /// 
+    /// let assignment = client.get_asset_assignment(asset_uuid, assignment_id).await?;
+    /// 
+    /// println!("Assignment ID: {}", assignment.id);
+    /// println!("Assigned amount: {}", assignment.amount);
+    /// println!("Registered user: {}", assignment.registered_user);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_assignment(&self, asset_uuid: &str, assignment_id: &str) -> Result<Assignment, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "assignments", assignment_id],
+            None::<&()>,
+        )
+        .await
+    }
+
     /// Gets a specific manager by ID.
     ///
     /// # Arguments
@@ -2761,6 +2816,48 @@ impl ApiClient {
             .await
     }
 
+    /// Locks a manager account to prevent further operations.
+    ///
+    /// This method sends a PUT request to lock the specified manager, preventing any further
+    /// operations on that manager account. This is typically used for security purposes or
+    /// when a manager needs to be temporarily disabled.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager to lock
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the manager was successfully locked.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The manager ID is invalid or does not exist
+    /// - The manager is already locked
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Lock manager with ID 123
+    /// client.lock_manager(123).await?;
+    /// println!("Manager 123 has been locked successfully");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn lock_manager(&self, manager_id: i64) -> Result<(), Error> {
+        self.request_empty(
+            Method::PUT,
+            &["managers", &manager_id.to_string(), "lock"],
+            None::<&()>,
+        )
+        .await
+    }
+
     /// Unlocks a manager account.
     ///
     /// # Arguments
@@ -2775,6 +2872,54 @@ impl ApiClient {
         self.request_empty(
             Method::PUT,
             &["managers", &manager_id.to_string(), "unlock"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Authorizes a manager to manage a specific asset.
+    ///
+    /// This method sends a PUT request to authorize the specified manager to manage the given asset.
+    /// Once authorized, the manager will have permissions to perform operations on the asset such as
+    /// creating assignments, managing ownership, and other asset-related operations.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager to authorize
+    /// * `asset_uuid` - The UUID of the asset to add to the manager's authorized assets
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the manager was successfully authorized for the asset.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The manager ID is invalid or does not exist
+    /// - The asset UUID is invalid or does not exist
+    /// - The manager is already authorized for this asset
+    /// - The manager is locked and cannot be modified
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Authorize manager 123 to manage asset with UUID "550e8400-e29b-41d4-a716-446655440000"
+    /// let manager_id = 123;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// 
+    /// client.add_asset_to_manager(manager_id, asset_uuid).await?;
+    /// println!("Manager {} is now authorized to manage asset {}", manager_id, asset_uuid);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn add_asset_to_manager(&self, manager_id: i64, asset_uuid: &str) -> Result<(), Error> {
+        self.request_empty(
+            Method::PUT,
+            &["managers", &manager_id.to_string(), "assets", asset_uuid, "add"],
             None::<&()>,
         )
         .await

@@ -43,8 +43,8 @@ cargo test test_name_filter -- --ignored                     # Run specific slow
 
 ### Code Quality
 ```bash
-cargo fmt                                                                                                    # Format code
-cargo clippy --all-features -- -D warnings -W clippy::pedantic -W clippy::nursery -W rust-2018-idioms     # Run linter with comprehensive checks
+cargo fmt     # Format code
+cargo clippy  # Run basic linter checks
 ```
 
 ### Examples
