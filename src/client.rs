@@ -20,7 +20,7 @@ use crate::model::{
     CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
     ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
     GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
-    SetAssetMemoRequest, TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
+    TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
 /// Token environment detection for automatic strategy selection
@@ -2122,16 +2122,32 @@ impl ApiClient {
     /// # }
     /// ```
     pub async fn set_asset_memo(&self, asset_uuid: &str, memo: &str) -> Result<(), Error> {
-        let request = SetAssetMemoRequest {
-            memo: memo.to_string(),
-        };
+        let token = self.get_token().await?;
+        let mut url = self.base_url.clone();
+        url.path_segments_mut().unwrap().extend(&["assets", asset_uuid, "memo", "set"]);
 
-        self.request_empty(
-            Method::POST,
-            &["assets", asset_uuid, "memo", "set"],
-            Some(request),
-        )
-        .await
+        let response = self
+            .client
+            .request(Method::POST, url)
+            .header(AUTHORIZATION, format!("token {token}"))
+            .header("content-type", "application/json")
+            .body(format!("\"{}\"", memo.replace("\"", "\\\"")))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(Error::RequestFailed(format!(
+                "Request to [\"assets\", \"{}\", \"memo\", \"set\"] failed with status {}: {}",
+                asset_uuid, status, error_text
+            )));
+        }
+
+        Ok(())
     }
 
     pub async fn blacklist_asset_utxos(

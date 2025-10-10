@@ -868,3 +868,35 @@ pub fn mock_set_asset_memo(server: &MockServer) {
             .json_body(json!({}));
     });
 }
+
+pub fn mock_add_asset_to_category(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/categories/1/assets/mock_asset_uuid/add");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "name": "Mock Category",
+                "description": "A mock category",
+                "registered_users": [],
+                "assets": ["mock_asset_uuid"]
+            }));
+    });
+}
+
+pub fn mock_remove_asset_from_category(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(PUT)
+            .path("/categories/1/assets/mock_asset_uuid/remove");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "id": 1,
+                "name": "Mock Category",
+                "description": "A mock category",
+                "registered_users": [],
+                "assets": []
+            }));
+    });
+}

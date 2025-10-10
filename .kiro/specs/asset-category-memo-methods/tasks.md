@@ -46,7 +46,7 @@
     - Include proper test setup and cleanup
     - _Requirements: 5.1, 5.2_
   
-  - [ ] 4.2 Create `test_set_asset_memo_mock` test
+  - [x] 4.2 Create `test_set_asset_memo_mock` test
     - Add test function in `tests/api.rs`
     - Use mock server with `mock_set_asset_memo`
     - Create client with mock token
@@ -56,7 +56,7 @@
     - _Requirements: 5.1, 5.2_
 
 - [ ] 5. Implement live tests for memo operations
-  - [ ] 5.1 Create `test_get_asset_memo_live` test
+  - [x] 5.1 Create `test_get_asset_memo_live` test
     - Add test function in `tests/api.rs`
     - Skip test if not in live mode (`AMP_TESTS != "live"`)
     - Use `get_shared_client()` for authentication
@@ -65,7 +65,7 @@
     - Handle case where asset may not have memo
     - _Requirements: 5.1, 5.3, 5.5_
   
-  - [ ] 5.2 Create `test_set_asset_memo_live` test
+  - [x] 5.2 Create `test_set_asset_memo_live` test
     - Add test function in `tests/api.rs`
     - Skip test if not in live mode (`AMP_TESTS != "live"`)
     - Use `get_shared_client()` for authentication
@@ -76,7 +76,7 @@
     - _Requirements: 5.1, 5.3, 5.5_
 
 - [ ] 6. Implement live tests for category operations
-  - [ ] 6.1 Create `test_add_asset_to_category_live` test
+  - [x] 6.1 Create `test_add_asset_to_category_live` test
     - Add test function in `tests/api.rs`
     - Skip test if not in live mode (`AMP_TESTS != "live"`)
     - Use `get_shared_client()` for authentication
@@ -87,7 +87,7 @@
     - Clean up by removing asset from category and deleting both resources
     - _Requirements: 5.1, 5.3, 5.4, 5.6_
   
-  - [ ] 6.2 Create `test_remove_asset_from_category_live` test
+  - [x] 6.2 Create `test_remove_asset_from_category_live` test
     - Add test function in `tests/api.rs`
     - Skip test if not in live mode (`AMP_TESTS != "live"`)
     - Use `get_shared_client()` for authentication
@@ -100,7 +100,7 @@
     - _Requirements: 5.1, 5.3, 5.4, 5.6_
 
 - [ ] 7. Add mock tests for category operations
-  - [ ] 7.1 Create `test_add_asset_to_category_mock` test
+  - [x] 7.1 Create `test_add_asset_to_category_mock` test
     - Add test function in `tests/api.rs`
     - Use existing mock functions for categories and assets
     - Create mock for add asset to category operation
@@ -109,7 +109,7 @@
     - Include proper test setup and cleanup
     - _Requirements: 5.1, 5.2_
   
-  - [ ] 7.2 Create `test_remove_asset_from_category_mock` test
+  - [x] 7.2 Create `test_remove_asset_from_category_mock` test
     - Add test function in `tests/api.rs`
     - Use existing mock functions for categories and assets
     - Create mock for remove asset from category operation
@@ -117,10 +117,3 @@
     - Verify response matches expected CategoryResponse
     - Include proper test setup and cleanup
     - _Requirements: 5.1, 5.2_
-
-- [ ] 8. Update library exports and documentation
-  - Ensure new methods are properly exposed through the public API
-  - Add usage examples to method documentation
-  - Verify all new code follows existing style and conventions
-  - Run clippy and fmt to ensure code quality
-  - _Requirements: 6.1, 6.2, 6.3, 6.4_

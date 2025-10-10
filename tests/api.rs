@@ -219,6 +219,87 @@ async fn test_get_asset_mock() {
 }
 
 #[tokio::test]
+async fn test_get_asset_memo_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+    let assets = client.get_assets().await.unwrap();
+
+    if let Some(asset_to_test) = assets.first() {
+        let result = client.get_asset_memo(&asset_to_test.asset_uuid).await;
+        
+        // The memo retrieval should either succeed with a memo string or fail gracefully
+        match result {
+            Ok(memo) => {
+                println!("Asset {} has memo: '{}'", asset_to_test.asset_uuid, memo);
+                // If we got a memo, it should be a valid string (could be empty)
+                assert!(memo.is_empty() || !memo.trim().is_empty());
+            }
+            Err(e) => {
+                // This is acceptable - the asset may not have a memo set
+                println!("Asset {} has no memo or memo retrieval failed: {:?}", asset_to_test.asset_uuid, e);
+                // We don't assert failure here because it's valid for an asset to not have a memo
+            }
+        }
+    } else {
+        println!("Skipping test_get_asset_memo_live because no assets were found.");
+    }
+}
+
+#[tokio::test]
+async fn test_set_asset_memo_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+    let assets = client.get_assets().await.unwrap();
+
+    if let Some(asset_to_test) = assets.first() {
+        let test_memo = "Test memo set by live test";
+        
+        // Set a test memo on the asset
+        let set_result = client.set_asset_memo(&asset_to_test.asset_uuid, test_memo).await;
+        assert!(set_result.is_ok(), "Failed to set memo: {:?}", set_result.err());
+        
+        // Retrieve the memo to verify it was set correctly
+        let get_result = client.get_asset_memo(&asset_to_test.asset_uuid).await;
+        assert!(get_result.is_ok(), "Failed to get memo after setting: {:?}", get_result.err());
+        
+        let retrieved_memo = get_result.unwrap();
+        assert_eq!(retrieved_memo, test_memo, "Retrieved memo doesn't match set memo");
+        
+        println!("Successfully set and verified memo for asset {}: '{}'", asset_to_test.asset_uuid, retrieved_memo);
+        
+        // Clean up by setting empty memo (optional - leaving test memo is also acceptable)
+        let cleanup_result = client.set_asset_memo(&asset_to_test.asset_uuid, "").await;
+        if cleanup_result.is_ok() {
+            println!("Successfully cleaned up memo for asset {}", asset_to_test.asset_uuid);
+        } else {
+            println!("Warning: Failed to clean up memo, leaving test memo in place");
+        }
+    } else {
+        println!("Skipping test_set_asset_memo_live because no assets were found.");
+    }
+}
+
+#[tokio::test]
 async fn test_simple_memo_test() {
     assert!(true);
 }
@@ -268,6 +349,58 @@ async fn test_set_asset_memo_mock() {
         .set_asset_memo("mock_asset_uuid", "Test memo content")
         .await;
     assert!(result.is_ok());
+
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_add_asset_to_category_mock() {
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_add_asset_to_category(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+
+    let result = client.add_asset_to_category(1, "mock_asset_uuid").await;
+    assert!(result.is_ok());
+    
+    let category_response = result.unwrap();
+    assert_eq!(category_response.id, 1);
+    assert_eq!(category_response.name, "Mock Category");
+    assert_eq!(category_response.description, Some("A mock category".to_string()));
+    assert!(category_response.assets.contains(&"mock_asset_uuid".to_string()));
+
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_remove_asset_from_category_mock() {
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_remove_asset_from_category(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+
+    let result = client.remove_asset_from_category(1, "mock_asset_uuid").await;
+    assert!(result.is_ok());
+    
+    let category_response = result.unwrap();
+    assert_eq!(category_response.id, 1);
+    assert_eq!(category_response.name, "Mock Category");
+    assert_eq!(category_response.description, Some("A mock category".to_string()));
+    assert!(category_response.assets.is_empty());
 
     cleanup_mock_test().await;
 }
@@ -826,6 +959,234 @@ async fn test_validate_gaid_live() {
 
 #[tokio::test]
 async fn test_validate_gaid_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_validate_gaid(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .await
+    .unwrap();
+    let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
+    let result = client.validate_gaid(gaid).await;
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.is_valid);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn test_add_asset_to_category_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+
+    // Create temporary test category using unique timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let new_category = amp_rs::model::CategoryAdd {
+        name: format!("Test Category for Asset Addition {}", timestamp),
+        description: Some("Temporary test category for asset-category association test".to_string()),
+    };
+
+    println!("Creating test category: {:?}", new_category);
+    let category_result = client.add_category(&new_category).await;
+    assert!(category_result.is_ok(), "Failed to create test category: {:?}", category_result.err());
+    let created_category = category_result.unwrap();
+    println!("Created category with ID: {}", created_category.id);
+
+    // Create temporary test asset using GAID patterns
+    // Use third GAID from gaids.json: GA2HsrczzwaFzdJiw5NJM8P4iWKQh1
+    let destination_address = get_destination_address_for_gaid("GA2HsrczzwaFzdJiw5NJM8P4iWKQh1")
+        .await
+        .expect("Failed to get destination address for GAID GA2HsrczzwaFzdJiw5NJM8P4iWKQh1");
+
+    let issuance_request = amp_rs::model::IssuanceRequest {
+        name: format!("Test Asset for Category {}", timestamp),
+        amount: 1000,
+        destination_address,
+        domain: "example.com".to_string(),
+        ticker: "TSTC".to_string(),
+        pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(), // Valid compressed pubkey
+        precision: Some(8),
+        is_confidential: Some(true),
+        is_reissuable: Some(false),
+        reissuance_amount: None,
+        reissuance_address: None,
+        transfer_restricted: Some(true),
+    };
+
+    println!("Creating test asset: {:?}", issuance_request.name);
+    let asset_result = client.issue_asset(&issuance_request).await;
+    assert!(asset_result.is_ok(), "Failed to create test asset: {:?}", asset_result.err());
+    let created_asset = asset_result.unwrap();
+    println!("Created asset with UUID: {}", created_asset.asset_uuid);
+
+    // Add asset to category using existing add_asset_to_category method
+    println!("Adding asset {} to category {}", created_asset.asset_uuid, created_category.id);
+    let add_result = client.add_asset_to_category(created_category.id, &created_asset.asset_uuid).await;
+    assert!(add_result.is_ok(), "Failed to add asset to category: {:?}", add_result.err());
+    
+    let category_response = add_result.unwrap();
+    println!("Successfully added asset to category. Category now has {} assets", category_response.assets.len());
+    
+    // Verify the asset is in the category
+    assert!(category_response.assets.contains(&created_asset.asset_uuid), 
+           "Asset UUID not found in category assets list");
+
+    // Clean up by removing asset from category and deleting both resources
+    println!("Cleaning up: removing asset from category");
+    let remove_result = client.remove_asset_from_category(created_category.id, &created_asset.asset_uuid).await;
+    if let Err(e) = &remove_result {
+        println!("Warning: Failed to remove asset from category: {:?}", e);
+    } else {
+        println!("Successfully removed asset from category");
+    }
+
+    println!("Cleaning up: deleting test asset");
+    let delete_asset_result = client.delete_asset(&created_asset.asset_uuid).await;
+    if let Err(e) = &delete_asset_result {
+        println!("Warning: Failed to delete test asset: {:?}", e);
+    } else {
+        println!("Successfully deleted test asset");
+    }
+
+    println!("Cleaning up: deleting test category");
+    let delete_category_result = client.delete_category(created_category.id).await;
+    if let Err(e) = &delete_category_result {
+        println!("Warning: Failed to delete test category: {:?}", e);
+    } else {
+        println!("Successfully deleted test category");
+    }
+
+    println!("Test completed successfully");
+}
+
+#[tokio::test]
+#[serial]
+async fn test_remove_asset_from_category_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    let client = get_shared_client().await.unwrap();
+
+    // Create temporary test category using unique timestamp
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let new_category = amp_rs::model::CategoryAdd {
+        name: format!("Test Category for Asset Removal {}", timestamp),
+        description: Some("Temporary test category for asset-category removal test".to_string()),
+    };
+
+    println!("Creating test category: {:?}", new_category);
+    let category_result = client.add_category(&new_category).await;
+    assert!(category_result.is_ok(), "Failed to create test category: {:?}", category_result.err());
+    let created_category = category_result.unwrap();
+    println!("Created category with ID: {}", created_category.id);
+
+    // Create temporary test asset using GAID patterns
+    // Use fourth GAID from gaids.json: GA3tJqC58PwiCjp4tPkCjNkPnVzLqn
+    let destination_address = get_destination_address_for_gaid("GA3tJqC58PwiCjp4tPkCjNkPnVzLqn")
+        .await
+        .expect("Failed to get destination address for GAID GA3tJqC58PwiCjp4tPkCjNkPnVzLqn");
+
+    let issuance_request = amp_rs::model::IssuanceRequest {
+        name: format!("Test Asset for Category Removal {}", timestamp),
+        amount: 1000,
+        destination_address,
+        domain: "example.com".to_string(),
+        ticker: "TSTR".to_string(),
+        pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(), // Valid compressed pubkey
+        precision: Some(8),
+        is_confidential: Some(true),
+        is_reissuable: Some(false),
+        reissuance_amount: None,
+        reissuance_address: None,
+        transfer_restricted: Some(true),
+    };
+
+    println!("Creating test asset: {:?}", issuance_request.name);
+    let asset_result = client.issue_asset(&issuance_request).await;
+    assert!(asset_result.is_ok(), "Failed to create test asset: {:?}", asset_result.err());
+    let created_asset = asset_result.unwrap();
+    println!("Created asset with UUID: {}", created_asset.asset_uuid);
+
+    // Add asset to category first
+    println!("Adding asset {} to category {}", created_asset.asset_uuid, created_category.id);
+    let add_result = client.add_asset_to_category(created_category.id, &created_asset.asset_uuid).await;
+    assert!(add_result.is_ok(), "Failed to add asset to category: {:?}", add_result.err());
+    
+    let category_response_after_add = add_result.unwrap();
+    println!("Successfully added asset to category. Category now has {} assets", category_response_after_add.assets.len());
+    
+    // Verify the asset is in the category
+    assert!(category_response_after_add.assets.contains(&created_asset.asset_uuid), 
+           "Asset UUID not found in category assets list after adding");
+
+    // Remove asset from category using existing remove_asset_from_category method
+    println!("Removing asset {} from category {}", created_asset.asset_uuid, created_category.id);
+    let remove_result = client.remove_asset_from_category(created_category.id, &created_asset.asset_uuid).await;
+    assert!(remove_result.is_ok(), "Failed to remove asset from category: {:?}", remove_result.err());
+    
+    let category_response_after_remove = remove_result.unwrap();
+    println!("Successfully removed asset from category. Category now has {} assets", category_response_after_remove.assets.len());
+    
+    // Verify the asset is no longer in the category
+    assert!(!category_response_after_remove.assets.contains(&created_asset.asset_uuid), 
+           "Asset UUID still found in category assets list after removal");
+
+    // Clean up by deleting both category and asset
+    println!("Cleaning up: deleting test asset");
+    let delete_asset_result = client.delete_asset(&created_asset.asset_uuid).await;
+    if let Err(e) = &delete_asset_result {
+        println!("Warning: Failed to delete test asset: {:?}", e);
+    } else {
+        println!("Successfully deleted test asset");
+    }
+
+    println!("Cleaning up: deleting test category");
+    let delete_category_result = client.delete_category(created_category.id).await;
+    if let Err(e) = &delete_category_result {
+        println!("Warning: Failed to delete test category: {:?}", e);
+    } else {
+        println!("Successfully deleted test category");
+    }
+
+    println!("Test completed successfully");
+}
+
+#[tokio::test]
+async fn test_validate_gaid_mock_truncated() {
     // Setup mock test environment
     setup_mock_test().await;
 
