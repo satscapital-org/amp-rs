@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [x] 1. Fix simple literal and format issues
+- [-] 1. Fix simple literal and format issues
   - Fix numeric literal separators in mocks.rs by adding underscores to large numbers
   - Update format! macros to use inline variable syntax in client.rs
   - Replace single-character string patterns with character literals

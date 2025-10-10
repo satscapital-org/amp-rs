@@ -240,7 +240,7 @@ impl MockTokenStrategy {
     /// Creates a mock token strategy for a specific test case
     #[must_use]
     pub fn for_test(test_name: &str) -> Self {
-        Self::new(format!("mock_token_{}", test_name))
+        Self::new(format!("mock_token_{test_name}"))
     }
 }
 
@@ -900,7 +900,7 @@ impl TokenManager {
     ///
     /// # Errors
     /// This method is infallible but returns Result for API consistency
-    pub async fn with_mock_token(
+    pub fn with_mock_token(
         config: RetryConfig,
         base_url: Url,
         mock_token: String,
@@ -1669,7 +1669,7 @@ impl ApiClient {
     /// # Errors
     ///
     /// This method is infallible but returns Result for API consistency.
-    pub async fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
+    pub fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
         let client = Client::new();
         let token_strategy: Box<dyn TokenStrategy> =
             Box::new(MockTokenStrategy::new(mock_token.clone()));
@@ -3211,7 +3211,7 @@ mod tests {
 
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
-                .await
+                
                 .unwrap(),
         );
 
@@ -3236,7 +3236,7 @@ mod tests {
 
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
-                .await
+                
                 .unwrap(),
         );
 
