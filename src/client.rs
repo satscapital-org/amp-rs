@@ -23,6 +23,15 @@ use crate::model::{
     TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
+/// Environment variables used for token environment detection
+#[derive(Debug)]
+struct EnvironmentVariables {
+    username: String,
+    password: String,
+    amp_tests: String,
+    base_url: String,
+}
+
 /// Token environment detection for automatic strategy selection
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenEnvironment {
@@ -44,39 +53,65 @@ impl TokenEnvironment {
     /// 4. Fallback to `Mock` for safety
     #[must_use]
     pub fn detect() -> Self {
-        let username = env::var("AMP_USERNAME").unwrap_or_default();
-        let password = env::var("AMP_PASSWORD").unwrap_or_default();
-        let amp_tests = env::var("AMP_TESTS").unwrap_or_default();
-        let base_url = env::var("AMP_API_BASE_URL").unwrap_or_default();
+        let env_vars = Self::read_environment_variables();
+        Self::log_detection_start(&env_vars);
 
-        tracing::debug!(
-            "Detecting token environment - AMP_TESTS: '{}', username: '{}', base_url: '{}'",
-            amp_tests,
-            username,
-            base_url
-        );
-
-        // Explicit live test environment
-        if amp_tests == "live" {
-            tracing::info!("Detected live environment via AMP_TESTS=live");
+        if Self::is_explicit_live_environment(&env_vars.amp_tests) {
             return Self::Live;
         }
 
-        // Mock credentials detected
-        if Self::has_mock_credentials(&username, &password, &base_url) {
-            tracing::info!("Detected mock environment via mock credentials");
+        if Self::has_mock_credentials(&env_vars.username, &env_vars.password, &env_vars.base_url) {
+            Self::log_detection_result("mock environment via mock credentials");
             return Self::Mock;
         }
 
-        // Real credentials without live test flag - default to live for production use
-        if !username.is_empty() && !password.is_empty() {
-            tracing::info!("Detected live environment via real credentials");
+        if Self::has_real_credentials(&env_vars.username, &env_vars.password) {
+            Self::log_detection_result("live environment via real credentials");
             return Self::Live;
         }
 
-        // Fallback to mock for safety when no credentials are present
-        tracing::info!("Detected mock environment via fallback (no credentials)");
+        Self::log_detection_result("mock environment via fallback (no credentials)");
         Self::Mock
+    }
+
+    /// Reads environment variables needed for token environment detection
+    fn read_environment_variables() -> EnvironmentVariables {
+        EnvironmentVariables {
+            username: env::var("AMP_USERNAME").unwrap_or_default(),
+            password: env::var("AMP_PASSWORD").unwrap_or_default(),
+            amp_tests: env::var("AMP_TESTS").unwrap_or_default(),
+            base_url: env::var("AMP_API_BASE_URL").unwrap_or_default(),
+        }
+    }
+
+    /// Logs the start of environment detection with current variable values
+    fn log_detection_start(env_vars: &EnvironmentVariables) {
+        tracing::debug!(
+            "Detecting token environment - AMP_TESTS: '{}', username: '{}', base_url: '{}'",
+            env_vars.amp_tests,
+            env_vars.username,
+            env_vars.base_url
+        );
+    }
+
+    /// Checks if the environment is explicitly set to live testing
+    fn is_explicit_live_environment(amp_tests: &str) -> bool {
+        if amp_tests == "live" {
+            Self::log_detection_result("live environment via AMP_TESTS=live");
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Checks if real (non-empty) credentials are present
+    const fn has_real_credentials(username: &str, password: &str) -> bool {
+        !username.is_empty() && !password.is_empty()
+    }
+
+    /// Logs the final detection result
+    fn log_detection_result(reason: &str) {
+        tracing::info!("Detected {}", reason);
     }
 
     /// Checks if the provided credentials indicate a mock environment

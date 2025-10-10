@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Fix simple literal and format issues
+- [ gu] 1. Fix simple literal and format issues
   - Fix numeric literal separators in mocks.rs by adding underscores to large numbers
   - Update format! macros to use inline variable syntax in client.rs
   - Replace single-character string patterns with character literals
@@ -41,7 +41,7 @@
   - Run tests to verify async removal doesn't break functionality
   - _Requirements: 12.1, 12.2_
 
-- [-] 7. Refactor high-complexity functions - Part 1
+- [x] 7. Refactor high-complexity functions - Part 1
   - Extract helper methods from TokenManager::detect() function to reduce complexity from 38 to under 25
   - Break down environment detection logic into smaller, focused functions
   - Maintain the same public API and behavior
