@@ -157,42 +157,62 @@ impl TokenEnvironment {
         mock_token: Option<String>,
     ) -> Result<Box<dyn TokenStrategy>, Error> {
         match self {
-            Self::Mock => {
-                let token = mock_token.unwrap_or_else(|| "default_mock_token".to_string());
-                tracing::debug!("Creating mock token strategy with token");
-                Ok(Box::new(MockTokenStrategy::new(token)))
-            }
-            Self::Live => {
-                tracing::debug!("Creating live token strategy");
-                let strategy = LiveTokenStrategy::new().await?;
-                Ok(Box::new(strategy))
-            }
-            Self::Auto => {
-                tracing::debug!("Auto-detecting environment for strategy creation");
-                let detected = Self::detect();
-                // Avoid recursion by directly matching the detected environment
-                match detected {
-                    Self::Mock => {
-                        let token = mock_token.unwrap_or_else(|| "default_mock_token".to_string());
-                        tracing::debug!("Auto-detected mock environment, creating mock strategy");
-                        Ok(Box::new(MockTokenStrategy::new(token)))
-                    }
-                    Self::Live => {
-                        tracing::debug!("Auto-detected live environment, creating live strategy");
-                        let strategy = LiveTokenStrategy::new().await?;
-                        Ok(Box::new(strategy))
-                    }
-                    Self::Auto => {
-                        // This should never happen since detect() never returns Auto
-                        tracing::error!("Unexpected Auto environment from detect()");
-                        Err(Error::Token(TokenError::validation(
-                            "Environment detection returned Auto, which should not happen"
-                                .to_string(),
-                        )))
-                    }
-                }
-            }
+            Self::Mock => Ok(Self::create_mock_strategy(mock_token)),
+            Self::Live => Self::create_live_strategy().await,
+            Self::Auto => Self::create_auto_detected_strategy(mock_token).await,
         }
+    }
+
+    /// Creates a mock token strategy with the provided or default token
+    fn create_mock_strategy(mock_token: Option<String>) -> Box<dyn TokenStrategy> {
+        let token = mock_token.unwrap_or_else(|| "default_mock_token".to_string());
+        tracing::debug!("Creating mock token strategy with token");
+        Box::new(MockTokenStrategy::new(token))
+    }
+
+    /// Creates a live token strategy
+    async fn create_live_strategy() -> Result<Box<dyn TokenStrategy>, Error> {
+        tracing::debug!("Creating live token strategy");
+        let strategy = LiveTokenStrategy::new().await?;
+        Ok(Box::new(strategy))
+    }
+
+    /// Creates a strategy based on auto-detected environment
+    async fn create_auto_detected_strategy(
+        mock_token: Option<String>,
+    ) -> Result<Box<dyn TokenStrategy>, Error> {
+        tracing::debug!("Auto-detecting environment for strategy creation");
+        let detected = Self::detect();
+        
+        match detected {
+            Self::Mock => Ok(Self::create_auto_detected_mock_strategy(mock_token)),
+            Self::Live => Self::create_auto_detected_live_strategy().await,
+            Self::Auto => Self::handle_unexpected_auto_detection(),
+        }
+    }
+
+    /// Creates a mock strategy for auto-detected mock environment
+    fn create_auto_detected_mock_strategy(
+        mock_token: Option<String>,
+    ) -> Box<dyn TokenStrategy> {
+        let token = mock_token.unwrap_or_else(|| "default_mock_token".to_string());
+        tracing::debug!("Auto-detected mock environment, creating mock strategy");
+        Box::new(MockTokenStrategy::new(token))
+    }
+
+    /// Creates a live strategy for auto-detected live environment
+    async fn create_auto_detected_live_strategy() -> Result<Box<dyn TokenStrategy>, Error> {
+        tracing::debug!("Auto-detected live environment, creating live strategy");
+        let strategy = LiveTokenStrategy::new().await?;
+        Ok(Box::new(strategy))
+    }
+
+    /// Handles the unexpected case where `detect()` returns Auto
+    fn handle_unexpected_auto_detection() -> Result<Box<dyn TokenStrategy>, Error> {
+        tracing::error!("Unexpected Auto environment from detect()");
+        Err(Error::Token(TokenError::validation(
+            "Environment detection returned Auto, which should not happen".to_string(),
+        )))
     }
 
     /// Creates a token strategy with automatic environment detection

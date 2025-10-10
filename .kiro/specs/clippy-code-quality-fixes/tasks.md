@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ gu] 1. Fix simple literal and format issues
+- [ ] 1. Fix simple literal and format issues
   - Fix numeric literal separators in mocks.rs by adding underscores to large numbers
   - Update format! macros to use inline variable syntax in client.rs
   - Replace single-character string patterns with character literals
@@ -48,7 +48,7 @@
   - Run tests to ensure detection logic works correctly
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 8. Refactor high-complexity functions - Part 2
+- [x] 8. Refactor high-complexity functions - Part 2
   - Extract helper methods from TokenManager::create_strategy() to reduce complexity from 47 to under 25
   - Separate strategy creation logic into focused helper functions
   - Preserve existing strategy creation behavior and error handling
