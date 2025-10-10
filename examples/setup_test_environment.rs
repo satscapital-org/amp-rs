@@ -1,10 +1,6 @@
-use amp_rs::model::{
-    CategoryAdd, IssuanceRequest, RegisteredUserAdd,
-};
+use amp_rs::model::{CategoryAdd, IssuanceRequest, RegisteredUserAdd};
 use amp_rs::ApiClient;
 use std::env;
-
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

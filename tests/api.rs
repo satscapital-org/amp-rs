@@ -2464,11 +2464,11 @@ async fn test_lock_manager_invalid_id_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with invalid manager ID (999999)
     let result = client.lock_manager(999999).await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2495,11 +2495,11 @@ async fn test_lock_manager_server_error() {
     )
     .await
     .unwrap();
-    
+
     // Test server error scenario
     let result = client.lock_manager(1).await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2524,11 +2524,11 @@ async fn test_lock_manager_network_error() {
     )
     .await
     .unwrap();
-    
+
     // Test network error scenario
     let result = client.lock_manager(1).await;
     assert!(result.is_err());
-    
+
     // Verify the error is Reqwest variant (network error)
     match result.unwrap_err() {
         amp_rs::client::Error::Reqwest(_) => {
@@ -2578,44 +2578,56 @@ async fn test_add_asset_to_manager_live() {
     let client = get_shared_client().await.unwrap();
 
     // Get existing managers and use the first available one
-    let managers = client.get_managers().await
-        .expect("Failed to get managers");
-    
+    let managers = client.get_managers().await.expect("Failed to get managers");
+
     if managers.is_empty() {
         println!("Skipping test: No managers available");
         return;
     }
 
     let test_manager = &managers[0];
-    println!("Using existing manager: {} (ID: {})", test_manager.username, test_manager.id);
+    println!(
+        "Using existing manager: {} (ID: {})",
+        test_manager.username, test_manager.id
+    );
 
     // Find preserved "Test Environment Asset" or use first available asset
-    let assets = client.get_assets().await
-        .expect("Failed to get assets");
-    
-    let test_asset = assets.iter()
+    let assets = client.get_assets().await.expect("Failed to get assets");
+
+    let test_asset = assets
+        .iter()
         .find(|asset| asset.name == "Test Environment Asset")
         .or_else(|| assets.first());
-    
+
     if let Some(asset) = test_asset {
         println!("Using asset: {} (UUID: {})", asset.name, asset.asset_uuid);
-        
+
         // Call add_asset_to_manager method with manager ID and asset UUID
         println!("Adding asset to manager...");
-        let add_result = client.add_asset_to_manager(test_manager.id, &asset.asset_uuid).await;
-        assert!(add_result.is_ok(), "Failed to add asset to manager: {:?}", add_result.err());
-        
+        let add_result = client
+            .add_asset_to_manager(test_manager.id, &asset.asset_uuid)
+            .await;
+        assert!(
+            add_result.is_ok(),
+            "Failed to add asset to manager: {:?}",
+            add_result.err()
+        );
+
         println!("Successfully added asset to manager");
 
         // Verify the operation by checking if the manager now has access to the asset
         // We can do this by getting the manager details and checking their assets
-        let updated_manager = client.get_manager(test_manager.id).await
+        let updated_manager = client
+            .get_manager(test_manager.id)
+            .await
             .expect("Failed to get updated manager state");
-        
+
         // Check if the asset is now in the manager's asset list
-        let has_asset = updated_manager.assets.iter()
+        let has_asset = updated_manager
+            .assets
+            .iter()
             .any(|manager_asset| manager_asset == &asset.asset_uuid);
-        
+
         if has_asset {
             println!("Verified: Manager now has access to the asset");
         } else {
@@ -2640,11 +2652,11 @@ async fn test_add_asset_to_manager_invalid_manager_id_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with invalid manager ID (999999)
     let result = client.add_asset_to_manager(999999, "mock_asset_uuid").await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2671,11 +2683,11 @@ async fn test_add_asset_to_manager_invalid_asset_uuid_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with invalid asset UUID
     let result = client.add_asset_to_manager(1, "invalid_asset_uuid").await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2702,11 +2714,11 @@ async fn test_add_asset_to_manager_server_error() {
     )
     .await
     .unwrap();
-    
+
     // Test server error scenario
     let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2731,11 +2743,11 @@ async fn test_add_asset_to_manager_network_error() {
     )
     .await
     .unwrap();
-    
+
     // Test network error scenario
     let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
     assert!(result.is_err());
-    
+
     // Verify the error is Reqwest variant (network error)
     match result.unwrap_err() {
         amp_rs::client::Error::Reqwest(_) => {
@@ -2762,11 +2774,13 @@ async fn test_get_asset_assignment_invalid_asset_uuid_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with invalid asset UUID
-    let result = client.get_asset_assignment("invalid_asset_uuid", "10").await;
+    let result = client
+        .get_asset_assignment("invalid_asset_uuid", "10")
+        .await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2793,11 +2807,13 @@ async fn test_get_asset_assignment_invalid_assignment_id_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with invalid assignment ID (999999)
-    let result = client.get_asset_assignment("mock_asset_uuid", "999999").await;
+    let result = client
+        .get_asset_assignment("mock_asset_uuid", "999999")
+        .await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2824,11 +2840,13 @@ async fn test_get_asset_assignment_non_existent_error() {
     )
     .await
     .unwrap();
-    
+
     // Test with non-existent asset and assignment
-    let result = client.get_asset_assignment("non_existent_asset", "non_existent_assignment").await;
+    let result = client
+        .get_asset_assignment("non_existent_asset", "non_existent_assignment")
+        .await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2855,11 +2873,11 @@ async fn test_get_asset_assignment_server_error() {
     )
     .await
     .unwrap();
-    
+
     // Test server error scenario
     let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_err());
-    
+
     // Verify the error is RequestFailed variant
     match result.unwrap_err() {
         amp_rs::client::Error::RequestFailed(msg) => {
@@ -2884,11 +2902,11 @@ async fn test_get_asset_assignment_network_error() {
     )
     .await
     .unwrap();
-    
+
     // Test network error scenario
     let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_err());
-    
+
     // Verify the error is Reqwest variant (network error)
     match result.unwrap_err() {
         amp_rs::client::Error::Reqwest(_) => {
@@ -2925,7 +2943,10 @@ async fn test_get_asset_assignment_mock() {
     assert_eq!(assignment.has_vested, true);
     assert_eq!(assignment.is_distributed, false);
     assert_eq!(assignment.creator, 1);
-    assert_eq!(assignment.gaid, Some("GA3DS3emT12zDF4RGywBvJqZfhefNp".to_string()));
+    assert_eq!(
+        assignment.gaid,
+        Some("GA3DS3emT12zDF4RGywBvJqZfhefNp".to_string())
+    );
     assert_eq!(assignment.investor, Some(13));
 
     // Cleanup
@@ -2970,36 +2991,51 @@ async fn test_lock_manager_live() {
     let client = get_shared_client().await.unwrap();
 
     // Get existing managers and use the first available one
-    let managers = client.get_managers().await
-        .expect("Failed to get managers");
-    
+    let managers = client.get_managers().await.expect("Failed to get managers");
+
     if managers.is_empty() {
         println!("Skipping test: No managers available");
         return;
     }
 
     let test_manager = &managers[0];
-    println!("Using existing manager: {} (ID: {})", test_manager.username, test_manager.id);
+    println!(
+        "Using existing manager: {} (ID: {})",
+        test_manager.username, test_manager.id
+    );
 
     // If the manager is already locked, unlock it first to ensure we can test locking
     if test_manager.is_locked {
         println!("Manager is already locked, unlocking first");
         let unlock_result = client.unlock_manager(test_manager.id).await;
-        assert!(unlock_result.is_ok(), "Failed to unlock manager: {:?}", unlock_result.err());
+        assert!(
+            unlock_result.is_ok(),
+            "Failed to unlock manager: {:?}",
+            unlock_result.err()
+        );
         println!("Successfully unlocked manager");
     }
 
     // Call lock_manager method with the manager ID
     println!("Locking manager with ID: {}", test_manager.id);
     let lock_result = client.lock_manager(test_manager.id).await;
-    assert!(lock_result.is_ok(), "Failed to lock manager: {:?}", lock_result.err());
-    
+    assert!(
+        lock_result.is_ok(),
+        "Failed to lock manager: {:?}",
+        lock_result.err()
+    );
+
     println!("Successfully locked manager");
 
     // Verify the manager is locked by getting its current state
-    let updated_manager = client.get_manager(test_manager.id).await
+    let updated_manager = client
+        .get_manager(test_manager.id)
+        .await
         .expect("Failed to get updated manager state");
-    assert!(updated_manager.is_locked, "Manager should be locked after lock operation");
+    assert!(
+        updated_manager.is_locked,
+        "Manager should be locked after lock operation"
+    );
     println!("Verified manager is locked");
 
     // Clean up by unlocking the manager to restore original state
@@ -4523,16 +4559,22 @@ async fn test_get_asset_assignment_live() {
         .await
         .expect("Failed to create assignment for testing");
 
-    assert!(!created_assignments.is_empty(), "Should have created at least one assignment");
+    assert!(
+        !created_assignments.is_empty(),
+        "Should have created at least one assignment"
+    );
     let created_assignment = &created_assignments[0];
     println!("✅ Created assignment with ID: {}", created_assignment.id);
 
     // === TEST PHASE: Call get_asset_assignment method ===
     println!("\n=== TEST PHASE ===");
-    
+
     let assignment_id = created_assignment.id.to_string();
-    println!("Calling get_asset_assignment with asset_uuid: {}, assignment_id: {}", asset_uuid, assignment_id);
-    
+    println!(
+        "Calling get_asset_assignment with asset_uuid: {}, assignment_id: {}",
+        asset_uuid, assignment_id
+    );
+
     let retrieved_assignment = client
         .get_asset_assignment(&asset_uuid, &assignment_id)
         .await
@@ -4540,18 +4582,39 @@ async fn test_get_asset_assignment_live() {
 
     // === VERIFICATION PHASE: Verify returned assignment data matches created assignment ===
     println!("\n=== VERIFICATION PHASE ===");
-    
-    assert_eq!(retrieved_assignment.id, created_assignment.id, "Assignment ID should match");
-    assert_eq!(retrieved_assignment.registered_user, created_assignment.registered_user, "Registered user should match");
-    assert_eq!(retrieved_assignment.amount, created_assignment.amount, "Amount should match");
-    assert_eq!(retrieved_assignment.ready_for_distribution, created_assignment.ready_for_distribution, "Ready for distribution should match");
-    assert_eq!(retrieved_assignment.creator, created_assignment.creator, "Creator should match");
-    
+
+    assert_eq!(
+        retrieved_assignment.id, created_assignment.id,
+        "Assignment ID should match"
+    );
+    assert_eq!(
+        retrieved_assignment.registered_user, created_assignment.registered_user,
+        "Registered user should match"
+    );
+    assert_eq!(
+        retrieved_assignment.amount, created_assignment.amount,
+        "Amount should match"
+    );
+    assert_eq!(
+        retrieved_assignment.ready_for_distribution, created_assignment.ready_for_distribution,
+        "Ready for distribution should match"
+    );
+    assert_eq!(
+        retrieved_assignment.creator, created_assignment.creator,
+        "Creator should match"
+    );
+
     println!("✅ Retrieved assignment matches created assignment:");
     println!("  ID: {}", retrieved_assignment.id);
-    println!("  Registered User: {}", retrieved_assignment.registered_user);
+    println!(
+        "  Registered User: {}",
+        retrieved_assignment.registered_user
+    );
     println!("  Amount: {}", retrieved_assignment.amount);
-    println!("  Ready for Distribution: {}", retrieved_assignment.ready_for_distribution);
+    println!(
+        "  Ready for Distribution: {}",
+        retrieved_assignment.ready_for_distribution
+    );
     println!("  Creator: {}", retrieved_assignment.creator);
 
     // === CLEANUP PHASE: Use create_asset_assignment cleanup ===

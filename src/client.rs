@@ -2702,20 +2702,24 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Retrieve assignment with ID "123" for asset "550e8400-e29b-41d4-a716-446655440000"
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let assignment_id = "123";
-    /// 
+    ///
     /// let assignment = client.get_asset_assignment(asset_uuid, assignment_id).await?;
-    /// 
+    ///
     /// println!("Assignment ID: {}", assignment.id);
     /// println!("Assigned amount: {}", assignment.amount);
     /// println!("Registered user: {}", assignment.registered_user);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_asset_assignment(&self, asset_uuid: &str, assignment_id: &str) -> Result<Assignment, Error> {
+    pub async fn get_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        assignment_id: &str,
+    ) -> Result<Assignment, Error> {
         self.request_json(
             Method::GET,
             &["assets", asset_uuid, "assignments", assignment_id],
@@ -2842,7 +2846,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Lock manager with ID 123
     /// client.lock_manager(123).await?;
     /// println!("Manager 123 has been locked successfully");
@@ -2906,20 +2910,30 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Authorize manager 123 to manage asset with UUID "550e8400-e29b-41d4-a716-446655440000"
     /// let manager_id = 123;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
-    /// 
+    ///
     /// client.add_asset_to_manager(manager_id, asset_uuid).await?;
     /// println!("Manager {} is now authorized to manage asset {}", manager_id, asset_uuid);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn add_asset_to_manager(&self, manager_id: i64, asset_uuid: &str) -> Result<(), Error> {
+    pub async fn add_asset_to_manager(
+        &self,
+        manager_id: i64,
+        asset_uuid: &str,
+    ) -> Result<(), Error> {
         self.request_empty(
             Method::PUT,
-            &["managers", &manager_id.to_string(), "assets", asset_uuid, "add"],
+            &[
+                "managers",
+                &manager_id.to_string(),
+                "assets",
+                asset_uuid,
+                "add",
+            ],
             None::<&()>,
         )
         .await

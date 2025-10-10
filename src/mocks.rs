@@ -589,14 +589,16 @@ pub fn mock_lock_manager_server_error(server: &MockServer) {
 
 pub fn mock_add_asset_to_manager(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT).path("/managers/1/assets/mock_asset_uuid/add");
+        when.method(PUT)
+            .path("/managers/1/assets/mock_asset_uuid/add");
         then.status(200);
     });
 }
 
 pub fn mock_add_asset_to_manager_invalid_manager_id(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT).path("/managers/999999/assets/mock_asset_uuid/add");
+        when.method(PUT)
+            .path("/managers/999999/assets/mock_asset_uuid/add");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -607,7 +609,8 @@ pub fn mock_add_asset_to_manager_invalid_manager_id(server: &MockServer) {
 
 pub fn mock_add_asset_to_manager_invalid_asset_uuid(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT).path("/managers/1/assets/invalid_asset_uuid/add");
+        when.method(PUT)
+            .path("/managers/1/assets/invalid_asset_uuid/add");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -618,7 +621,8 @@ pub fn mock_add_asset_to_manager_invalid_asset_uuid(server: &MockServer) {
 
 pub fn mock_add_asset_to_manager_server_error(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT).path("/managers/1/assets/mock_asset_uuid/add");
+        when.method(PUT)
+            .path("/managers/1/assets/mock_asset_uuid/add");
         then.status(500)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -629,7 +633,8 @@ pub fn mock_add_asset_to_manager_server_error(server: &MockServer) {
 
 pub fn mock_get_asset_assignment(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/mock_asset_uuid/assignments/10");
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/assignments/10");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -994,7 +999,8 @@ pub fn mock_remove_asset_from_category(server: &MockServer) {
 }
 pub fn mock_get_asset_assignment_invalid_asset_uuid(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/invalid_asset_uuid/assignments/10");
+        when.method(GET)
+            .path("/assets/invalid_asset_uuid/assignments/10");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -1005,7 +1011,8 @@ pub fn mock_get_asset_assignment_invalid_asset_uuid(server: &MockServer) {
 
 pub fn mock_get_asset_assignment_invalid_assignment_id(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/mock_asset_uuid/assignments/999999");
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/assignments/999999");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -1016,7 +1023,8 @@ pub fn mock_get_asset_assignment_invalid_assignment_id(server: &MockServer) {
 
 pub fn mock_get_asset_assignment_non_existent(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/non_existent_asset/assignments/non_existent_assignment");
+        when.method(GET)
+            .path("/assets/non_existent_asset/assignments/non_existent_assignment");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -1027,7 +1035,8 @@ pub fn mock_get_asset_assignment_non_existent(server: &MockServer) {
 
 pub fn mock_get_asset_assignment_server_error(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/mock_asset_uuid/assignments/10");
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/assignments/10");
         then.status(500)
             .header("content-type", "application/json")
             .json_body(json!({
