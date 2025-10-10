@@ -20,7 +20,7 @@
   - Run tests to verify no impact on functionality
   - _Requirements: 5.1, 5.2_
 
-- [ ] 4. Add missing error documentation
+- [-] 4. Add missing error documentation
   - Add comprehensive "# Errors" sections to functions returning Result types
   - Document specific error conditions for force_cleanup_token_files()
   - Document initialization errors for reset_global_instance()
@@ -62,7 +62,7 @@
   - Run tests to ensure token management works correctly
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [-] 10. Refactor high-complexity functions - Part 4
+- [x] 10. Refactor high-complexity functions - Part 4
   - Extract helper methods from TokenManager::load_token_from_disk() to reduce complexity from 43 to under 25
   - Break down file loading and validation logic into focused functions
   - Preserve existing token loading behavior and error handling

@@ -1486,37 +1486,38 @@ impl TokenManager {
 
     /// Loads token data from disk if it exists and is valid
     async fn load_token_from_disk(&self) -> Result<Option<TokenData>, Error> {
-        use tokio::fs;
-
         let token_file = "token.json";
 
-        // Check if file exists
-        if !tokio::fs::try_exists(token_file).await.unwrap_or(false) {
-            tracing::debug!("Token file does not exist: {}", token_file);
+        if !self.token_file_exists(token_file).await {
             return Ok(None);
         }
 
-        // Read and parse the token file
-        match fs::read_to_string(token_file).await {
-            Ok(content) => match serde_json::from_str::<TokenData>(&content) {
-                Ok(token_data) => {
-                    if token_data.is_expired() {
-                        tracing::info!("Token loaded from disk is expired, removing file");
-                        let _ = fs::remove_file(token_file).await;
-                        Ok(None)
-                    } else {
-                        tracing::info!("Valid token loaded from disk");
-                        Ok(Some(token_data))
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to parse token file, removing: {e}");
-                    let _ = fs::remove_file(token_file).await;
-                    Err(Error::Token(TokenError::serialization(format!(
-                        "Failed to parse token file: {e}"
-                    ))))
-                }
+        let content = self.read_token_file(token_file).await?;
+        self.parse_and_validate_token(token_file, &content).await
+    }
+
+    /// Checks if the token file exists on disk
+    async fn token_file_exists(&self, token_file: &str) -> bool {
+        tokio::fs::try_exists(token_file).await.map_or_else(
+            |_| {
+                tracing::debug!("Error checking token file existence: {}", token_file);
+                false
             },
+            |exists| {
+                if !exists {
+                    tracing::debug!("Token file does not exist: {}", token_file);
+                }
+                exists
+            },
+        )
+    }
+
+    /// Reads the token file content from disk
+    async fn read_token_file(&self, token_file: &str) -> Result<String, Error> {
+        use tokio::fs;
+
+        match fs::read_to_string(token_file).await {
+            Ok(content) => Ok(content),
             Err(e) => {
                 tracing::warn!("Failed to read token file: {e}");
                 Err(Error::Token(TokenError::storage(format!(
@@ -1524,6 +1525,51 @@ impl TokenManager {
                 ))))
             }
         }
+    }
+
+    /// Parses token content and validates expiration
+    async fn parse_and_validate_token(
+        &self,
+        token_file: &str,
+        content: &str,
+    ) -> Result<Option<TokenData>, Error> {
+        match serde_json::from_str::<TokenData>(content) {
+            Ok(token_data) => {
+                self.handle_parsed_token(token_file, token_data).await
+            }
+            Err(e) => {
+                self.handle_parse_error(token_file, e).await
+            }
+        }
+    }
+
+    /// Handles successfully parsed token data, checking expiration
+    async fn handle_parsed_token(
+        &self,
+        token_file: &str,
+        token_data: TokenData,
+    ) -> Result<Option<TokenData>, Error> {
+        if token_data.is_expired() {
+            tracing::info!("Token loaded from disk is expired, removing file");
+            let _ = tokio::fs::remove_file(token_file).await;
+            Ok(None)
+        } else {
+            tracing::info!("Valid token loaded from disk");
+            Ok(Some(token_data))
+        }
+    }
+
+    /// Handles token parsing errors by cleaning up the invalid file
+    async fn handle_parse_error(
+        &self,
+        token_file: &str,
+        e: serde_json::Error,
+    ) -> Result<Option<TokenData>, Error> {
+        tracing::warn!("Failed to parse token file, removing: {e}");
+        let _ = tokio::fs::remove_file(token_file).await;
+        Err(Error::Token(TokenError::serialization(format!(
+            "Failed to parse token file: {e}"
+        ))))
     }
 
     /// Saves token data to disk
