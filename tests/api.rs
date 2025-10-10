@@ -236,7 +236,7 @@ async fn test_get_asset_memo_live() {
 
     if let Some(asset_to_test) = assets.first() {
         let result = client.get_asset_memo(&asset_to_test.asset_uuid).await;
-        
+
         // The memo retrieval should either succeed with a memo string or fail gracefully
         match result {
             Ok(memo) => {
@@ -246,7 +246,10 @@ async fn test_get_asset_memo_live() {
             }
             Err(e) => {
                 // This is acceptable - the asset may not have a memo set
-                println!("Asset {} has no memo or memo retrieval failed: {:?}", asset_to_test.asset_uuid, e);
+                println!(
+                    "Asset {} has no memo or memo retrieval failed: {:?}",
+                    asset_to_test.asset_uuid, e
+                );
                 // We don't assert failure here because it's valid for an asset to not have a memo
             }
         }
@@ -273,24 +276,43 @@ async fn test_set_asset_memo_live() {
 
     if let Some(asset_to_test) = assets.first() {
         let test_memo = "Test memo set by live test";
-        
+
         // Set a test memo on the asset
-        let set_result = client.set_asset_memo(&asset_to_test.asset_uuid, test_memo).await;
-        assert!(set_result.is_ok(), "Failed to set memo: {:?}", set_result.err());
-        
+        let set_result = client
+            .set_asset_memo(&asset_to_test.asset_uuid, test_memo)
+            .await;
+        assert!(
+            set_result.is_ok(),
+            "Failed to set memo: {:?}",
+            set_result.err()
+        );
+
         // Retrieve the memo to verify it was set correctly
         let get_result = client.get_asset_memo(&asset_to_test.asset_uuid).await;
-        assert!(get_result.is_ok(), "Failed to get memo after setting: {:?}", get_result.err());
-        
+        assert!(
+            get_result.is_ok(),
+            "Failed to get memo after setting: {:?}",
+            get_result.err()
+        );
+
         let retrieved_memo = get_result.unwrap();
-        assert_eq!(retrieved_memo, test_memo, "Retrieved memo doesn't match set memo");
-        
-        println!("Successfully set and verified memo for asset {}: '{}'", asset_to_test.asset_uuid, retrieved_memo);
-        
+        assert_eq!(
+            retrieved_memo, test_memo,
+            "Retrieved memo doesn't match set memo"
+        );
+
+        println!(
+            "Successfully set and verified memo for asset {}: '{}'",
+            asset_to_test.asset_uuid, retrieved_memo
+        );
+
         // Clean up by setting empty memo (optional - leaving test memo is also acceptable)
         let cleanup_result = client.set_asset_memo(&asset_to_test.asset_uuid, "").await;
         if cleanup_result.is_ok() {
-            println!("Successfully cleaned up memo for asset {}", asset_to_test.asset_uuid);
+            println!(
+                "Successfully cleaned up memo for asset {}",
+                asset_to_test.asset_uuid
+            );
         } else {
             println!("Warning: Failed to clean up memo, leaving test memo in place");
         }
@@ -369,12 +391,17 @@ async fn test_add_asset_to_category_mock() {
 
     let result = client.add_asset_to_category(1, "mock_asset_uuid").await;
     assert!(result.is_ok());
-    
+
     let category_response = result.unwrap();
     assert_eq!(category_response.id, 1);
     assert_eq!(category_response.name, "Mock Category");
-    assert_eq!(category_response.description, Some("A mock category".to_string()));
-    assert!(category_response.assets.contains(&"mock_asset_uuid".to_string()));
+    assert_eq!(
+        category_response.description,
+        Some("A mock category".to_string())
+    );
+    assert!(category_response
+        .assets
+        .contains(&"mock_asset_uuid".to_string()));
 
     cleanup_mock_test().await;
 }
@@ -393,13 +420,18 @@ async fn test_remove_asset_from_category_mock() {
     .await
     .unwrap();
 
-    let result = client.remove_asset_from_category(1, "mock_asset_uuid").await;
+    let result = client
+        .remove_asset_from_category(1, "mock_asset_uuid")
+        .await;
     assert!(result.is_ok());
-    
+
     let category_response = result.unwrap();
     assert_eq!(category_response.id, 1);
     assert_eq!(category_response.name, "Mock Category");
-    assert_eq!(category_response.description, Some("A mock category".to_string()));
+    assert_eq!(
+        category_response.description,
+        Some("A mock category".to_string())
+    );
     assert!(category_response.assets.is_empty());
 
     cleanup_mock_test().await;
@@ -1005,12 +1037,18 @@ async fn test_add_asset_to_category_live() {
 
     let new_category = amp_rs::model::CategoryAdd {
         name: format!("Test Category for Asset Addition {}", timestamp),
-        description: Some("Temporary test category for asset-category association test".to_string()),
+        description: Some(
+            "Temporary test category for asset-category association test".to_string(),
+        ),
     };
 
     println!("Creating test category: {:?}", new_category);
     let category_result = client.add_category(&new_category).await;
-    assert!(category_result.is_ok(), "Failed to create test category: {:?}", category_result.err());
+    assert!(
+        category_result.is_ok(),
+        "Failed to create test category: {:?}",
+        category_result.err()
+    );
     let created_category = category_result.unwrap();
     println!("Created category with ID: {}", created_category.id);
 
@@ -1037,25 +1075,45 @@ async fn test_add_asset_to_category_live() {
 
     println!("Creating test asset: {:?}", issuance_request.name);
     let asset_result = client.issue_asset(&issuance_request).await;
-    assert!(asset_result.is_ok(), "Failed to create test asset: {:?}", asset_result.err());
+    assert!(
+        asset_result.is_ok(),
+        "Failed to create test asset: {:?}",
+        asset_result.err()
+    );
     let created_asset = asset_result.unwrap();
     println!("Created asset with UUID: {}", created_asset.asset_uuid);
 
     // Add asset to category using existing add_asset_to_category method
-    println!("Adding asset {} to category {}", created_asset.asset_uuid, created_category.id);
-    let add_result = client.add_asset_to_category(created_category.id, &created_asset.asset_uuid).await;
-    assert!(add_result.is_ok(), "Failed to add asset to category: {:?}", add_result.err());
-    
+    println!(
+        "Adding asset {} to category {}",
+        created_asset.asset_uuid, created_category.id
+    );
+    let add_result = client
+        .add_asset_to_category(created_category.id, &created_asset.asset_uuid)
+        .await;
+    assert!(
+        add_result.is_ok(),
+        "Failed to add asset to category: {:?}",
+        add_result.err()
+    );
+
     let category_response = add_result.unwrap();
-    println!("Successfully added asset to category. Category now has {} assets", category_response.assets.len());
-    
+    println!(
+        "Successfully added asset to category. Category now has {} assets",
+        category_response.assets.len()
+    );
+
     // Verify the asset is in the category
-    assert!(category_response.assets.contains(&created_asset.asset_uuid), 
-           "Asset UUID not found in category assets list");
+    assert!(
+        category_response.assets.contains(&created_asset.asset_uuid),
+        "Asset UUID not found in category assets list"
+    );
 
     // Clean up by removing asset from category and deleting both resources
     println!("Cleaning up: removing asset from category");
-    let remove_result = client.remove_asset_from_category(created_category.id, &created_asset.asset_uuid).await;
+    let remove_result = client
+        .remove_asset_from_category(created_category.id, &created_asset.asset_uuid)
+        .await;
     if let Err(e) = &remove_result {
         println!("Warning: Failed to remove asset from category: {:?}", e);
     } else {
@@ -1110,7 +1168,11 @@ async fn test_remove_asset_from_category_live() {
 
     println!("Creating test category: {:?}", new_category);
     let category_result = client.add_category(&new_category).await;
-    assert!(category_result.is_ok(), "Failed to create test category: {:?}", category_result.err());
+    assert!(
+        category_result.is_ok(),
+        "Failed to create test category: {:?}",
+        category_result.err()
+    );
     let created_category = category_result.unwrap();
     println!("Created category with ID: {}", created_category.id);
 
@@ -1137,33 +1199,69 @@ async fn test_remove_asset_from_category_live() {
 
     println!("Creating test asset: {:?}", issuance_request.name);
     let asset_result = client.issue_asset(&issuance_request).await;
-    assert!(asset_result.is_ok(), "Failed to create test asset: {:?}", asset_result.err());
+    assert!(
+        asset_result.is_ok(),
+        "Failed to create test asset: {:?}",
+        asset_result.err()
+    );
     let created_asset = asset_result.unwrap();
     println!("Created asset with UUID: {}", created_asset.asset_uuid);
 
     // Add asset to category first
-    println!("Adding asset {} to category {}", created_asset.asset_uuid, created_category.id);
-    let add_result = client.add_asset_to_category(created_category.id, &created_asset.asset_uuid).await;
-    assert!(add_result.is_ok(), "Failed to add asset to category: {:?}", add_result.err());
-    
+    println!(
+        "Adding asset {} to category {}",
+        created_asset.asset_uuid, created_category.id
+    );
+    let add_result = client
+        .add_asset_to_category(created_category.id, &created_asset.asset_uuid)
+        .await;
+    assert!(
+        add_result.is_ok(),
+        "Failed to add asset to category: {:?}",
+        add_result.err()
+    );
+
     let category_response_after_add = add_result.unwrap();
-    println!("Successfully added asset to category. Category now has {} assets", category_response_after_add.assets.len());
-    
+    println!(
+        "Successfully added asset to category. Category now has {} assets",
+        category_response_after_add.assets.len()
+    );
+
     // Verify the asset is in the category
-    assert!(category_response_after_add.assets.contains(&created_asset.asset_uuid), 
-           "Asset UUID not found in category assets list after adding");
+    assert!(
+        category_response_after_add
+            .assets
+            .contains(&created_asset.asset_uuid),
+        "Asset UUID not found in category assets list after adding"
+    );
 
     // Remove asset from category using existing remove_asset_from_category method
-    println!("Removing asset {} from category {}", created_asset.asset_uuid, created_category.id);
-    let remove_result = client.remove_asset_from_category(created_category.id, &created_asset.asset_uuid).await;
-    assert!(remove_result.is_ok(), "Failed to remove asset from category: {:?}", remove_result.err());
-    
+    println!(
+        "Removing asset {} from category {}",
+        created_asset.asset_uuid, created_category.id
+    );
+    let remove_result = client
+        .remove_asset_from_category(created_category.id, &created_asset.asset_uuid)
+        .await;
+    assert!(
+        remove_result.is_ok(),
+        "Failed to remove asset from category: {:?}",
+        remove_result.err()
+    );
+
     let category_response_after_remove = remove_result.unwrap();
-    println!("Successfully removed asset from category. Category now has {} assets", category_response_after_remove.assets.len());
-    
+    println!(
+        "Successfully removed asset from category. Category now has {} assets",
+        category_response_after_remove.assets.len()
+    );
+
     // Verify the asset is no longer in the category
-    assert!(!category_response_after_remove.assets.contains(&created_asset.asset_uuid), 
-           "Asset UUID still found in category assets list after removal");
+    assert!(
+        !category_response_after_remove
+            .assets
+            .contains(&created_asset.asset_uuid),
+        "Asset UUID still found in category assets list after removal"
+    );
 
     // Clean up by deleting both category and asset
     println!("Cleaning up: deleting test asset");

@@ -19,8 +19,8 @@ use crate::model::{
     Activity, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse,
     CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
     ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
-    GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
-    TokenData, TokenInfo, TokenRequest, TokenResponse, Utxo,
+    GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, TokenData,
+    TokenInfo, TokenRequest, TokenResponse, Utxo,
 };
 
 /// Token environment detection for automatic strategy selection
@@ -2124,7 +2124,9 @@ impl ApiClient {
     pub async fn set_asset_memo(&self, asset_uuid: &str, memo: &str) -> Result<(), Error> {
         let token = self.get_token().await?;
         let mut url = self.base_url.clone();
-        url.path_segments_mut().unwrap().extend(&["assets", asset_uuid, "memo", "set"]);
+        url.path_segments_mut()
+            .unwrap()
+            .extend(&["assets", asset_uuid, "memo", "set"]);
 
         let response = self
             .client
