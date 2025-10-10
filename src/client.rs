@@ -1371,25 +1371,38 @@ impl TokenManager {
     pub async fn clear_token(&self) -> Result<(), Error> {
         tracing::debug!("Clearing stored token from memory and disk");
 
+        let had_token = self.clear_token_from_memory().await;
+        self.clear_token_from_disk_if_enabled().await;
+        Self::log_token_clear_result(had_token);
+
+        Ok(())
+    }
+
+    /// Clears the token from memory and returns whether a token was present
+    async fn clear_token_from_memory(&self) -> bool {
         let mut token_guard = self.token_data.lock().await;
         let had_token = token_guard.is_some();
         *token_guard = None;
         drop(token_guard);
+        had_token
+    }
 
-        // Remove from disk if persistence is enabled
+    /// Clears the token from disk if persistence is enabled
+    async fn clear_token_from_disk_if_enabled(&self) {
         if Self::should_persist_tokens() {
             if let Err(e) = self.remove_token_from_disk().await {
                 tracing::warn!("Failed to remove token from disk: {e}");
             }
         }
+    }
 
+    /// Logs the result of the token clearing operation
+    fn log_token_clear_result(had_token: bool) {
         if had_token {
             tracing::info!("Token successfully cleared from memory and disk - next get_token() will obtain fresh token");
         } else {
             tracing::debug!("No token was stored to clear");
         }
-
-        Ok(())
     }
 
     /// Forces a token refresh regardless of current token status
