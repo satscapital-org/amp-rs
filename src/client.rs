@@ -817,7 +817,7 @@ impl RetryClient {
     }
 }
 
-/// Singleton instance of the TokenManager for shared token storage across all ApiClient instances
+/// Singleton instance of the `TokenManager` for shared token storage across all `ApiClient` instances
 static GLOBAL_TOKEN_MANAGER: OnceCell<Arc<TokenManager>> = OnceCell::const_new();
 
 /// Core token manager with proactive refresh and secure storage
@@ -832,13 +832,13 @@ pub struct TokenManager {
 }
 
 impl TokenManager {
-    /// Gets the global singleton instance of TokenManager
+    /// Gets the global singleton instance of `TokenManager`
     ///
-    /// This ensures all ApiClient instances share the same token storage,
+    /// This ensures all `ApiClient` instances share the same token storage,
     /// preventing multiple token acquisition attempts in concurrent tests.
     ///
     /// # Errors
-    /// Returns an error if the TokenManager cannot be initialized
+    /// Returns an error if the `TokenManager` cannot be initialized
     pub async fn get_global_instance() -> Result<Arc<TokenManager>, Error> {
         let manager = GLOBAL_TOKEN_MANAGER
             .get_or_try_init(|| async {
@@ -1535,10 +1535,10 @@ impl TokenManager {
         }
     }
 
-    /// Resets the global TokenManager singleton (useful for testing)
+    /// Resets the global `TokenManager` singleton (useful for testing)
     ///
     /// This method clears the global singleton instance, forcing the next
-    /// call to get_global_instance() to create a fresh TokenManager.
+    /// call to `get_global_instance()` to create a fresh `TokenManager`.
     /// Primarily intended for test scenarios where a clean state is needed.
     pub async fn reset_global_instance() -> Result<(), Error> {
         // Clear any existing token from the current global instance
@@ -1762,9 +1762,9 @@ impl ApiClient {
         self.token_strategy.get_token().await
     }
 
-    /// Resets the global TokenManager singleton (useful for testing).
+    /// Resets the global `TokenManager` singleton (useful for testing).
     ///
-    /// This method clears the token from the global TokenManager instance.
+    /// This method clears the token from the global `TokenManager` instance.
     /// Primarily intended for test scenarios where a clean token state is needed.
     ///
     /// # Errors
@@ -1811,7 +1811,7 @@ impl ApiClient {
     /// Force cleanup of token files (for test cleanup)
     ///
     /// This is a static method that can be used to cleanup token files
-    /// without needing an ApiClient instance. Useful for test teardown.
+    /// without needing an `ApiClient` instance. Useful for test teardown.
     ///
     /// # Errors
     /// Returns an error if token file cleanup fails
@@ -3117,7 +3117,7 @@ pub fn create_mock_token_strategy(token: String) -> Box<dyn TokenStrategy> {
 /// Creates a live token strategy with default configuration
 ///
 /// # Errors
-/// Returns an error if the TokenManager cannot be initialized
+/// Returns an error if the `TokenManager` cannot be initialized
 pub async fn create_live_token_strategy() -> Result<Box<dyn TokenStrategy>, Error> {
     let strategy = LiveTokenStrategy::new().await?;
     Ok(Box::new(strategy))
@@ -3211,7 +3211,7 @@ mod tests {
 
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
-                
+
                 .unwrap(),
         );
 
@@ -3236,7 +3236,7 @@ mod tests {
 
         let token_manager = Arc::new(
             TokenManager::with_mock_token(config, base_url, mock_token.clone())
-                
+
                 .unwrap(),
         );
 

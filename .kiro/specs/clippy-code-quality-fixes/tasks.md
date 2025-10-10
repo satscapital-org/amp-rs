@@ -13,7 +13,7 @@
   - Run tests to verify functionality is preserved
   - _Requirements: 8.1, 8.2, 11.1, 11.2_
 
-- [-] 3. Enhance documentation formatting
+- [x] 3. Enhance documentation formatting
   - Add backticks around code identifiers in documentation comments
   - Update all TokenManager, ApiClient, and function name references
   - Ensure consistent documentation formatting throughout client.rs
@@ -41,7 +41,7 @@
   - Run tests to verify async removal doesn't break functionality
   - _Requirements: 12.1, 12.2_
 
-- [ ] 7. Refactor high-complexity functions - Part 1
+- [-] 7. Refactor high-complexity functions - Part 1
   - Extract helper methods from TokenManager::detect() function to reduce complexity from 38 to under 25
   - Break down environment detection logic into smaller, focused functions
   - Maintain the same public API and behavior
