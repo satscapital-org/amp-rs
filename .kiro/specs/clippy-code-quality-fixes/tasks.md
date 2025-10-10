@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [-] 1. Fix simple literal and format issues
+- [ ] 1. Fix simple literal and format issues
   - Fix numeric literal separators in mocks.rs by adding underscores to large numbers
   - Update format! macros to use inline variable syntax in client.rs
   - Replace single-character string patterns with character literals
@@ -13,7 +13,7 @@
   - Run tests to verify functionality is preserved
   - _Requirements: 8.1, 8.2, 11.1, 11.2_
 
-- [ ] 3. Enhance documentation formatting
+- [-] 3. Enhance documentation formatting
   - Add backticks around code identifiers in documentation comments
   - Update all TokenManager, ApiClient, and function name references
   - Ensure consistent documentation formatting throughout client.rs

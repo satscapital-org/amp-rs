@@ -567,7 +567,7 @@ pub fn mock_lock_manager(server: &MockServer) {
 
 pub fn mock_lock_manager_invalid_id(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(PUT).path("/managers/999999/lock");
+        when.method(PUT).path("/managers/999_999/lock");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -598,7 +598,7 @@ pub fn mock_add_asset_to_manager(server: &MockServer) {
 pub fn mock_add_asset_to_manager_invalid_manager_id(server: &MockServer) {
     server.mock(|when, then| {
         when.method(PUT)
-            .path("/managers/999999/assets/mock_asset_uuid/add");
+            .path("/managers/999_999/assets/mock_asset_uuid/add");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -1012,7 +1012,7 @@ pub fn mock_get_asset_assignment_invalid_asset_uuid(server: &MockServer) {
 pub fn mock_get_asset_assignment_invalid_assignment_id(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET)
-            .path("/assets/mock_asset_uuid/assignments/999999");
+            .path("/assets/mock_asset_uuid/assignments/999_999");
         then.status(404)
             .header("content-type", "application/json")
             .json_body(json!({

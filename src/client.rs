@@ -486,7 +486,7 @@ impl Default for RetryConfig {
         Self {
             max_attempts: 3,
             base_delay_ms: 1000,
-            max_delay_ms: 30000,
+            max_delay_ms: 30_000,
             timeout_seconds: 10,
         }
     }
@@ -523,7 +523,7 @@ impl RetryConfig {
             Ok(val) => val.parse::<u64>().map_err(|e| {
                 Error::InvalidRetryConfig(format!("Invalid API_RETRY_MAX_DELAY_MS: {e}"))
             })?,
-            Err(_) => 30000,
+            Err(_) => 30_000,
         };
 
         let timeout_seconds = match env::var("API_REQUEST_TIMEOUT_SECONDS") {
@@ -2133,7 +2133,7 @@ impl ApiClient {
             .request(Method::POST, url)
             .header(AUTHORIZATION, format!("token {token}"))
             .header("content-type", "application/json")
-            .body(format!("\"{}\"", memo.replace("\"", "\\\"")))
+            .body(format!("\"{}\"", memo.replace('"', "\\\"")))
             .send()
             .await?;
 
@@ -3145,7 +3145,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_token_strategy_basic_functionality() {
-        let mock_token = "mock_token_12345".to_string();
+        let mock_token = "mock_token_12_345".to_string();
         let strategy = MockTokenStrategy::new(mock_token.clone());
 
         // Test get_token returns the mock token
@@ -3273,7 +3273,7 @@ mod tests {
     #[tokio::test]
     async fn test_strategy_debug_formatting() {
         let mock_strategy = MockTokenStrategy::new("debug_test_token".to_string());
-        let debug_output = format!("{:?}", mock_strategy);
+        let debug_output = format!("{mock_strategy:?}");
 
         // Verify debug output contains expected information
         assert!(debug_output.contains("MockTokenStrategy"));
