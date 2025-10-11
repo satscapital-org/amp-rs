@@ -1626,6 +1626,12 @@ impl TokenManager {
 
     /// Forces cleanup of token persistence files (useful for testing)
     /// This method removes token files regardless of persistence settings
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - File system permissions prevent deletion of the token file
+    /// - I/O errors occur during file deletion operations
+    /// - The token file is locked by another process
     pub async fn force_cleanup_token_files() -> Result<(), Error> {
         use tokio::fs;
 
@@ -1654,6 +1660,12 @@ impl TokenManager {
     /// This method clears the global singleton instance, forcing the next
     /// call to `get_global_instance()` to create a fresh `TokenManager`.
     /// Primarily intended for test scenarios where a clean state is needed.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Token clearing operations fail during the reset process
+    /// - File system errors occur when clearing persistent token data
+    /// - The global instance is in an invalid state that prevents cleanup
     pub async fn reset_global_instance() -> Result<(), Error> {
         // Clear any existing token from the current global instance
         if let Some(manager) = GLOBAL_TOKEN_MANAGER.get() {
@@ -2101,6 +2113,12 @@ impl ApiClient {
         .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset does not exist or cannot be found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
     pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
         self.request_empty(
             Method::DELETE,
@@ -2110,16 +2128,39 @@ impl ApiClient {
         .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The transaction ID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_broadcast_status(&self, txid: &str) -> Result<BroadcastResponse, Error> {
         self.request_json(Method::GET, &["tx", "broadcast", txid], None::<&()>)
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The transaction hex is invalid or malformed
+    /// - The transaction is rejected by the network
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn broadcast_transaction(&self, tx_hex: &str) -> Result<BroadcastResponse, Error> {
         self.request_json(Method::POST, &["tx", "broadcast"], Some(tx_hex))
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The asset is already registered
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(
             Method::GET,
@@ -2129,6 +2170,15 @@ impl ApiClient {
         .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The user lacks authorization to register the asset
+    /// - The asset is already registered
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn register_asset_authorized(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(
             Method::GET,
@@ -2138,16 +2188,42 @@ impl ApiClient {
         .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The asset is already locked
+    /// - The user lacks permission to lock the asset
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn lock_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(Method::PUT, &["assets", asset_uuid, "lock"], None::<&()>)
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The asset is not currently locked
+    /// - The user lacks permission to unlock the asset
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn unlock_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(Method::PUT, &["assets", asset_uuid, "unlock"], None::<&()>)
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The activity parameters are invalid
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_asset_activities(
         &self,
         asset_uuid: &str,
@@ -2161,6 +2237,14 @@ impl ApiClient {
         .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The specified height is invalid or out of range
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_asset_ownerships(
         &self,
         asset_uuid: &str,
@@ -2175,16 +2259,37 @@ impl ApiClient {
         self.request_json(Method::GET, &path, None::<&()>).await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_asset_balance(&self, asset_uuid: &str) -> Result<Balance, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid, "balance"], None::<&()>)
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_asset_summary(&self, asset_uuid: &str) -> Result<AssetSummary, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid, "summary"], None::<&()>)
             .await
     }
 
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
     pub async fn get_asset_utxos(&self, asset_uuid: &str) -> Result<Vec<Utxo>, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid, "utxos"], None::<&()>)
             .await
