@@ -2,6 +2,13 @@
 name = "amp-rs"
 version = "0.0.1"
 edition = "2021"
+description = "A Rust client for the Blockstream AMP API, providing interfaces for asset management, user operations, and token handling on the Liquid Network."
+license = "BSD-3-Clause"
+repository = "https://github.com/gmikeska/amp-rs"
+homepage = "https://github.com/gmikeska/amp-rs"
+keywords = ["blockstream", "amp", "liquid", "assets", "blockchain"]
+categories = ["api-bindings", "cryptography::blockchains"]
+readme = "README.md"
 
 [lib]
 name = "amp_rs"
@@ -40,4 +47,3 @@ rand = "0.8"
 tokio = { version = "1", features = ["full"] }
 serial_test = "3.0"
 tracing-subscriber = "0.3"
-
