@@ -1,5 +1,5 @@
 [package]
-name = "amp-rs"
+name = "amp-rust"
 version = "0.0.1"
 edition = "2021"
 description = "A Rust client for the Blockstream AMP API, providing interfaces for asset management, user operations, and token handling on the Liquid Network."
