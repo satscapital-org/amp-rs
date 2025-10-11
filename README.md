@@ -1,4 +1,4 @@
-# AMP Client
+# Rust Amp Client (amp-rust)
 
 > **⚠️ DEVELOPMENT STATUS**: This package is currently in development and undergoing early integration testing. The API may change and some endpoints are not yet implemented. Don't use in production environments.
 
@@ -10,7 +10,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-amp_client = "0.0.1"
+amp-rust = "0.0.2"
 ```
 
 ## Examples
