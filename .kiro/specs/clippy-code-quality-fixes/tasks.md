@@ -27,7 +27,7 @@
   - Run tests to ensure documentation changes don't affect compilation
   - _Requirements: 7.1, 7.2_
 
-- [-] 5. Optimize type usage and annotations
+- [ ] 5. Optimize type usage and annotations
   - Replace explicit type names with Self where appropriate in TokenManager
   - Add #[must_use] attributes to functions that return important values
   - Update function signatures to use Self consistently
@@ -69,7 +69,7 @@
   - Run tests to verify token persistence functionality
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 11. Final validation and cleanup
+- [x] 11. Final validation and cleanup
   - Run comprehensive clippy check to verify all warnings are resolved
   - Execute full test suite to ensure no regressions
   - Verify cargo build completes without warnings

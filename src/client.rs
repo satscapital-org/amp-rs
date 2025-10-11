@@ -892,13 +892,13 @@ impl TokenManager {
     ///
     /// # Errors
     /// Returns an error if the `TokenManager` cannot be initialized
-    pub async fn get_global_instance() -> Result<Arc<TokenManager>, Error> {
+    pub async fn get_global_instance() -> Result<Arc<Self>, Error> {
         let manager = GLOBAL_TOKEN_MANAGER
             .get_or_try_init(|| async {
                 let config = RetryConfig::from_env()?;
                 let base_url = get_amp_api_base_url()?;
                 let manager = Self::with_config_and_base_url(config, base_url).await?;
-                Ok::<Arc<TokenManager>, Error>(Arc::new(manager))
+                Ok::<Arc<Self>, Error>(Arc::new(manager))
             })
             .await?;
 
@@ -1914,6 +1914,7 @@ impl ApiClient {
     ///
     /// # Returns
     /// A string indicating the strategy type: "mock" or "live"
+    #[must_use]
     pub fn get_strategy_type(&self) -> &'static str {
         self.token_strategy.strategy_type()
     }
@@ -1924,6 +1925,7 @@ impl ApiClient {
     ///
     /// # Returns
     /// `true` if tokens are persisted to disk, `false` for in-memory only
+    #[must_use]
     pub fn should_persist_tokens(&self) -> bool {
         self.token_strategy.should_persist()
     }
