@@ -7,7 +7,7 @@ license = "BSD-3-Clause"
 repository = "https://github.com/gmikeska/amp-rs"
 homepage = "https://github.com/gmikeska/amp-rs"
 keywords = ["blockstream", "amp", "liquid", "assets", "blockchain"]
-categories = ["api-bindings", "cryptography::blockchains"]
+categories = ["api-bindings"]
 readme = "README.md"
 
 [lib]
