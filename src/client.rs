@@ -1694,6 +1694,21 @@ impl ApiClient {
     /// Returns an error if:
     /// - The `AMP_API_BASE_URL` environment variable contains an invalid URL
     /// - Token strategy initialization fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// // Create a new client - automatically detects environment
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Client is ready to use
+    /// let assets = client.get_assets().await?;
+    /// println!("Found {} assets", assets.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn new() -> Result<Self, Error> {
         let base_url = get_amp_api_base_url()?;
         let client = Client::new();
@@ -1721,6 +1736,21 @@ impl ApiClient {
     /// # Errors
     ///
     /// Returns an error if token strategy initialization fails.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # use reqwest::Url;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let base_url = Url::parse("https://amp-test.blockstream.com/api")?;
+    /// let client = ApiClient::with_base_url(base_url).await?;
+    /// 
+    /// // Client is ready to use with the specified URL
+    /// let assets = client.get_assets().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn with_base_url(base_url: Url) -> Result<Self, Error> {
         let client = Client::new();
 
@@ -1789,6 +1819,22 @@ impl ApiClient {
     /// # Errors
     ///
     /// This method is infallible but returns Result for API consistency.
+    ///
+    /// # Examples
+    /// ```
+    /// # use amp_rs::ApiClient;
+    /// # use reqwest::Url;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let base_url = Url::parse("http://localhost:8080/api")?;
+    /// let client = ApiClient::with_mock_token(base_url, "test_token".to_string())?;
+    /// 
+    /// // Client will always use "test_token" for authentication
+    /// let token = client.get_token().await?;
+    /// assert_eq!(token, "test_token");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
         let client = Client::new();
         let token_strategy: Box<dyn TokenStrategy> = Box::new(MockTokenStrategy::new(mock_token));
@@ -1838,6 +1884,23 @@ impl ApiClient {
     ///
     /// # Errors
     /// Returns an error if token information retrieval fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// if let Some(token_info) = client.get_token_info().await? {
+    ///     println!("Token expires at: {}", token_info.expires_at);
+    ///     println!("Token is expired: {}", token_info.is_expired);
+    /// } else {
+    ///     println!("No token stored or mock strategy in use");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_token_info(&self) -> Result<Option<TokenInfo>, Error> {
         // Only live strategies support detailed token information
         if let Some(live_strategy) = self
@@ -1863,6 +1926,22 @@ impl ApiClient {
     ///
     /// # Errors
     /// Returns an error if token clearing fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Clear any existing token
+    /// client.clear_token().await?;
+    /// 
+    /// // Next get_token() call will obtain a fresh token
+    /// let token = client.get_token().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn clear_token(&self) -> Result<(), Error> {
         self.token_strategy.clear_token().await
     }
@@ -1903,6 +1982,20 @@ impl ApiClient {
     /// # Errors
     ///
     /// Returns an error if token acquisition or refresh fails after all retries.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// // Get a valid token - automatically handles refresh if needed
+    /// let token = client.get_token().await?;
+    /// println!("Got token: {}", &token[..10]); // Print first 10 chars
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_token(&self) -> Result<String, Error> {
         self.token_strategy.get_token().await
     }
@@ -2049,6 +2142,21 @@ impl ApiClient {
     /// - The HTTP request fails
     /// - The server returns an error status
     /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let assets = client.get_assets().await?;
+    /// for asset in assets {
+    ///     println!("Asset: {} ({})", asset.name, asset.ticker.unwrap_or_default());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_assets(&self) -> Result<Vec<Asset>, Error> {
         self.request_json(Method::GET, &["assets"], None::<&()>)
             .await
@@ -2063,6 +2171,22 @@ impl ApiClient {
     /// - The HTTP request fails
     /// - The asset does not exist
     /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let asset = client.get_asset(asset_uuid).await?;
+    /// 
+    /// println!("Asset: {} ({})", asset.name, asset.ticker.unwrap_or_default());
+    /// println!("Registered: {}, Locked: {}", asset.is_registered, asset.is_locked);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid], None::<&()>)
             .await
@@ -2077,6 +2201,34 @@ impl ApiClient {
     /// - The HTTP request fails
     /// - The issuance request is invalid
     /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::IssuanceRequest};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let issuance_request = IssuanceRequest {
+    ///     name: "My Token".to_string(),
+    ///     amount: 1000000,
+    ///     destination_address: "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string(),
+    ///     domain: "example.com".to_string(),
+    ///     ticker: "MYTKN".to_string(),
+    ///     pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+    ///     precision: Some(8),
+    ///     is_confidential: Some(true),
+    ///     is_reissuable: Some(false),
+    ///     reissuance_amount: None,
+    ///     reissuance_address: None,
+    ///     transfer_restricted: Some(false),
+    /// };
+    /// 
+    /// let response = client.issue_asset(&issuance_request).await?;
+    /// println!("Issued asset with UUID: {}", response.asset_uuid);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn issue_asset(
         &self,
         issuance_request: &IssuanceRequest,
@@ -2457,6 +2609,29 @@ impl ApiClient {
         .await
     }
 
+    /// Gets a list of all registered users.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let users = client.get_registered_users().await?;
+    /// for user in users {
+    ///     println!("User: {} (ID: {})", user.name, user.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_registered_users(
         &self,
     ) -> Result<Vec<crate::model::RegisteredUserResponse>, Error> {
@@ -2464,6 +2639,30 @@ impl ApiClient {
             .await
     }
 
+    /// Gets a specific registered user by ID.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the registered user to retrieve
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The user ID does not exist
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let user = client.get_registered_user(1).await?;
+    /// println!("User: {} (ID: {})", user.name, user.id);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_registered_user(
         &self,
         user_id: i64,
@@ -2652,6 +2851,24 @@ impl ApiClient {
     /// - The GAID is invalid
     /// - Network or authentication errors occur
     /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
+    /// let balance = client.get_gaid_balance(gaid).await?;
+    /// 
+    /// println!("GAID {} has {} balance entries", gaid, balance.len());
+    /// for entry in balance {
+    ///     println!("Asset {}: {} units", entry.asset_id, entry.balance);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_gaid_balance(&self, gaid: &str) -> Result<Balance, Error> {
         self.request_json(Method::GET, &["gaids", gaid, "balance"], None::<&()>)
             .await
@@ -2694,6 +2911,34 @@ impl ApiClient {
         })
     }
 
+    /// Gets a list of all categories.
+    ///
+    /// # Returns
+    /// Returns a vector of `CategoryResponse` objects
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let categories = client.get_categories().await?;
+    /// for category in categories {
+    ///     println!("Category: {} (ID: {})", category.name, category.id);
+    ///     if let Some(desc) = category.description {
+    ///         println!("  Description: {}", desc);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
         self.request_json(Method::GET, &["categories"], None::<&()>)
             .await
@@ -2814,6 +3059,38 @@ impl ApiClient {
         .await
     }
 
+    /// Validates a GAID (Green Address ID).
+    ///
+    /// # Arguments
+    /// * `gaid` - The GAID string to validate
+    ///
+    /// # Returns
+    /// Returns a `ValidateGaidResponse` indicating whether the GAID is valid
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
+    /// let validation = client.validate_gaid(gaid).await?;
+    /// 
+    /// if validation.is_valid {
+    ///     println!("GAID {} is valid", gaid);
+    /// } else {
+    ///     println!("GAID {} is invalid: {:?}", gaid, validation.error);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn validate_gaid(
         &self,
         gaid: &str,
@@ -2822,6 +3099,35 @@ impl ApiClient {
             .await
     }
 
+    /// Gets the address associated with a GAID.
+    ///
+    /// # Arguments
+    /// * `gaid` - The GAID to get the address for
+    ///
+    /// # Returns
+    /// Returns an `AddressGaidResponse` containing the address
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The GAID is invalid
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
+    /// let address_response = client.get_gaid_address(gaid).await?;
+    /// 
+    /// println!("Address for GAID {}: {}", gaid, address_response.address);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_gaid_address(
         &self,
         gaid: &str,
@@ -2830,11 +3136,68 @@ impl ApiClient {
             .await
     }
 
+    /// Gets a list of all managers.
+    ///
+    /// # Returns
+    /// Returns a vector of `Manager` objects
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let managers = client.get_managers().await?;
+    /// for manager in managers {
+    ///     println!("Manager: {} (ID: {})", manager.username, manager.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_managers(&self) -> Result<Vec<crate::model::Manager>, Error> {
         self.request_json(Method::GET, &["managers"], None::<&()>)
             .await
     }
 
+    /// Creates a new manager.
+    ///
+    /// # Arguments
+    /// * `new_manager` - The manager creation request containing username and password
+    ///
+    /// # Returns
+    /// Returns the created `Manager` object
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The manager creation request is invalid
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::ManagerCreate};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let new_manager = ManagerCreate {
+    ///     username: "new_manager".to_string(),
+    ///     password: "secure_password".to_string(),
+    /// };
+    /// 
+    /// let manager = client.create_manager(&new_manager).await?;
+    /// println!("Created manager: {} (ID: {})", manager.username, manager.id);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create_manager(
         &self,
         new_manager: &crate::model::ManagerCreate,
@@ -2843,6 +3206,37 @@ impl ApiClient {
             .await
     }
 
+    /// Gets all assignments for a specific asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to get assignments for
+    ///
+    /// # Returns
+    /// Returns a vector of `Assignment` objects
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The asset UUID is invalid
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let assignments = client.get_asset_assignments(asset_uuid).await?;
+    /// 
+    /// for assignment in assignments {
+    ///     println!("Assignment ID: {}, Amount: {}", assignment.id, assignment.amount);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_asset_assignments(&self, asset_uuid: &str) -> Result<Vec<Assignment>, Error> {
         self.request_json(
             Method::GET,

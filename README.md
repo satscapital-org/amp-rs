@@ -1,5 +1,7 @@
 # AMP Client
 
+> **⚠️ DEVELOPMENT STATUS**: This package is currently in development and undergoing early integration testing. The API may change and some endpoints are not yet implemented. Use with caution in production environments.
+
 A Rust client for the Blockstream AMP API.
 
 ## Usage
@@ -111,6 +113,29 @@ async fn main() {
 ```
 
 
+
+## Missing Endpoints
+
+The following AMP API endpoints are not yet implemented in this client library:
+
+### Asset Operations
+- `POST /api/assets/{assetUuid}/reissue-request` - Request asset reissuance
+- `POST /api/assets/{assetUuid}/reissue-confirm` - Confirm asset reissuance
+- `GET /api/assets/{assetUuid}/reissuances` - Get asset reissuances
+- `GET /api/assets/{assetUuid}/distributions/create/` - Create asset distribution
+- `POST /api/assets/{assetUuid}/distributions/{distributionUuid}/confirm` - Confirm distribution
+- `DELETE /api/assets/{assetUuid}/distributions/{distributionUuid}/cancel` - Cancel distribution
+- `GET /api/assets/{assetUuid}/distributions` - Get asset distributions
+- `GET /api/assets/{assetUuid}/distributions/{distributionUuid}` - Get specific distribution
+- `GET /api/assets/{assetUuid}/txs` - Get asset transactions
+- `GET /api/assets/{assetUuid}/txs/{txid}` - Get specific asset transaction
+- `GET /api/assets/{assetUuid}/lost-outputs` - Get asset lost outputs
+- `POST /api/assets/{assetUuid}/update-blinders` - Update asset blinders
+
+### Manager Operations
+- `POST /api/managers/{managerId}/change-password` - Change manager password
+
+These endpoints will be added in future releases. If you need any of these endpoints urgently, please open an issue on the project repository.
 
 ## Token Management
 

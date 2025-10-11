@@ -1,6 +1,19 @@
 use httpmock::prelude::*;
 use serde_json::json;
 
+/// Sets up a mock for the GET /changelog endpoint.
+///
+/// This mock returns a sample changelog with version 0.1.0.
+///
+/// # Examples
+/// ```
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_get_changelog;
+/// let server = MockServer::start();
+/// mock_get_changelog(&server);
+/// 
+/// // Now requests to /changelog will return the mocked response
+/// ```
 pub fn mock_get_changelog(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/changelog");
@@ -237,6 +250,19 @@ pub fn mock_create_manager(server: &MockServer) {
     });
 }
 
+/// Sets up a mock for the POST /user/obtain_token endpoint.
+///
+/// This mock returns a successful token response with "mock_token".
+///
+/// # Examples
+/// ```
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_obtain_token;
+/// let server = MockServer::start();
+/// mock_obtain_token(&server);
+/// 
+/// // Now token requests will return the mocked token
+/// ```
 pub fn mock_obtain_token(server: &MockServer) {
     server.mock(|when, then| {
         when.method(POST).path("/user/obtain_token");
@@ -439,6 +465,19 @@ pub fn mock_edit_asset(server: &MockServer) {
     });
 }
 
+/// Sets up a mock for the POST /assets/issue endpoint.
+///
+/// This mock returns a successful asset issuance response with mock data.
+///
+/// # Examples
+/// ```
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_issue_asset;
+/// let server = MockServer::start();
+/// mock_issue_asset(&server);
+/// 
+/// // Now asset issuance requests will return the mocked response
+/// ```
 pub fn mock_issue_asset(server: &MockServer) {
     server.mock(|when, then| {
         when.method(POST).path("/assets/issue");
@@ -470,6 +509,19 @@ pub fn mock_issue_asset(server: &MockServer) {
     });
 }
 
+/// Sets up a mock for the GET /assets endpoint.
+///
+/// This mock returns a list containing one sample asset with mock data.
+///
+/// # Examples
+/// ```
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_get_assets;
+/// let server = MockServer::start();
+/// mock_get_assets(&server);
+/// 
+/// // Now requests to /assets will return the mocked asset list
+/// ```
 pub fn mock_get_assets(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/assets");

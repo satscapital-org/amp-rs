@@ -452,6 +452,15 @@ pub struct TokenData {
 
 impl TokenData {
     /// Creates a new `TokenData` instance
+    ///
+    /// # Examples
+    /// ```
+    /// # use amp_rs::model::TokenData;
+    /// # use chrono::{Utc, Duration};
+    /// let expires_at = Utc::now() + Duration::hours(24);
+    /// let token_data = TokenData::new("my_token".to_string(), expires_at);
+    /// assert!(!token_data.is_expired());
+    /// ```
     #[must_use]
     pub fn new(token: String, expires_at: DateTime<Utc>) -> Self {
         Self {
@@ -462,18 +471,60 @@ impl TokenData {
     }
 
     /// Checks if the token is expired
+    ///
+    /// # Examples
+    /// ```
+    /// # use amp_rs::model::TokenData;
+    /// # use chrono::{Utc, Duration};
+    /// // Create an expired token
+    /// let expires_at = Utc::now() - Duration::hours(1);
+    /// let token_data = TokenData::new("expired_token".to_string(), expires_at);
+    /// assert!(token_data.is_expired());
+    /// 
+    /// // Create a valid token
+    /// let expires_at = Utc::now() + Duration::hours(1);
+    /// let token_data = TokenData::new("valid_token".to_string(), expires_at);
+    /// assert!(!token_data.is_expired());
+    /// ```
     #[must_use]
     pub fn is_expired(&self) -> bool {
         Utc::now() > self.expires_at
     }
 
     /// Checks if the token expires within the given threshold
+    ///
+    /// # Examples
+    /// ```
+    /// # use amp_rs::model::TokenData;
+    /// # use chrono::{Utc, Duration};
+    /// // Token expires in 30 minutes
+    /// let expires_at = Utc::now() + Duration::minutes(30);
+    /// let token_data = TokenData::new("token".to_string(), expires_at);
+    /// 
+    /// // Check if it expires within 1 hour
+    /// assert!(token_data.expires_soon(Duration::hours(1)));
+    /// 
+    /// // Check if it expires within 15 minutes
+    /// assert!(!token_data.expires_soon(Duration::minutes(15)));
+    /// ```
     #[must_use]
     pub fn expires_soon(&self, threshold: Duration) -> bool {
         Utc::now() + threshold > self.expires_at
     }
 
     /// Returns the age of the token
+    ///
+    /// # Examples
+    /// ```
+    /// # use amp_rs::model::TokenData;
+    /// # use chrono::{Utc, Duration};
+    /// let expires_at = Utc::now() + Duration::hours(24);
+    /// let token_data = TokenData::new("token".to_string(), expires_at);
+    /// 
+    /// // Token age should be very small (just created)
+    /// let age = token_data.age();
+    /// assert!(age < Duration::seconds(1));
+    /// ```
     #[must_use]
     pub fn age(&self) -> Duration {
         Utc::now() - self.obtained_at
