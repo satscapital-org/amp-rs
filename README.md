@@ -1,6 +1,6 @@
 # AMP Client
 
-> **⚠️ DEVELOPMENT STATUS**: This package is currently in development and undergoing early integration testing. The API may change and some endpoints are not yet implemented. Use with caution in production environments.
+> **⚠️ DEVELOPMENT STATUS**: This package is currently in development and undergoing early integration testing. The API may change and some endpoints are not yet implemented. Don't use in production environments.
 
 A Rust client for the Blockstream AMP API.
 
@@ -88,21 +88,21 @@ async fn main() {
     let client = ApiClient::new().unwrap();
     let asset_uuid = "your_asset_uuid";
     let assignment_id = "assignment_id";
-    
+
     // Lock an assignment
     let locked_assignment = client
         .lock_asset_assignment(asset_uuid, assignment_id)
         .await
         .unwrap();
     println!("Locked assignment: {:?}", locked_assignment);
-    
+
     // Unlock an assignment
     let unlocked_assignment = client
         .unlock_asset_assignment(asset_uuid, assignment_id)
         .await
         .unwrap();
     println!("Unlocked assignment: {:?}", unlocked_assignment);
-    
+
     // Delete an assignment (destructive operation)
     client
         .delete_asset_assignment(asset_uuid, assignment_id)
@@ -164,25 +164,25 @@ use amp_rs::ApiClient;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = ApiClient::new()?;
-    
+
     // Get token (automatically handles persistence and refresh)
     let token = client.get_token().await?;
     println!("Token: {}...", &token[..20]);
-    
+
     // Get token information
     if let Some(info) = client.get_token_info().await? {
         println!("Token expires at: {}", info.expires_at);
         println!("Token age: {:?}", info.age);
         println!("Expires in: {:?}", info.expires_in);
     }
-    
+
     // Force refresh token
     let refreshed_token = client.force_refresh().await?;
     println!("Refreshed token: {}...", &refreshed_token[..20]);
-    
+
     // Clear token (useful for testing)
     client.clear_token().await?;
-    
+
     Ok(())
 }
 ```
