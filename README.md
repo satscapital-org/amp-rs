@@ -116,11 +116,13 @@ async fn main() {
 
 ## Missing Endpoints
 
-The following AMP API endpoints are not yet implemented in this client library:
+The following AMP API endpoints are not yet implemented in this client library. This list may not be exhaustive:
 
 ### Asset Operations
 - `POST /api/assets/{assetUuid}/reissue-request` - Request asset reissuance
 - `POST /api/assets/{assetUuid}/reissue-confirm` - Confirm asset reissuance
+- `POST /api/assets/{assetUuid}/burn-request` - Request asset burn
+- `POST /api/assets/{assetUuid}/burn-confirm` - Confirm asset burn
 - `GET /api/assets/{assetUuid}/reissuances` - Get asset reissuances
 - `GET /api/assets/{assetUuid}/distributions/create/` - Create asset distribution
 - `POST /api/assets/{assetUuid}/distributions/{distributionUuid}/confirm` - Confirm distribution
@@ -135,7 +137,7 @@ The following AMP API endpoints are not yet implemented in this client library:
 ### Manager Operations
 - `POST /api/managers/{managerId}/change-password` - Change manager password
 
-These endpoints will be added in future releases. If you need any of these endpoints urgently, please open an issue on the project repository.
+These and potentially other endpoints will be added in future releases. If you need any of these endpoints urgently, please open an issue on the project repository.
 
 ## Token Management
 

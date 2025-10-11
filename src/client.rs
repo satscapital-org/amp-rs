@@ -2517,6 +2517,56 @@ impl ApiClient {
         Ok(())
     }
 
+    /// Blacklists specific UTXOs for an asset to prevent them from being used in transactions.
+    ///
+    /// This method adds the specified UTXOs to the asset's blacklist, preventing them from being
+    /// used in future transactions. This is typically used for security purposes when UTXOs are
+    /// suspected to be compromised or need to be temporarily disabled.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to blacklist UTXOs for
+    /// * `utxos` - A slice of `Outpoint` structs representing the UTXOs to blacklist
+    ///
+    /// # Returns
+    /// Returns a vector of `Utxo` structs representing the blacklisted UTXOs with their updated status.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - One or more UTXOs are invalid or already blacklisted
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::Outpoint};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let utxos = vec![
+    ///     Outpoint {
+    ///         txid: "abc123...".to_string(),
+    ///         vout: 0,
+    ///     },
+    ///     Outpoint {
+    ///         txid: "def456...".to_string(),
+    ///         vout: 1,
+    ///     },
+    /// ];
+    /// 
+    /// let blacklisted_utxos = client.blacklist_asset_utxos(asset_uuid, &utxos).await?;
+    /// println!("Blacklisted {} UTXOs", blacklisted_utxos.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`whitelist_asset_utxos`](Self::whitelist_asset_utxos) - Remove UTXOs from blacklist
+    /// - [`get_asset`](Self::get_asset) - Get asset information including UTXO status
     pub async fn blacklist_asset_utxos(
         &self,
         asset_uuid: &str,
@@ -2530,6 +2580,51 @@ impl ApiClient {
         .await
     }
 
+    /// Removes UTXOs from the asset's blacklist, allowing them to be used in transactions again.
+    ///
+    /// This method removes the specified UTXOs from the asset's blacklist, restoring their ability
+    /// to be used in transactions. This is the reverse operation of blacklisting UTXOs.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to whitelist UTXOs for
+    /// * `utxos` - A slice of `Outpoint` structs representing the UTXOs to remove from blacklist
+    ///
+    /// # Returns
+    /// Returns a vector of `Utxo` structs representing the whitelisted UTXOs with their updated status.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - One or more UTXOs are invalid or not currently blacklisted
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::Outpoint};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let utxos = vec![
+    ///     Outpoint {
+    ///         txid: "abc123...".to_string(),
+    ///         vout: 0,
+    ///     },
+    /// ];
+    /// 
+    /// let whitelisted_utxos = client.whitelist_asset_utxos(asset_uuid, &utxos).await?;
+    /// println!("Whitelisted {} UTXOs", whitelisted_utxos.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`blacklist_asset_utxos`](Self::blacklist_asset_utxos) - Add UTXOs to blacklist
+    /// - [`get_asset`](Self::get_asset) - Get asset information including UTXO status
     pub async fn whitelist_asset_utxos(
         &self,
         asset_uuid: &str,
@@ -2596,6 +2691,51 @@ impl ApiClient {
         .await
     }
 
+    /// Removes treasury addresses from a specific asset.
+    ///
+    /// This method removes the specified addresses from the asset's treasury address list.
+    /// Treasury addresses are special addresses that can be used for asset management operations
+    /// such as reissuance and burning.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to remove treasury addresses from
+    /// * `addresses` - A slice of address strings to remove from the treasury addresses
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on successful removal.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - One or more addresses are invalid or not currently treasury addresses
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - Attempting to remove the last treasury address (if not allowed)
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let addresses = vec![
+    ///     "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh".to_string(),
+    ///     "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".to_string(),
+    /// ];
+    /// 
+    /// client.delete_asset_treasury_addresses(asset_uuid, &addresses).await?;
+    /// println!("Removed {} treasury addresses", addresses.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`add_asset_treasury_addresses`](Self::add_asset_treasury_addresses) - Add treasury addresses
+    /// - [`get_asset_treasury_addresses`](Self::get_asset_treasury_addresses) - Get current treasury addresses
+    /// - [`reissue_asset`](Self::reissue_asset) - Reissue assets using treasury addresses
     pub async fn delete_asset_treasury_addresses(
         &self,
         asset_uuid: &str,
@@ -2675,6 +2815,50 @@ impl ApiClient {
         .await
     }
 
+    /// Creates a new registered user in the AMP system.
+    ///
+    /// This method creates a new registered user with the provided information. Registered users
+    /// can be associated with GAIDs, assigned to categories, and receive asset assignments.
+    ///
+    /// # Arguments
+    /// * `new_user` - A `RegisteredUserAdd` struct containing the user information to create
+    ///
+    /// # Returns
+    /// Returns a `RegisteredUserResponse` containing the created user's information including
+    /// the assigned user ID.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The user data is invalid (e.g., missing required fields, invalid email format)
+    /// - A user with the same identifier already exists
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::RegisteredUserAdd};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let new_user = RegisteredUserAdd {
+    ///     name: "John Doe".to_string(),
+    ///     gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+    ///     is_company: false,
+    /// };
+    /// 
+    /// let created_user = client.add_registered_user(&new_user).await?;
+    /// println!("Created user: {} with ID {}", created_user.name, created_user.id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_registered_users`](Self::get_registered_users) - List all registered users
+    /// - [`edit_registered_user`](Self::edit_registered_user) - Update user information
+    /// - [`delete_registered_user`](Self::delete_registered_user) - Remove a user
     pub async fn add_registered_user(
         &self,
         new_user: &crate::model::RegisteredUserAdd,
@@ -2683,6 +2867,44 @@ impl ApiClient {
             .await
     }
 
+    /// Removes a registered user from the AMP system.
+    ///
+    /// This method permanently deletes a registered user and all associated data. This operation
+    /// cannot be undone. Any GAIDs associated with the user will be disassociated, and any
+    /// pending assignments may be affected.
+    ///
+    /// # Arguments
+    /// * `user_id` - The ID of the registered user to delete
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on successful deletion.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The user ID is invalid or does not exist
+    /// - The user has active assignments that prevent deletion
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let user_id = 123;
+    /// client.delete_registered_user(user_id).await?;
+    /// println!("Successfully deleted user with ID {}", user_id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_registered_user`](Self::get_registered_user) - Get user information before deletion
+    /// - [`add_registered_user`](Self::add_registered_user) - Create a new user
+    /// - [`get_registered_user_summary`](Self::get_registered_user_summary) - Check user's assignments
     pub async fn delete_registered_user(&self, user_id: i64) -> Result<(), Error> {
         self.request_empty(
             Method::DELETE,
@@ -2692,6 +2914,49 @@ impl ApiClient {
         .await
     }
 
+    /// Updates registered user information.
+    ///
+    /// This method allows you to modify the information of an existing registered user.
+    /// Only the fields provided in the edit data will be updated; other fields remain unchanged.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user to update
+    /// * `edit_data` - A `RegisteredUserEdit` struct containing the fields to update
+    ///
+    /// # Returns
+    /// Returns a `RegisteredUserResponse` containing the updated user information.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The user ID is invalid or does not exist
+    /// - The edit data contains invalid values (e.g., invalid email format)
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::RegisteredUserEdit};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let user_id = 123;
+    /// let edit_data = RegisteredUserEdit {
+    ///     name: Some("Jane Doe".to_string()),
+    /// };
+    /// 
+    /// let updated_user = client.edit_registered_user(user_id, &edit_data).await?;
+    /// println!("Updated user: {}", updated_user.name);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_registered_user`](Self::get_registered_user) - Get current user information
+    /// - [`add_registered_user`](Self::add_registered_user) - Create a new user
+    /// - [`delete_registered_user`](Self::delete_registered_user) - Remove a user
     pub async fn edit_registered_user(
         &self,
         registered_user_id: i64,
@@ -2705,6 +2970,54 @@ impl ApiClient {
         .await
     }
 
+    /// Gets comprehensive summary information for a registered user including assets and distributions.
+    ///
+    /// This method retrieves detailed summary information about a registered user, including
+    /// their basic information, associated assets, assignment history, and distribution records.
+    /// This provides a complete overview of the user's activity and holdings in the system.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user to get summary for
+    ///
+    /// # Returns
+    /// Returns a `RegisteredUserSummary` containing:
+    /// - Basic user information (name, email, etc.)
+    /// - List of associated GAIDs
+    /// - Asset assignments and their status
+    /// - Distribution history
+    /// - Balance information
+    /// - Activity timestamps
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The user ID is invalid or does not exist
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let user_id = 123;
+    /// let summary = client.get_registered_user_summary(user_id).await?;
+    /// 
+    /// println!("Asset UUID: {}", summary.asset_uuid);
+    /// println!("Asset ID: {}", summary.asset_id);
+    /// println!("Asset assignments: {}", summary.assignments.len());
+    /// println!("Distributions received: {}", summary.distributions.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_registered_user`](Self::get_registered_user) - Get basic user information
+    /// - [`get_registered_user_gaids`](Self::get_registered_user_gaids) - Get only GAIDs
+    /// - [`get_asset_assignments`](Self::get_asset_assignments) - Get assignments for specific asset
     pub async fn get_registered_user_summary(
         &self,
         registered_user_id: i64,
@@ -2721,6 +3034,49 @@ impl ApiClient {
         .await
     }
 
+    /// Gets all GAIDs (Green Address IDs) associated with a registered user.
+    ///
+    /// This method retrieves a list of all GAIDs that are currently associated with the specified
+    /// registered user. GAIDs are unique identifiers that can be used to receive assets and
+    /// track ownership.
+    ///
+    /// # Arguments
+    /// * `registered_user_id` - The ID of the registered user to get GAIDs for
+    ///
+    /// # Returns
+    /// Returns a vector of GAID strings associated with the user.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The user ID is invalid or does not exist
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let user_id = 123;
+    /// let gaids = client.get_registered_user_gaids(user_id).await?;
+    /// 
+    /// println!("User {} has {} associated GAIDs:", user_id, gaids.len());
+    /// for gaid in gaids {
+    ///     println!("  - {}", gaid);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`add_gaid_to_registered_user`](Self::add_gaid_to_registered_user) - Associate a GAID with user
+    /// - [`set_default_gaid_for_registered_user`](Self::set_default_gaid_for_registered_user) - Set default GAID
+    /// - [`get_gaid_registered_user`](Self::get_gaid_registered_user) - Find user by GAID
+    /// - [`validate_gaid`](Self::validate_gaid) - Validate GAID format
     pub async fn get_registered_user_gaids(
         &self,
         registered_user_id: i64,
@@ -2944,6 +3300,51 @@ impl ApiClient {
             .await
     }
 
+    /// Creates a new category for organizing users and assets.
+    ///
+    /// This method creates a new category that can be used to group registered users and assets
+    /// for organizational purposes. Categories help manage permissions and provide logical
+    /// groupings for assets and users.
+    ///
+    /// # Arguments
+    /// * `new_category` - A `CategoryAdd` struct containing the category information to create
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the created category information including
+    /// the assigned category ID.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category data is invalid (e.g., missing name, invalid characters)
+    /// - A category with the same name already exists
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::CategoryAdd};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let new_category = CategoryAdd {
+    ///     name: "Premium Users".to_string(),
+    ///     description: Some("High-value users with special privileges".to_string()),
+    /// };
+    /// 
+    /// let created_category = client.add_category(&new_category).await?;
+    /// println!("Created category: {} with ID {}", created_category.name, created_category.id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_categories`](Self::get_categories) - List all categories
+    /// - [`edit_category`](Self::edit_category) - Update category information
+    /// - [`delete_category`](Self::delete_category) - Remove a category
+    /// - [`add_registered_user_to_category`](Self::add_registered_user_to_category) - Add users to category
     pub async fn add_category(
         &self,
         new_category: &CategoryAdd,
@@ -2952,6 +3353,53 @@ impl ApiClient {
             .await
     }
 
+    /// Gets a specific category by ID.
+    ///
+    /// This method retrieves detailed information about a specific category, including
+    /// its name, description, and associated users and assets.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to retrieve
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the category information including:
+    /// - Category ID, name, and description
+    /// - List of associated registered users
+    /// - List of associated assets
+    /// - Creation and modification timestamps
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let category = client.get_category(category_id).await?;
+    /// 
+    /// println!("Category: {} (ID: {})", category.name, category.id);
+    /// if let Some(desc) = category.description {
+    ///     println!("Description: {}", desc);
+    /// }
+    /// println!("Users: {}, Assets: {}", category.registered_users.len(), category.assets.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_categories`](Self::get_categories) - List all categories
+    /// - [`add_category`](Self::add_category) - Create a new category
+    /// - [`edit_category`](Self::edit_category) - Update category information
+    /// - [`delete_category`](Self::delete_category) - Remove a category
     pub async fn get_category(&self, category_id: i64) -> Result<CategoryResponse, Error> {
         self.request_json(
             Method::GET,
@@ -2961,6 +3409,51 @@ impl ApiClient {
         .await
     }
 
+    /// Updates category information.
+    ///
+    /// This method allows you to modify the information of an existing category.
+    /// Only the fields provided in the edit data will be updated; other fields remain unchanged.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to update
+    /// * `edit_category` - A `CategoryEdit` struct containing the fields to update
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the updated category information.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The edit data contains invalid values (e.g., empty name, invalid characters)
+    /// - A category with the new name already exists (if name is being changed)
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::CategoryEdit};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let edit_data = CategoryEdit {
+    ///     name: Some("VIP Users".to_string()),
+    ///     description: Some("Very important users with premium access".to_string()),
+    /// };
+    /// 
+    /// let updated_category = client.edit_category(category_id, &edit_data).await?;
+    /// println!("Updated category: {}", updated_category.name);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_category`](Self::get_category) - Get current category information
+    /// - [`add_category`](Self::add_category) - Create a new category
+    /// - [`delete_category`](Self::delete_category) - Remove a category
     pub async fn edit_category(
         &self,
         category_id: i64,
@@ -2974,6 +3467,45 @@ impl ApiClient {
         .await
     }
 
+    /// Removes a category from the system.
+    ///
+    /// This method permanently deletes a category. All users and assets associated with the
+    /// category will be disassociated, but the users and assets themselves are not deleted.
+    /// This operation cannot be undone.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to delete
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on successful deletion.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The category is still in use and cannot be deleted (depending on system configuration)
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// client.delete_category(category_id).await?;
+    /// println!("Successfully deleted category with ID {}", category_id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_category`](Self::get_category) - Get category information before deletion
+    /// - [`add_category`](Self::add_category) - Create a new category
+    /// - [`remove_registered_user_from_category`](Self::remove_registered_user_from_category) - Remove users first
+    /// - [`remove_asset_from_category`](Self::remove_asset_from_category) - Remove assets first
     pub async fn delete_category(&self, category_id: i64) -> Result<(), Error> {
         self.request_empty(
             Method::DELETE,
@@ -2983,6 +3515,51 @@ impl ApiClient {
         .await
     }
 
+    /// Associates a registered user with a category.
+    ///
+    /// This method adds a registered user to a category, allowing for organized grouping
+    /// of users. Users can belong to multiple categories, and categories can contain
+    /// multiple users.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to add the user to
+    /// * `user_id` - The ID of the registered user to add to the category
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the updated category information including
+    /// the newly added user.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The user ID is invalid or does not exist
+    /// - The user is already associated with the category
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let user_id = 123;
+    /// 
+    /// let updated_category = client.add_registered_user_to_category(category_id, user_id).await?;
+    /// println!("Added user {} to category '{}'", user_id, updated_category.name);
+    /// println!("Category now has {} users", updated_category.registered_users.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`remove_registered_user_from_category`](Self::remove_registered_user_from_category) - Remove user from category
+    /// - [`get_category`](Self::get_category) - Get category information including users
+    /// - [`get_registered_user`](Self::get_registered_user) - Get user information
     pub async fn add_registered_user_to_category(
         &self,
         category_id: i64,
@@ -3002,6 +3579,51 @@ impl ApiClient {
         .await
     }
 
+    /// Removes a registered user from a category.
+    ///
+    /// This method disassociates a registered user from a category. The user remains in the
+    /// system but is no longer part of the specified category. This does not affect the user's
+    /// association with other categories.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to remove the user from
+    /// * `user_id` - The ID of the registered user to remove from the category
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the updated category information without
+    /// the removed user.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The user ID is invalid or does not exist
+    /// - The user is not currently associated with the category
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let user_id = 123;
+    /// 
+    /// let updated_category = client.remove_registered_user_from_category(category_id, user_id).await?;
+    /// println!("Removed user {} from category '{}'", user_id, updated_category.name);
+    /// println!("Category now has {} users", updated_category.registered_users.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`add_registered_user_to_category`](Self::add_registered_user_to_category) - Add user to category
+    /// - [`get_category`](Self::get_category) - Get category information including users
+    /// - [`get_registered_user`](Self::get_registered_user) - Get user information
     pub async fn remove_registered_user_from_category(
         &self,
         category_id: i64,
@@ -3021,6 +3643,51 @@ impl ApiClient {
         .await
     }
 
+    /// Associates an asset with a category.
+    ///
+    /// This method adds an asset to a category, allowing for organized grouping of assets.
+    /// Assets can belong to multiple categories, and categories can contain multiple assets.
+    /// This helps with asset management and permission organization.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to add the asset to
+    /// * `asset_uuid` - The UUID of the asset to add to the category
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the updated category information including
+    /// the newly added asset.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The asset UUID is invalid or does not exist
+    /// - The asset is already associated with the category
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// 
+    /// let updated_category = client.add_asset_to_category(category_id, asset_uuid).await?;
+    /// println!("Added asset {} to category '{}'", asset_uuid, updated_category.name);
+    /// println!("Category now has {} assets", updated_category.assets.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`remove_asset_from_category`](Self::remove_asset_from_category) - Remove asset from category
+    /// - [`get_category`](Self::get_category) - Get category information including assets
+    /// - [`get_asset`](Self::get_asset) - Get asset information
     pub async fn add_asset_to_category(
         &self,
         category_id: i64,
@@ -3040,6 +3707,51 @@ impl ApiClient {
         .await
     }
 
+    /// Removes an asset from a category.
+    ///
+    /// This method disassociates an asset from a category. The asset remains in the system
+    /// but is no longer part of the specified category. This does not affect the asset's
+    /// association with other categories.
+    ///
+    /// # Arguments
+    /// * `category_id` - The ID of the category to remove the asset from
+    /// * `asset_uuid` - The UUID of the asset to remove from the category
+    ///
+    /// # Returns
+    /// Returns a `CategoryResponse` containing the updated category information without
+    /// the removed asset.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The category ID is invalid or does not exist
+    /// - The asset UUID is invalid or does not exist
+    /// - The asset is not currently associated with the category
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let category_id = 1;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// 
+    /// let updated_category = client.remove_asset_from_category(category_id, asset_uuid).await?;
+    /// println!("Removed asset {} from category '{}'", asset_uuid, updated_category.name);
+    /// println!("Category now has {} assets", updated_category.assets.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`add_asset_to_category`](Self::add_asset_to_category) - Add asset to category
+    /// - [`get_category`](Self::get_category) - Get category information including assets
+    /// - [`get_asset`](Self::get_asset) - Get asset information
     pub async fn remove_asset_from_category(
         &self,
         category_id: i64,
@@ -3246,6 +3958,70 @@ impl ApiClient {
         .await
     }
 
+    /// Creates multiple asset assignments in batch.
+    ///
+    /// This method creates multiple asset assignments for the specified asset. Each assignment
+    /// allocates a specific amount of the asset to a registered user. The assignments are
+    /// created individually due to API limitations, but this method handles the batch processing
+    /// automatically.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to create assignments for
+    /// * `requests` - A slice of `CreateAssetAssignmentRequest` structs containing assignment details
+    ///
+    /// # Returns
+    /// Returns a vector of `Assignment` structs representing the created assignments with their
+    /// assigned IDs and status information.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - Any assignment request contains invalid data (e.g., invalid user ID, negative amount)
+    /// - Insufficient asset balance for the total requested assignments
+    /// - Any individual assignment creation fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, model::CreateAssetAssignmentRequest};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let requests = vec![
+    ///     CreateAssetAssignmentRequest {
+    ///         registered_user: 123,
+    ///         amount: 1000,
+    ///         vesting_timestamp: None,
+    ///         ready_for_distribution: false,
+    ///     },
+    ///     CreateAssetAssignmentRequest {
+    ///         registered_user: 456,
+    ///         amount: 500,
+    ///         vesting_timestamp: None,
+    ///         ready_for_distribution: true,
+    ///     },
+    /// ];
+    /// 
+    /// let assignments = client.create_asset_assignments(asset_uuid, &requests).await?;
+    /// println!("Created {} assignments", assignments.len());
+    /// for assignment in assignments {
+    ///     println!("Assignment {}: {} units to user {}", 
+    ///              assignment.id, assignment.amount, assignment.registered_user);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_asset_assignments`](Self::get_asset_assignments) - List all assignments for an asset
+    /// - [`delete_asset_assignment`](Self::delete_asset_assignment) - Remove an assignment
+    /// - [`edit_asset_assignment`](Self::edit_asset_assignment) - Update assignment details
+    /// - [`set_assignment_ready_for_distribution`](Self::set_assignment_ready_for_distribution) - Mark for distribution
     pub async fn create_asset_assignments(
         &self,
         asset_uuid: &str,
@@ -3357,15 +4133,48 @@ impl ApiClient {
 
     /// Removes a manager's permissions to modify a specific asset.
     ///
+    /// This method revokes a manager's access to a specific asset, preventing them from
+    /// performing asset management operations such as creating assignments, managing ownership,
+    /// or modifying asset properties. The manager will no longer be able to access this asset
+    /// through their management interface.
+    ///
     /// # Arguments
-    /// * `manager_id` - The ID of the manager
+    /// * `manager_id` - The ID of the manager to remove permissions from
     /// * `asset_uuid` - The UUID of the asset to remove permissions for
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on successful permission removal.
     ///
     /// # Errors
     /// Returns an error if:
-    /// - Authentication fails
+    /// - Authentication fails or insufficient permissions
+    /// - The manager ID is invalid or does not exist
+    /// - The asset UUID is invalid or does not exist
+    /// - The manager does not currently have permissions for this asset
     /// - The HTTP request fails
     /// - The server returns an error status
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let manager_id = 123;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// 
+    /// client.manager_remove_asset(manager_id, asset_uuid).await?;
+    /// println!("Removed asset {} from manager {}", asset_uuid, manager_id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`add_asset_to_manager`](Self::add_asset_to_manager) - Grant manager permissions for an asset
+    /// - [`get_manager`](Self::get_manager) - Get manager information including current assets
+    /// - [`revoke_manager`](Self::revoke_manager) - Remove all asset permissions from manager
+    /// - [`lock_manager`](Self::lock_manager) - Lock manager account
     pub async fn manager_remove_asset(
         &self,
         manager_id: i64,
@@ -3503,7 +4312,7 @@ impl ApiClient {
     ///
     /// # Errors
     /// Returns an error if:
-    /// - Authentication fails
+    /// - Authentication fails or insufficient permissions
     /// - The HTTP request fails
     /// - The server returns an error status
     /// - The manager ID is invalid or does not exist
@@ -3511,7 +4320,7 @@ impl ApiClient {
     /// - The manager is already authorized for this asset
     /// - The manager is locked and cannot be modified
     ///
-    /// # Example
+    /// # Examples
     /// ```no_run
     /// # use amp_rs::ApiClient;
     /// # #[tokio::main]
@@ -3527,6 +4336,12 @@ impl ApiClient {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Related Methods
+    /// - [`manager_remove_asset`](Self::manager_remove_asset) - Remove manager permissions for an asset
+    /// - [`get_manager`](Self::get_manager) - Get manager information including current assets
+    /// - [`get_manager_permissions`](Self::get_manager_permissions) - Get manager's current permissions
+    /// - [`lock_manager`](Self::lock_manager) - Lock manager account
     pub async fn add_asset_to_manager(
         &self,
         manager_id: i64,
@@ -3557,6 +4372,50 @@ impl ApiClient {
     /// - Authentication fails
     /// - The HTTP request fails
     /// - The server returns an error status
+    /// Removes an asset assignment.
+    ///
+    /// This method permanently deletes an asset assignment, returning the allocated assets
+    /// back to the available pool. This operation cannot be undone. If the assignment has
+    /// already been distributed, this operation may fail.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset containing the assignment
+    /// * `assignment_id` - The ID of the assignment to delete
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on successful deletion.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - The assignment ID is invalid or does not exist
+    /// - The assignment has already been distributed and cannot be deleted
+    /// - The assignment is locked and cannot be modified
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// 
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let assignment_id = "123";
+    /// 
+    /// client.delete_asset_assignment(asset_uuid, assignment_id).await?;
+    /// println!("Successfully deleted assignment {}", assignment_id);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_asset_assignment`](Self::get_asset_assignment) - Get assignment details before deletion
+    /// - [`create_asset_assignments`](Self::create_asset_assignments) - Create new assignments
+    /// - [`edit_asset_assignment`](Self::edit_asset_assignment) - Update assignment instead of deleting
+    /// - [`lock_asset_assignment`](Self::lock_asset_assignment) - Lock assignment to prevent changes
     pub async fn delete_asset_assignment(
         &self,
         asset_uuid: &str,
