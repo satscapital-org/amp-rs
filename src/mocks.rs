@@ -105,7 +105,7 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                 let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
                 body.is_ok_and(|json| {
                     json.get("assignments")
-                        .and_then(|v| v.as_array())
+                        .and_then(serde_json::Value::as_array)
                         .is_some_and(|assignments| {
                             assignments.len() == 1
                                 && assignments[0]
@@ -145,7 +145,7 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                 let body: Result<Value, _> = serde_json::from_slice(req.body.as_ref().unwrap());
                 body.is_ok_and(|json| {
                     json.get("assignments")
-                        .and_then(|v| v.as_array())
+                        .and_then(serde_json::Value::as_array)
                         .is_some_and(|assignments| {
                             assignments.len() == 1
                                 && assignments[0]

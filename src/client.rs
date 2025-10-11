@@ -1792,7 +1792,7 @@ impl ApiClient {
     pub fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
         let client = Client::new();
         let token_strategy: Box<dyn TokenStrategy> =
-            Box::new(MockTokenStrategy::new(mock_token.clone()));
+            Box::new(MockTokenStrategy::new(mock_token));
 
         tracing::info!(
             "Created ApiClient with explicit mock token strategy for base URL: {}",
@@ -2357,8 +2357,7 @@ impl ApiClient {
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(Error::RequestFailed(format!(
-                "Request to [\"assets\", \"{}\", \"memo\", \"set\"] failed with status {}: {}",
-                asset_uuid, status, error_text
+                "Request to [\"assets\", \"{asset_uuid}\", \"memo\", \"set\"] failed with status {status}: {error_text}"
             )));
         }
 

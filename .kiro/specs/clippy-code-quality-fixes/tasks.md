@@ -1,13 +1,13 @@
 # Implementation Plan
 
-- [ ] 1. Fix simple literal and format issues
+- [x] 1. Fix simple literal and format issues
   - Fix numeric literal separators in mocks.rs by adding underscores to large numbers
   - Update format! macros to use inline variable syntax in client.rs
   - Replace single-character string patterns with character literals
   - Run tests to ensure no regressions
   - _Requirements: 2.1, 2.2, 4.1, 4.2, 10.1, 10.2_
 
-- [ ] 2. Eliminate redundant operations
+- [x] 2. Eliminate redundant operations
   - Remove redundant clone operations where ownership can be transferred
   - Replace redundant closures with direct method references in mocks.rs
   - Run tests to verify functionality is preserved
@@ -20,14 +20,14 @@
   - Run tests to verify no impact on functionality
   - _Requirements: 5.1, 5.2_
 
-- [-] 4. Add missing error documentation
+- [x] 4. Add missing error documentation
   - Add comprehensive "# Errors" sections to functions returning Result types
   - Document specific error conditions for force_cleanup_token_files()
   - Document initialization errors for reset_global_instance()
   - Run tests to ensure documentation changes don't affect compilation
   - _Requirements: 7.1, 7.2_
 
-- [ ] 5. Optimize type usage and annotations
+- [-] 5. Optimize type usage and annotations
   - Replace explicit type names with Self where appropriate in TokenManager
   - Add #[must_use] attributes to functions that return important values
   - Update function signatures to use Self consistently
