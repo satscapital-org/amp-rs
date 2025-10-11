@@ -183,7 +183,7 @@ impl TokenEnvironment {
     ) -> Result<Box<dyn TokenStrategy>, Error> {
         tracing::debug!("Auto-detecting environment for strategy creation");
         let detected = Self::detect();
-        
+
         match detected {
             Self::Mock => Ok(Self::create_auto_detected_mock_strategy(mock_token)),
             Self::Live => Self::create_auto_detected_live_strategy().await,
@@ -192,9 +192,7 @@ impl TokenEnvironment {
     }
 
     /// Creates a mock strategy for auto-detected mock environment
-    fn create_auto_detected_mock_strategy(
-        mock_token: Option<String>,
-    ) -> Box<dyn TokenStrategy> {
+    fn create_auto_detected_mock_strategy(mock_token: Option<String>) -> Box<dyn TokenStrategy> {
         let token = mock_token.unwrap_or_else(|| "default_mock_token".to_string());
         tracing::debug!("Auto-detected mock environment, creating mock strategy");
         Box::new(MockTokenStrategy::new(token))
@@ -1534,12 +1532,8 @@ impl TokenManager {
         content: &str,
     ) -> Result<Option<TokenData>, Error> {
         match serde_json::from_str::<TokenData>(content) {
-            Ok(token_data) => {
-                self.handle_parsed_token(token_file, token_data).await
-            }
-            Err(e) => {
-                self.handle_parse_error(token_file, e).await
-            }
+            Ok(token_data) => self.handle_parsed_token(token_file, token_data).await,
+            Err(e) => self.handle_parse_error(token_file, e).await,
         }
     }
 
@@ -3428,11 +3422,8 @@ mod tests {
         let base_url = Url::parse("http://localhost:8080").unwrap();
         let mock_token = "test_live_token".to_string();
 
-        let token_manager = Arc::new(
-            TokenManager::with_mock_token(config, base_url, mock_token.clone())
-
-                .unwrap(),
-        );
+        let token_manager =
+            Arc::new(TokenManager::with_mock_token(config, base_url, mock_token.clone()).unwrap());
 
         let strategy = LiveTokenStrategy::with_token_manager(token_manager);
 
@@ -3453,11 +3444,8 @@ mod tests {
         let base_url = Url::parse("http://localhost:8080").unwrap();
         let mock_token = "test_clear_token".to_string();
 
-        let token_manager = Arc::new(
-            TokenManager::with_mock_token(config, base_url, mock_token.clone())
-
-                .unwrap(),
-        );
+        let token_manager =
+            Arc::new(TokenManager::with_mock_token(config, base_url, mock_token.clone()).unwrap());
 
         let strategy = LiveTokenStrategy::with_token_manager(token_manager);
 

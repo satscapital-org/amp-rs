@@ -108,7 +108,9 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                         .and_then(|v| v.as_array())
                         .is_some_and(|assignments| {
                             assignments.len() == 1
-                                && assignments[0].get("amount").and_then(serde_json::Value::as_i64)
+                                && assignments[0]
+                                    .get("amount")
+                                    .and_then(serde_json::Value::as_i64)
                                     == Some(100)
                         })
                 })
@@ -146,7 +148,9 @@ pub fn mock_create_asset_assignments_multiple(server: &MockServer) {
                         .and_then(|v| v.as_array())
                         .is_some_and(|assignments| {
                             assignments.len() == 1
-                                && assignments[0].get("amount").and_then(serde_json::Value::as_i64)
+                                && assignments[0]
+                                    .get("amount")
+                                    .and_then(serde_json::Value::as_i64)
                                     == Some(200)
                         })
                 })

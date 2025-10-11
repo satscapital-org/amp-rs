@@ -111,7 +111,6 @@ async fn test_get_changelog_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let changelog = client.get_changelog().await;
 
@@ -154,7 +153,6 @@ async fn test_get_assets_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let assets = client.get_assets().await;
 
@@ -202,7 +200,6 @@ async fn test_get_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let assets = client.get_assets().await.unwrap();
 
@@ -342,7 +339,6 @@ async fn test_get_asset_memo_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client.get_asset_memo("mock_asset_uuid").await;
@@ -364,7 +360,6 @@ async fn test_set_asset_memo_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -386,7 +381,6 @@ async fn test_add_asset_to_category_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client.add_asset_to_category(1, "mock_asset_uuid").await;
@@ -417,7 +411,6 @@ async fn test_remove_asset_from_category_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -509,7 +502,6 @@ async fn test_issue_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset".to_string(),
@@ -582,7 +574,6 @@ async fn test_edit_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let assets = client.get_assets().await.unwrap();
 
@@ -666,7 +657,6 @@ async fn test_delete_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset to Delete".to_string(),
@@ -723,7 +713,6 @@ async fn test_get_registered_users_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let registered_users = client.get_registered_users().await;
 
@@ -772,7 +761,6 @@ async fn test_get_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let registered_users = client.get_registered_users().await.unwrap();
 
@@ -827,7 +815,6 @@ async fn test_add_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let new_user = amp_rs::model::RegisteredUserAdd {
         name: "Test User".to_string(),
@@ -879,7 +866,6 @@ async fn test_get_categories_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let categories = client.get_categories().await;
 
@@ -950,7 +936,6 @@ async fn test_add_category_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let new_category = amp_rs::model::CategoryAdd {
         name: "Test Category".to_string(),
@@ -1001,7 +986,6 @@ async fn test_validate_gaid_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.validate_gaid(gaid).await;
@@ -1295,7 +1279,6 @@ async fn test_validate_gaid_mock_truncated() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.validate_gaid(gaid).await;
@@ -1341,7 +1324,6 @@ async fn test_get_gaid_address_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     let result = client.get_gaid_address(gaid).await;
@@ -1388,7 +1370,6 @@ async fn test_get_managers_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let managers = client.get_managers().await;
 
@@ -1412,7 +1393,6 @@ async fn test_create_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let new_manager = amp_rs::model::ManagerCreate {
         username: "test_manager".to_string(),
@@ -1442,7 +1422,6 @@ async fn test_broadcast_transaction_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.broadcast_transaction("mock_tx_hex").await;
     assert!(result.is_ok());
@@ -1759,7 +1738,6 @@ async fn test_create_asset_assignments_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = assets.first().unwrap().asset_uuid.clone();
@@ -1862,7 +1840,6 @@ async fn test_create_asset_assignments_multiple_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = assets.first().unwrap().asset_uuid.clone();
@@ -2321,7 +2298,6 @@ async fn test_get_broadcast_status_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.get_broadcast_status("mock_txid").await;
     assert!(result.is_ok());
@@ -2344,7 +2320,6 @@ async fn test_get_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.get_manager(1).await;
     assert!(result.is_ok());
@@ -2370,7 +2345,6 @@ async fn test_manager_remove_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.manager_remove_asset(1, "asset_uuid_1").await;
     assert!(result.is_ok());
@@ -2394,7 +2368,6 @@ async fn test_revoke_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.revoke_manager(1).await;
     assert!(result.is_ok());
@@ -2416,7 +2389,6 @@ async fn test_get_current_manager_raw_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.get_current_manager_raw().await;
     assert!(result.is_ok());
@@ -2441,7 +2413,6 @@ async fn test_lock_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.lock_manager(1).await;
     assert!(result.is_ok());
@@ -2462,7 +2433,6 @@ async fn test_lock_manager_invalid_id_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with invalid manager ID (999999)
@@ -2493,7 +2463,6 @@ async fn test_lock_manager_server_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test server error scenario
@@ -2522,7 +2491,6 @@ async fn test_lock_manager_network_error() {
         Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test network error scenario
@@ -2553,7 +2521,6 @@ async fn test_add_asset_to_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.add_asset_to_manager(1, "mock_asset_uuid").await;
     assert!(result.is_ok());
@@ -2650,7 +2617,6 @@ async fn test_add_asset_to_manager_invalid_manager_id_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with invalid manager ID (999999)
@@ -2681,7 +2647,6 @@ async fn test_add_asset_to_manager_invalid_asset_uuid_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with invalid asset UUID
@@ -2712,7 +2677,6 @@ async fn test_add_asset_to_manager_server_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test server error scenario
@@ -2741,7 +2705,6 @@ async fn test_add_asset_to_manager_network_error() {
         Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test network error scenario
@@ -2772,7 +2735,6 @@ async fn test_get_asset_assignment_invalid_asset_uuid_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with invalid asset UUID
@@ -2805,7 +2767,6 @@ async fn test_get_asset_assignment_invalid_assignment_id_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with invalid assignment ID (999999)
@@ -2838,7 +2799,6 @@ async fn test_get_asset_assignment_non_existent_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test with non-existent asset and assignment
@@ -2871,7 +2831,6 @@ async fn test_get_asset_assignment_server_error() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test server error scenario
@@ -2900,7 +2859,6 @@ async fn test_get_asset_assignment_network_error() {
         Url::parse("http://invalid-host-that-does-not-exist:9999").unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     // Test network error scenario
@@ -2931,7 +2889,6 @@ async fn test_get_asset_assignment_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.get_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_ok());
@@ -2965,7 +2922,6 @@ async fn test_unlock_manager_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.unlock_manager(1).await;
     assert!(result.is_ok());
@@ -3155,7 +3111,6 @@ async fn test_add_asset_treasury_addresses_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let treasury_addresses = vec![
         "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
@@ -3216,7 +3171,6 @@ async fn test_get_asset_treasury_addresses_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.get_asset_treasury_addresses("mock_asset_uuid").await;
     assert!(result.is_ok());
@@ -3244,7 +3198,6 @@ async fn test_delete_asset_assignment_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client
         .delete_asset_assignment("mock_asset_uuid", "10")
@@ -3268,7 +3221,6 @@ async fn test_lock_asset_assignment_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.lock_asset_assignment("mock_asset_uuid", "10").await;
     assert!(result.is_ok());
@@ -3292,7 +3244,6 @@ async fn test_unlock_asset_assignment_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client
         .unlock_asset_assignment("mock_asset_uuid", "10")
@@ -3318,7 +3269,6 @@ async fn test_lock_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.lock_asset("mock_asset_uuid").await;
     assert!(result.is_ok());
@@ -3343,7 +3293,6 @@ async fn test_unlock_asset_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
     let result = client.unlock_asset("mock_asset_uuid").await;
     assert!(result.is_ok());
@@ -3366,7 +3315,6 @@ async fn test_edit_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let edit_data = amp_rs::model::RegisteredUserEdit {
@@ -3395,7 +3343,6 @@ async fn test_get_registered_user_summary_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client.get_registered_user_summary(1).await;
@@ -3420,7 +3367,6 @@ async fn test_get_registered_user_gaids_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client.get_registered_user_gaids(1).await;
@@ -3445,7 +3391,6 @@ async fn test_add_gaid_to_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -3469,7 +3414,6 @@ async fn test_set_default_gaid_for_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -3493,7 +3437,6 @@ async fn test_get_gaid_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -3520,7 +3463,6 @@ async fn test_get_gaid_balance_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -3555,7 +3497,6 @@ async fn test_get_gaid_asset_balance_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let result = client
@@ -3588,7 +3529,6 @@ async fn test_add_categories_to_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let categories = vec![1, 2, 3];
@@ -3613,7 +3553,6 @@ async fn test_remove_categories_from_registered_user_mock() {
         Url::parse(&server.base_url()).unwrap(),
         "mock_token".to_string(),
     )
-    
     .unwrap();
 
     let categories = vec![1, 2];

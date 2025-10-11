@@ -50,7 +50,6 @@ async fn test_api_client_with_mock_strategy() {
 
     // Create ApiClient with explicit mock token
     let client = ApiClient::with_mock_token(base_url.clone(), mock_token.clone())
-        
         .expect("Failed to create ApiClient with mock token");
 
     // Verify mock strategy is used
@@ -214,7 +213,6 @@ async fn test_api_client_strategy_methods() {
 
     let base_url = Url::parse("http://localhost:8080").unwrap();
     let client = ApiClient::with_mock_token(base_url, "test_token".to_string())
-        
         .expect("Failed to create ApiClient");
 
     // Test strategy inspection methods
