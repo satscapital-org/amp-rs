@@ -1791,8 +1791,7 @@ impl ApiClient {
     /// This method is infallible but returns Result for API consistency.
     pub fn with_mock_token(base_url: Url, mock_token: String) -> Result<Self, Error> {
         let client = Client::new();
-        let token_strategy: Box<dyn TokenStrategy> =
-            Box::new(MockTokenStrategy::new(mock_token));
+        let token_strategy: Box<dyn TokenStrategy> = Box::new(MockTokenStrategy::new(mock_token));
 
         tracing::info!(
             "Created ApiClient with explicit mock token strategy for base URL: {}",
