@@ -39,3 +39,4 @@ Thumbs.db
 gaids.json
 token.json
 *.sqliteaesgcm
+*.local.md
