@@ -26,6 +26,10 @@ path = "examples/token_persistence.rs"
 name = "asset_summary"
 path = "examples/asset_summary.rs"
 
+[[example]]
+name = "signer_usage"
+path = "examples/signer_usage.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -43,6 +47,11 @@ zeroize = { version = "1.5", features = ["derive"] }
 httpmock = { version = "0.6.8" }
 dotenvy = "0.15"
 rand = "0.8"
+lwk_signer = "0.5"
+lwk_common = "0.5"
+bip39 = "2.0"
+elements = "0.24"
+hex = "0.4"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 serial_test = "3.0"
