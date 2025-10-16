@@ -250,9 +250,9 @@ pub fn mock_create_manager(server: &MockServer) {
     });
 }
 
-/// Sets up a mock for the POST /user/obtain_token endpoint.
+/// Sets up a mock for the POST `/user/obtain_token` endpoint.
 ///
-/// This mock returns a successful token response with "mock_token".
+/// This mock returns a successful token response with `"mock_token"`.
 ///
 /// # Examples
 /// ```

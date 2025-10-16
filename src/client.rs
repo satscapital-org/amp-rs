@@ -4372,7 +4372,7 @@ impl ApiClient {
     /// - Authentication fails
     /// - The HTTP request fails
     /// - The server returns an error status
-    /// Removes an asset assignment.
+    ///   Removes an asset assignment.
     ///
     /// This method permanently deletes an asset assignment, returning the allocated assets
     /// back to the available pool. This operation cannot be undone. If the assignment has

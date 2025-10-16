@@ -10,7 +10,7 @@ pub enum SignerError {
     /// LWK-specific errors from the Liquid Wallet Kit
     ///
     /// This variant captures errors from LWK operations including:
-    /// - SwSigner creation failures
+    /// - `SwSigner` creation failures
     /// - Transaction signing failures  
     /// - PSET (Partially Signed Element Transaction) operations
     /// - Key derivation and cryptographic operations
@@ -78,7 +78,7 @@ pub enum SignerError {
 // Additional error conversions for external library errors
 // These provide seamless integration with third-party error types
 
-/// Convert BIP39 mnemonic errors to SignerError
+/// Convert BIP39 mnemonic errors to `SignerError`
 ///
 /// This conversion handles all BIP39-related errors including:
 /// - Invalid word count
@@ -87,11 +87,11 @@ pub enum SignerError {
 /// - Language detection issues
 impl From<bip39::Error> for SignerError {
     fn from(err: bip39::Error) -> Self {
-        SignerError::InvalidMnemonic(format!("BIP39 validation failed: {}", err))
+        Self::InvalidMnemonic(format!("BIP39 validation failed: {err}"))
     }
 }
 
-/// Convert Elements transaction encoding errors to SignerError
+/// Convert Elements transaction encoding errors to `SignerError`
 ///
 /// This conversion handles transaction serialization/deserialization errors
 /// from the Elements library including:
@@ -100,7 +100,7 @@ impl From<bip39::Error> for SignerError {
 /// - Serialization format errors
 impl From<elements::encode::Error> for SignerError {
     fn from(err: elements::encode::Error) -> Self {
-        SignerError::InvalidTransaction(format!("Elements transaction encoding failed: {}", err))
+        Self::InvalidTransaction(format!("Elements transaction encoding failed: {err}"))
     }
 }
 

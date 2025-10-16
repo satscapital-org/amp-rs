@@ -58,13 +58,14 @@ struct MnemonicStorage {
 
 impl MnemonicStorage {
     /// Create a new empty mnemonic storage
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             mnemonic: Vec::new(),
         }
     }
 
     /// Create mnemonic storage with initial mnemonics
+    #[allow(dead_code)]
     pub fn with_mnemonics(mnemonics: Vec<String>) -> Result<Self, SignerError> {
         let storage = Self {
             mnemonic: mnemonics,
@@ -77,7 +78,7 @@ impl MnemonicStorage {
     pub fn validate(&self) -> Result<(), SignerError> {
         for (index, mnemonic) in self.mnemonic.iter().enumerate() {
             Self::validate_mnemonic_format(mnemonic).map_err(|e| {
-                SignerError::InvalidMnemonic(format!("Invalid mnemonic at index {}: {}", index, e))
+                SignerError::InvalidMnemonic(format!("Invalid mnemonic at index {index}: {e}"))
             })?;
         }
         Ok(())
@@ -124,6 +125,7 @@ impl MnemonicStorage {
     ///
     /// This method is deprecated in favor of `append_mnemonic` which returns the index.
     /// It's kept for backward compatibility.
+    #[allow(dead_code)]
     pub fn add_mnemonic(&mut self, mnemonic: String) -> Result<(), SignerError> {
         self.append_mnemonic(mnemonic)?;
         Ok(())
@@ -133,6 +135,7 @@ impl MnemonicStorage {
     ///
     /// This method is deprecated in favor of `get_mnemonic_by_index` for clarity.
     /// It's kept for backward compatibility.
+    #[allow(dead_code)]
     pub fn get_mnemonic(&self, index: usize) -> Option<&String> {
         self.get_mnemonic_by_index(index)
     }
@@ -143,12 +146,13 @@ impl MnemonicStorage {
     }
 
     /// Get the number of stored mnemonics
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.mnemonic.len()
     }
 
     /// Check if storage is empty
-    pub fn is_empty(&self) -> bool {
+    #[allow(dead_code)]
+    pub const fn is_empty(&self) -> bool {
         self.mnemonic.is_empty()
     }
 }
@@ -172,6 +176,7 @@ impl MnemonicStorage {
     /// # Example
     ///
     /// Returns `Some(&String)` if the index exists, `None` otherwise.
+    #[allow(dead_code)]
     pub fn get_mnemonic_by_index(&self, index: usize) -> Option<&String> {
         self.mnemonic.get(index)
     }
@@ -202,7 +207,7 @@ impl MnemonicStorage {
     /// Returns the index where the mnemonic was added.
     pub fn append_mnemonic(&mut self, mnemonic: String) -> Result<usize, SignerError> {
         // Validate the mnemonic format before adding
-        Self::validate_mnemonic_format(&mnemonic).map_err(|e| SignerError::InvalidMnemonic(e))?;
+        Self::validate_mnemonic_format(&mnemonic).map_err(SignerError::InvalidMnemonic)?;
 
         // Add the mnemonic to the array
         self.mnemonic.push(mnemonic);
@@ -355,7 +360,7 @@ impl MnemonicStorage {
         }
 
         // Parse JSON content
-        let storage: MnemonicStorage = serde_json::from_str(&contents).map_err(|e| {
+        let storage: Self = serde_json::from_str(&contents).map_err(|e| {
             tracing::error!("Failed to parse mnemonic file {:?}: {}", path, e);
             SignerError::Serialization(e)
         })?;
@@ -458,7 +463,7 @@ impl MnemonicStorage {
 /// Software-based transaction signer using Blockstream's Liquid Wallet Kit (LWK)
 ///
 /// `LwkSoftwareSigner` provides transaction signing capabilities for Elements/Liquid
-/// transactions using mnemonic phrases and LWK's SwSigner implementation. This signer
+/// transactions using mnemonic phrases and LWK's `SwSigner` implementation. This signer
 /// is designed specifically for testnet and regtest environments with persistent
 /// mnemonic storage in JSON format.
 ///
@@ -581,7 +586,7 @@ pub struct LwkSoftwareSigner {
 impl LwkSoftwareSigner {
     /// Create a new signer from an existing mnemonic phrase
     ///
-    /// This method creates a new LwkSoftwareSigner instance from an existing mnemonic phrase.
+    /// This method creates a new `LwkSoftwareSigner` instance from an existing mnemonic phrase.
     /// The signer is configured for testnet/regtest networks only for security.
     ///
     /// The method performs comprehensive validation of the mnemonic phrase including:
@@ -603,7 +608,7 @@ impl LwkSoftwareSigner {
     ///
     /// This function can return:
     /// - `SignerError::InvalidMnemonic` - If the mnemonic format is invalid or fails BIP39 validation
-    /// - `SignerError::Lwk` - If LWK SwSigner creation fails
+    /// - `SignerError::Lwk` - If LWK `SwSigner` creation fails
     ///
     /// # Example
     ///
@@ -622,14 +627,14 @@ impl LwkSoftwareSigner {
         // First validate mnemonic format (word count, character validation, etc.)
         MnemonicStorage::validate_mnemonic_format(mnemonic_phrase).map_err(|e| {
             tracing::error!("Mnemonic format validation failed: {}", e);
-            SignerError::InvalidMnemonic(format!("Format validation failed: {}", e))
+            SignerError::InvalidMnemonic(format!("Format validation failed: {e}"))
         })?;
 
         // Parse and validate the mnemonic using BIP39 standard
         // This validates the checksum and ensures it's a valid BIP39 mnemonic
         let mnemonic = bip39::Mnemonic::parse(mnemonic_phrase).map_err(|e| {
             tracing::error!("BIP39 mnemonic parsing failed: {}", e);
-            SignerError::InvalidMnemonic(format!("BIP39 validation failed: {}", e))
+            SignerError::InvalidMnemonic(format!("BIP39 validation failed: {e}"))
         })?;
 
         tracing::debug!("Mnemonic validation successful, creating SwSigner instance");
@@ -695,6 +700,7 @@ impl LwkSoftwareSigner {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub fn generate_new() -> Result<(String, Self), SignerError> {
         tracing::debug!("Starting generate_new() - checking for existing mnemonic file");
 
@@ -824,13 +830,15 @@ impl LwkSoftwareSigner {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn is_testnet(&self) -> bool {
+    #[must_use]
+    pub const fn is_testnet(&self) -> bool {
         self.is_testnet
     }
 }
 
 #[async_trait]
 impl Signer for LwkSoftwareSigner {
+    #[allow(clippy::too_many_lines)]
     async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, SignerError> {
         tracing::debug!(
             "Starting transaction signing process for hex: {}",
@@ -916,7 +924,7 @@ impl Signer for LwkSoftwareSigner {
         }
 
         // Convert to PartiallySignedTransaction for LWK signing
-        let mut pset = PartiallySignedTransaction::from_tx(unsigned_transaction.clone());
+        let mut pset = PartiallySignedTransaction::from_tx(unsigned_transaction);
 
         tracing::debug!(
             "Created PSET for signing with {} inputs",
@@ -951,8 +959,7 @@ impl Signer for LwkSoftwareSigner {
         let signed_transaction = pset.extract_tx().map_err(|e| {
             tracing::error!("Failed to extract signed transaction from PSET: {}", e);
             SignerError::Lwk(format!(
-                "Transaction extraction failed after signing {} inputs: {}",
-                signed_inputs, e
+                "Transaction extraction failed after signing {signed_inputs} inputs: {e}"
             ))
         })?;
 
