@@ -11,7 +11,7 @@ use serde_json::json;
 /// # use amp_rs::mocks::mock_get_changelog;
 /// let server = MockServer::start();
 /// mock_get_changelog(&server);
-/// 
+///
 /// // Now requests to /changelog will return the mocked response
 /// ```
 pub fn mock_get_changelog(server: &MockServer) {
@@ -260,7 +260,7 @@ pub fn mock_create_manager(server: &MockServer) {
 /// # use amp_rs::mocks::mock_obtain_token;
 /// let server = MockServer::start();
 /// mock_obtain_token(&server);
-/// 
+///
 /// // Now token requests will return the mocked token
 /// ```
 pub fn mock_obtain_token(server: &MockServer) {
@@ -475,7 +475,7 @@ pub fn mock_edit_asset(server: &MockServer) {
 /// # use amp_rs::mocks::mock_issue_asset;
 /// let server = MockServer::start();
 /// mock_issue_asset(&server);
-/// 
+///
 /// // Now asset issuance requests will return the mocked response
 /// ```
 pub fn mock_issue_asset(server: &MockServer) {
@@ -519,7 +519,7 @@ pub fn mock_issue_asset(server: &MockServer) {
 /// # use amp_rs::mocks::mock_get_assets;
 /// let server = MockServer::start();
 /// mock_get_assets(&server);
-/// 
+///
 /// // Now requests to /assets will return the mocked asset list
 /// ```
 pub fn mock_get_assets(server: &MockServer) {

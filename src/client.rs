@@ -1702,7 +1702,7 @@ impl ApiClient {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// // Create a new client - automatically detects environment
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Client is ready to use
     /// let assets = client.get_assets().await?;
     /// println!("Found {} assets", assets.len());
@@ -1745,7 +1745,7 @@ impl ApiClient {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let base_url = Url::parse("https://amp-test.blockstream.com/api")?;
     /// let client = ApiClient::with_base_url(base_url).await?;
-    /// 
+    ///
     /// // Client is ready to use with the specified URL
     /// let assets = client.get_assets().await?;
     /// # Ok(())
@@ -1828,7 +1828,7 @@ impl ApiClient {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let base_url = Url::parse("http://localhost:8080/api")?;
     /// let client = ApiClient::with_mock_token(base_url, "test_token".to_string())?;
-    /// 
+    ///
     /// // Client will always use "test_token" for authentication
     /// let token = client.get_token().await?;
     /// assert_eq!(token, "test_token");
@@ -1891,7 +1891,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// if let Some(token_info) = client.get_token_info().await? {
     ///     println!("Token expires at: {}", token_info.expires_at);
     ///     println!("Token is expired: {}", token_info.is_expired);
@@ -1933,10 +1933,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Clear any existing token
     /// client.clear_token().await?;
-    /// 
+    ///
     /// // Next get_token() call will obtain a fresh token
     /// let token = client.get_token().await?;
     /// # Ok(())
@@ -1989,7 +1989,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// // Get a valid token - automatically handles refresh if needed
     /// let token = client.get_token().await?;
     /// println!("Got token: {}", &token[..10]); // Print first 10 chars
@@ -2149,7 +2149,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let assets = client.get_assets().await?;
     /// for asset in assets {
     ///     println!("Asset: {} ({})", asset.name, asset.ticker.unwrap_or_default());
@@ -2178,10 +2178,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let asset = client.get_asset(asset_uuid).await?;
-    /// 
+    ///
     /// println!("Asset: {} ({})", asset.name, asset.ticker.unwrap_or_default());
     /// println!("Registered: {}, Locked: {}", asset.is_registered, asset.is_locked);
     /// # Ok(())
@@ -2208,7 +2208,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let issuance_request = IssuanceRequest {
     ///     name: "My Token".to_string(),
     ///     amount: 1000000,
@@ -2223,7 +2223,7 @@ impl ApiClient {
     ///     reissuance_address: None,
     ///     transfer_restricted: Some(false),
     /// };
-    /// 
+    ///
     /// let response = client.issue_asset(&issuance_request).await?;
     /// println!("Issued asset with UUID: {}", response.asset_uuid);
     /// # Ok(())
@@ -2545,7 +2545,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let utxos = vec![
     ///     Outpoint {
@@ -2557,7 +2557,7 @@ impl ApiClient {
     ///         vout: 1,
     ///     },
     /// ];
-    /// 
+    ///
     /// let blacklisted_utxos = client.blacklist_asset_utxos(asset_uuid, &utxos).await?;
     /// println!("Blacklisted {} UTXOs", blacklisted_utxos.len());
     /// # Ok(())
@@ -2607,7 +2607,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let utxos = vec![
     ///     Outpoint {
@@ -2615,7 +2615,7 @@ impl ApiClient {
     ///         vout: 0,
     ///     },
     /// ];
-    /// 
+    ///
     /// let whitelisted_utxos = client.whitelist_asset_utxos(asset_uuid, &utxos).await?;
     /// println!("Whitelisted {} UTXOs", whitelisted_utxos.len());
     /// # Ok(())
@@ -2719,13 +2719,13 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let addresses = vec![
     ///     "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh".to_string(),
     ///     "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".to_string(),
     /// ];
-    /// 
+    ///
     /// client.delete_asset_treasury_addresses(asset_uuid, &addresses).await?;
     /// println!("Removed {} treasury addresses", addresses.len());
     /// # Ok(())
@@ -2764,7 +2764,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let users = client.get_registered_users().await?;
     /// for user in users {
     ///     println!("User: {} (ID: {})", user.name, user.id);
@@ -2797,7 +2797,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let user = client.get_registered_user(1).await?;
     /// println!("User: {} (ID: {})", user.name, user.id);
     /// # Ok(())
@@ -2842,13 +2842,13 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let new_user = RegisteredUserAdd {
     ///     name: "John Doe".to_string(),
     ///     gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
     ///     is_company: false,
     /// };
-    /// 
+    ///
     /// let created_user = client.add_registered_user(&new_user).await?;
     /// println!("Created user: {} with ID {}", created_user.name, created_user.id);
     /// # Ok(())
@@ -2893,7 +2893,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let user_id = 123;
     /// client.delete_registered_user(user_id).await?;
     /// println!("Successfully deleted user with ID {}", user_id);
@@ -2941,12 +2941,12 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let user_id = 123;
     /// let edit_data = RegisteredUserEdit {
     ///     name: Some("Jane Doe".to_string()),
     /// };
-    /// 
+    ///
     /// let updated_user = client.edit_registered_user(user_id, &edit_data).await?;
     /// println!("Updated user: {}", updated_user.name);
     /// # Ok(())
@@ -3002,10 +3002,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let user_id = 123;
     /// let summary = client.get_registered_user_summary(user_id).await?;
-    /// 
+    ///
     /// println!("Asset UUID: {}", summary.asset_uuid);
     /// println!("Asset ID: {}", summary.asset_id);
     /// println!("Asset assignments: {}", summary.assignments.len());
@@ -3060,10 +3060,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let user_id = 123;
     /// let gaids = client.get_registered_user_gaids(user_id).await?;
-    /// 
+    ///
     /// println!("User {} has {} associated GAIDs:", user_id, gaids.len());
     /// for gaid in gaids {
     ///     println!("  - {}", gaid);
@@ -3214,10 +3214,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     /// let balance = client.get_gaid_balance(gaid).await?;
-    /// 
+    ///
     /// println!("GAID {} has {} balance entries", gaid, balance.len());
     /// for entry in balance {
     ///     println!("Asset {}: {} units", entry.asset_id, entry.balance);
@@ -3284,7 +3284,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let categories = client.get_categories().await?;
     /// for category in categories {
     ///     println!("Category: {} (ID: {})", category.name, category.id);
@@ -3328,12 +3328,12 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let new_category = CategoryAdd {
     ///     name: "Premium Users".to_string(),
     ///     description: Some("High-value users with special privileges".to_string()),
     /// };
-    /// 
+    ///
     /// let created_category = client.add_category(&new_category).await?;
     /// println!("Created category: {} with ID {}", created_category.name, created_category.id);
     /// # Ok(())
@@ -3382,10 +3382,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let category = client.get_category(category_id).await?;
-    /// 
+    ///
     /// println!("Category: {} (ID: {})", category.name, category.id);
     /// if let Some(desc) = category.description {
     ///     println!("Description: {}", desc);
@@ -3437,13 +3437,13 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let edit_data = CategoryEdit {
     ///     name: Some("VIP Users".to_string()),
     ///     description: Some("Very important users with premium access".to_string()),
     /// };
-    /// 
+    ///
     /// let updated_category = client.edit_category(category_id, &edit_data).await?;
     /// println!("Updated category: {}", updated_category.name);
     /// # Ok(())
@@ -3493,7 +3493,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// client.delete_category(category_id).await?;
     /// println!("Successfully deleted category with ID {}", category_id);
@@ -3545,10 +3545,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let user_id = 123;
-    /// 
+    ///
     /// let updated_category = client.add_registered_user_to_category(category_id, user_id).await?;
     /// println!("Added user {} to category '{}'", user_id, updated_category.name);
     /// println!("Category now has {} users", updated_category.registered_users.len());
@@ -3609,10 +3609,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let user_id = 123;
-    /// 
+    ///
     /// let updated_category = client.remove_registered_user_from_category(category_id, user_id).await?;
     /// println!("Removed user {} from category '{}'", user_id, updated_category.name);
     /// println!("Category now has {} users", updated_category.registered_users.len());
@@ -3673,10 +3673,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
-    /// 
+    ///
     /// let updated_category = client.add_asset_to_category(category_id, asset_uuid).await?;
     /// println!("Added asset {} to category '{}'", asset_uuid, updated_category.name);
     /// println!("Category now has {} assets", updated_category.assets.len());
@@ -3737,10 +3737,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let category_id = 1;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
-    /// 
+    ///
     /// let updated_category = client.remove_asset_from_category(category_id, asset_uuid).await?;
     /// println!("Removed asset {} from category '{}'", asset_uuid, updated_category.name);
     /// println!("Category now has {} assets", updated_category.assets.len());
@@ -3791,10 +3791,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     /// let validation = client.validate_gaid(gaid).await?;
-    /// 
+    ///
     /// if validation.is_valid {
     ///     println!("GAID {} is valid", gaid);
     /// } else {
@@ -3832,10 +3832,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let gaid = "GAbYScu6jkWUND2jo3L4KJxyvo55d";
     /// let address_response = client.get_gaid_address(gaid).await?;
-    /// 
+    ///
     /// println!("Address for GAID {}: {}", gaid, address_response.address);
     /// # Ok(())
     /// # }
@@ -3865,7 +3865,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let managers = client.get_managers().await?;
     /// for manager in managers {
     ///     println!("Manager: {} (ID: {})", manager.username, manager.id);
@@ -3899,12 +3899,12 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let new_manager = ManagerCreate {
     ///     username: "new_manager".to_string(),
     ///     password: "secure_password".to_string(),
     /// };
-    /// 
+    ///
     /// let manager = client.create_manager(&new_manager).await?;
     /// println!("Created manager: {} (ID: {})", manager.username, manager.id);
     /// # Ok(())
@@ -3939,10 +3939,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let assignments = client.get_asset_assignments(asset_uuid).await?;
-    /// 
+    ///
     /// for assignment in assignments {
     ///     println!("Assignment ID: {}, Amount: {}", assignment.id, assignment.amount);
     /// }
@@ -3990,7 +3990,7 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let requests = vec![
     ///     CreateAssetAssignmentRequest {
@@ -4006,11 +4006,11 @@ impl ApiClient {
     ///         ready_for_distribution: true,
     ///     },
     /// ];
-    /// 
+    ///
     /// let assignments = client.create_asset_assignments(asset_uuid, &requests).await?;
     /// println!("Created {} assignments", assignments.len());
     /// for assignment in assignments {
-    ///     println!("Assignment {}: {} units to user {}", 
+    ///     println!("Assignment {}: {} units to user {}",
     ///              assignment.id, assignment.amount, assignment.registered_user);
     /// }
     /// # Ok(())
@@ -4160,10 +4160,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let manager_id = 123;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
-    /// 
+    ///
     /// client.manager_remove_asset(manager_id, asset_uuid).await?;
     /// println!("Removed asset {} from manager {}", asset_uuid, manager_id);
     /// # Ok(())
@@ -4401,10 +4401,10 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let assignment_id = "123";
-    /// 
+    ///
     /// client.delete_asset_assignment(asset_uuid, assignment_id).await?;
     /// println!("Successfully deleted assignment {}", assignment_id);
     /// # Ok(())

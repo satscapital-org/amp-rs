@@ -1,25 +1,25 @@
 //! # Signer Module
-//! 
+//!
 //! This module provides transaction signing capabilities for Elements/Liquid transactions
 //! using various signing backends. The primary implementation uses Blockstream's Liquid
 //! Wallet Kit (LWK) for software-based signing with mnemonic phrases.
-//! 
+//!
 //! ## ⚠️ SECURITY WARNING ⚠️
-//! 
+//!
 //! **TESTNET/REGTEST ONLY**: This implementation is designed exclusively for testnet
 //! and regtest environments. It stores mnemonic phrases in plain text JSON files
 //! and should NEVER be used in production or mainnet environments.
-//! 
+//!
 //! For production use cases, consider:
 //! - Hardware wallets (Ledger, Trezor)
 //! - Encrypted key storage solutions
 //! - Remote signing services with proper security
 //! - Hardware Security Modules (HSMs)
-//! 
+//!
 //! ## JSON File Format
-//! 
+//!
 //! The signer uses `mnemonic.local.json` for persistent storage with the following structure:
-//! 
+//!
 //! ```json
 //! {
 //!   "mnemonic": [
@@ -29,21 +29,21 @@
 //!   ]
 //! }
 //! ```
-//! 
+//!
 //! ### File Structure Details:
 //! - **Location**: `mnemonic.local.json` in the current working directory
 //! - **Format**: JSON with a single `mnemonic` array field
 //! - **Content**: Array of BIP39 mnemonic phrases (12, 15, 18, 21, or 24 words)
 //! - **Indexing**: Zero-based array indexing for consistent test identification
 //! - **Persistence**: Automatically created and updated when new mnemonics are generated
-//! 
+//!
 //! ## Usage Examples
-//! 
+//!
 //! ### Basic Signer Creation
-//! 
+//!
 //! ```rust,no_run
 //! use amp_rs::signer::{Signer, LwkSoftwareSigner, SignerError};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), SignerError> {
 //!     // Create signer from existing mnemonic
@@ -58,12 +58,12 @@
 //!     Ok(())
 //! }
 //! ```
-//! 
+//!
 //! ### Automatic Mnemonic Generation
-//! 
+//!
 //! ```rust,no_run
 //! use amp_rs::signer::{LwkSoftwareSigner, SignerError};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), SignerError> {
 //!     // Generate new signer (loads first mnemonic from file or creates new)
@@ -76,12 +76,12 @@
 //!     Ok(())
 //! }
 //! ```
-//! 
+//!
 //! ### Indexed Mnemonic Access for Testing
-//! 
+//!
 //! ```rust,no_run
 //! use amp_rs::signer::{LwkSoftwareSigner, SignerError};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), SignerError> {
 //!     // Get specific mnemonic by index (generates new ones if needed)
@@ -94,12 +94,12 @@
 //!     Ok(())
 //! }
 //! ```
-//! 
+//!
 //! ### Error Handling
-//! 
+//!
 //! ```rust,no_run
 //! use amp_rs::signer::{Signer, LwkSoftwareSigner, SignerError};
-//! 
+//!
 //! async fn sign_with_error_handling(unsigned_tx: &str) -> Result<String, SignerError> {
 //!     let (_, signer) = LwkSoftwareSigner::generate_new()?;
 //!     
@@ -137,27 +137,27 @@ pub use lwk::LwkSoftwareSigner;
 use async_trait::async_trait;
 
 /// Trait for transaction signing implementations
-/// 
+///
 /// This trait provides a unified interface for signing Elements/Liquid transactions
 /// using various signing backends (software signers, hardware wallets, etc.).
-/// 
+///
 /// # Usage
-/// 
+///
 /// Implementations of this trait should handle the complete signing pipeline:
 /// 1. Parse the unsigned transaction hex string
 /// 2. Sign the transaction using the appropriate private key(s)
 /// 3. Return the signed transaction as a hex string
-/// 
+///
 /// # Thread Safety
-/// 
+///
 /// All implementations must be thread-safe (Send + Sync) to support concurrent
 /// signing operations in async environments.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust,no_run
 /// use amp_rs::signer::{Signer, LwkSoftwareSigner};
-/// 
+///
 /// async fn sign_example() -> Result<(), Box<dyn std::error::Error>> {
 ///     let signer = LwkSoftwareSigner::new("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")?;
 ///     let unsigned_tx = "020000000001..."; // Unsigned transaction hex
@@ -169,26 +169,26 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait Signer: Send + Sync {
     /// Sign an unsigned transaction hex string
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `unsigned_tx` - Hex-encoded unsigned Elements/Liquid transaction
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Returns a `Result` containing:
     /// - `Ok(String)` - Hex-encoded signed transaction on success
     /// - `Err(SignerError)` - Specific error variant describing the failure
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// This method can return various `SignerError` variants:
     /// - `SignerError::HexParse` - Invalid hex encoding in input
     /// - `SignerError::InvalidTransaction` - Malformed transaction structure
     /// - `SignerError::Lwk` - Signing operation failed (implementation-specific)
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust,no_run
     /// # use amp_rs::signer::{Signer, SignerError};
     /// # async fn example(signer: &dyn Signer) -> Result<(), SignerError> {

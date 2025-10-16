@@ -480,7 +480,7 @@ impl TokenData {
     /// let expires_at = Utc::now() - Duration::hours(1);
     /// let token_data = TokenData::new("expired_token".to_string(), expires_at);
     /// assert!(token_data.is_expired());
-    /// 
+    ///
     /// // Create a valid token
     /// let expires_at = Utc::now() + Duration::hours(1);
     /// let token_data = TokenData::new("valid_token".to_string(), expires_at);
@@ -500,10 +500,10 @@ impl TokenData {
     /// // Token expires in 30 minutes
     /// let expires_at = Utc::now() + Duration::minutes(30);
     /// let token_data = TokenData::new("token".to_string(), expires_at);
-    /// 
+    ///
     /// // Check if it expires within 1 hour
     /// assert!(token_data.expires_soon(Duration::hours(1)));
-    /// 
+    ///
     /// // Check if it expires within 15 minutes
     /// assert!(!token_data.expires_soon(Duration::minutes(15)));
     /// ```
@@ -520,7 +520,7 @@ impl TokenData {
     /// # use chrono::{Utc, Duration};
     /// let expires_at = Utc::now() + Duration::hours(24);
     /// let token_data = TokenData::new("token".to_string(), expires_at);
-    /// 
+    ///
     /// // Token age should be very small (just created)
     /// let age = token_data.age();
     /// assert!(age < Duration::seconds(1));
