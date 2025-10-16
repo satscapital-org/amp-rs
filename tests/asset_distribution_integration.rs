@@ -35,6 +35,7 @@ use tracing_subscriber;
 
 /// Test data structure for asset and user setup
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TestSetupData {
     pub asset_uuid: String,
     pub asset_name: String,
@@ -958,6 +959,7 @@ async fn cleanup_test_data(
 }
 
 /// Helper function to create a complete TestSetupData structure
+#[allow(dead_code)]
 async fn create_complete_test_setup(
     client: &ApiClient,
     treasury_address: &str,
@@ -1035,7 +1037,7 @@ async fn test_comprehensive_cleanup_and_data_isolation() -> Result<(), Box<dyn s
     dotenvy::dotenv().ok();
     env::set_var("AMP_TESTS", "live");
     
-    let api_client = ApiClient::new().await?;
+    let _api_client = ApiClient::new().await?;
     
     // Note: We're not actually calling cleanup_test_data here because it would
     // try to delete non-existent entities. Instead, we're testing that the
@@ -1461,8 +1463,8 @@ async fn test_timeout_conditions() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
     env::set_var("AMP_TESTS", "live");
     
-    let api_client = ApiClient::new().await?;
-    let (mnemonic, signer) = LwkSoftwareSigner::generate_new_indexed(402)?;
+    let _api_client = ApiClient::new().await?;
+    let (mnemonic, _signer) = LwkSoftwareSigner::generate_new_indexed(402)?;
     
     println!("✅ Test infrastructure setup complete");
     println!("   - Signer mnemonic: {}...", &mnemonic[..50]);
@@ -1859,7 +1861,7 @@ async fn test_duplicate_distribution_and_retry_scenarios() -> Result<(), Box<dyn
         println!("   ⚠️  No retry instructions for RPC error");
     }
     
-    let api_error = amp_rs::AmpError::api("API connection failed");
+    let _api_error = amp_rs::AmpError::api("API connection failed");
     if let Some(instructions) = rpc_error.retry_instructions() {
         println!("   ✅ RPC error retry instructions: {}", instructions);
     } else {

@@ -660,16 +660,17 @@ async fn test_transaction_construction_dust_change_handling() {
     let utxos = create_mock_utxos(asset_id, vec![100.5]);
     create_listunspent_mock(&server, asset_id, utxos);
     
-    // Setup transaction creation mock - dust change should be added to fee
+    // Setup transaction creation mock - change amount is 0.4 which is above dust threshold
     let mut address_amounts = HashMap::new();
     address_amounts.insert("recipient1".to_string(), 100.0);
     
     let mut expected_outputs = HashMap::new();
     expected_outputs.insert("recipient1".to_string(), 100.0);
-    // No change output expected due to dust threshold
+    expected_outputs.insert("address_0".to_string(), 0.4); // Change: 100.5 - 100.0 - 0.1 = 0.4
     
     let mut expected_assets = HashMap::new();
     expected_assets.insert("recipient1".to_string(), asset_id.to_string());
+    expected_assets.insert("address_0".to_string(), asset_id.to_string());
     
     let expected_inputs = vec![TxInput {
         txid: "txid_000".to_string(),
@@ -774,9 +775,10 @@ async fn test_signer_return_value_validation() {
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("invalid hex"));
     
-    // Test signer returning shorter transaction (invalid)
-    let mock_signer = MockSigner::with_return_value("abcd".to_string());
-    let result = rpc.sign_transaction(unsigned_tx, &mock_signer).await;
+    // Test signer returning transaction that meets length requirement but is below minimum size
+    let short_unsigned_tx = "abcd"; // 2 bytes when decoded
+    let mock_signer = MockSigner::with_return_value("abcdef".to_string()); // 3 bytes when decoded, longer than unsigned but below 10 byte minimum
+    let result = rpc.sign_transaction(short_unsigned_tx, &mock_signer).await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("minimum size"));
 }

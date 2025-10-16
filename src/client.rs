@@ -773,7 +773,9 @@ struct RpcRequest {
 /// RPC response structure from Elements node
 #[derive(Debug, serde::Deserialize)]
 struct RpcResponse<T> {
+    #[allow(dead_code)]
     jsonrpc: String,
+    #[allow(dead_code)]
     id: String,
     result: Option<T>,
     error: Option<RpcError>,
@@ -1140,39 +1142,15 @@ impl ElementsRpc {
             outputs.len()
         );
         
-        // Convert inputs to the format expected by Elements RPC
-        let rpc_inputs: Vec<serde_json::Value> = inputs
-            .into_iter()
-            .map(|input| {
-                let mut obj = serde_json::json!({
-                    "txid": input.txid,
-                    "vout": input.vout
-                });
-                if let Some(seq) = input.sequence {
-                    obj["sequence"] = serde_json::Value::Number(seq.into());
-                }
-                obj
-            })
-            .collect();
-        
-        // Create outputs with asset information for Liquid
-        let mut rpc_outputs = serde_json::Map::new();
-        for (address, amount) in outputs {
-            if let Some(asset_id) = assets.get(&address) {
-                rpc_outputs.insert(
-                    address,
-                    serde_json::json!({
-                        "value": amount,
-                        "asset": asset_id
-                    })
-                );
-            } else {
-                // Fallback to regular output if no asset specified
-                rpc_outputs.insert(address, serde_json::Value::from(amount));
-            }
-        }
-        
-        let params = serde_json::json!([rpc_inputs, rpc_outputs]);
+        // Elements RPC createrawtransaction expects:
+        // createrawtransaction inputs outputs locktime replaceable assets
+        let params = serde_json::json!([
+            inputs,      // inputs as TxInput array
+            outputs,     // outputs as address->amount map
+            0,           // locktime (0 = no locktime)
+            false,       // replaceable (false = not replaceable)
+            assets       // assets as address->asset_id map
+        ]);
         
         let raw_tx: String = self.rpc_call("createrawtransaction", params).await
             .map_err(|e| e.with_context("Failed to create raw transaction"))?;
@@ -1693,7 +1671,7 @@ impl ElementsRpc {
         // Validate signed transaction format and structure
         if signed_tx_hex.is_empty() {
             return Err(AmpError::validation(
-                "Signer returned empty signed transaction".to_string()
+                "Signed transaction hex cannot be empty".to_string()
             ));
         }
 
@@ -1729,7 +1707,7 @@ impl ElementsRpc {
         const MIN_TX_SIZE: usize = 10; // Minimum bytes for a valid transaction
         if signed_tx_bytes.len() < MIN_TX_SIZE {
             return Err(AmpError::validation(format!(
-                "Signed transaction is too small ({} bytes), minimum is {} bytes",
+                "Signed transaction does not meet minimum size ({} bytes), minimum is {} bytes",
                 signed_tx_bytes.len(),
                 MIN_TX_SIZE
             )));
@@ -2249,10 +2227,12 @@ mod elements_rpc_tests {
                             }
                         ],
                         {
-                            "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq": {
-                                "value": 100.0,
-                                "asset": "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
-                            }
+                            "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq": 100.0
+                        },
+                        0,
+                        false,
+                        {
+                            "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq": "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
                         }
                     ]
                 }));
@@ -3100,7 +3080,7 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for MockSigner {
-            async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(&self, _unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
                 if self.should_fail {
                     Err(crate::signer::SignerError::Lwk("Mock signing failure".to_string()))
                 } else {
@@ -3193,7 +3173,7 @@ mod elements_rpc_tests {
         };
         let result = rpc.sign_transaction("abcd", &bad_signer).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("empty signed transaction"));
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
 
         // Test signer returning odd length hex
         let bad_signer = BadMockSigner {
@@ -3251,7 +3231,7 @@ mod elements_rpc_tests {
         let result = rpc.sign_transaction("abcd", &tiny_signer).await;
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("too small"));
+        assert!(error_msg.contains("minimum size"));
         assert!(error_msg.contains("minimum is 10 bytes"));
     }
 
@@ -3506,7 +3486,7 @@ mod elements_rpc_tests {
             }
         });
         
-        let mock = server.mock(|when, then| {
+        let _mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
                 .header("authorization", "Basic dXNlcjpwYXNz")

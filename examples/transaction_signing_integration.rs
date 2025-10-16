@@ -1,6 +1,6 @@
 // Example demonstrating transaction signing integration with ElementsRpc
 use amp_rs::{ElementsRpc, AmpError};
-use amp_rs::signer::{Signer, LwkSoftwareSigner, SignerError};
+use amp_rs::signer::{Signer, SignerError};
 use async_trait::async_trait;
 
 // Mock signer for demonstration purposes

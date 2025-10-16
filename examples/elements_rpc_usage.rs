@@ -8,7 +8,7 @@ async fn main() -> Result<(), AmpError> {
     println!("==================================================");
     
     // Create ElementsRpc client
-    let rpc = ElementsRpc::new(
+    let _rpc = ElementsRpc::new(
         "http://localhost:18884".to_string(),
         "user".to_string(),
         "pass".to_string(),

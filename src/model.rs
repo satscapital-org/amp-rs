@@ -1,7 +1,10 @@
 use chrono::{DateTime, Duration, Utc};
 use secrecy::{DebugSecret, Secret, SerializableSecret};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+#[cfg(test)]
 use std::collections::HashMap;
+
 use zeroize::Zeroize;
 
 /// Request payload for AMP token acquisition

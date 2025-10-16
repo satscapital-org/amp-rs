@@ -137,12 +137,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Helper function to demonstrate signer trait usage
+#[allow(dead_code)]
 async fn sign_with_trait(signer: &dyn Signer, tx_hex: &str) -> Result<String, SignerError> {
     // This function accepts any implementation of the Signer trait
     signer.sign_transaction(tx_hex).await
 }
 
 /// Example of using multiple signers in a test scenario
+#[allow(dead_code)]
 async fn multi_signer_test_scenario() -> Result<(), SignerError> {
     println!("🧪 Multi-signer test scenario");
 
