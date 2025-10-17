@@ -1110,7 +1110,7 @@ impl ElementsRpc {
 
         let params = asset_id.map_or_else(
             || serde_json::json!([1, 9_999_999, [], true]),
-            |asset| serde_json::json!([1, 9_999_999, [], true, {"asset": asset}])
+            |asset| serde_json::json!([1, 9_999_999, [], true, {"asset": asset}]),
         );
 
         let utxos: Vec<Unspent> = self
@@ -1244,10 +1244,10 @@ impl ElementsRpc {
 
         let params = serde_json::json!([txid, true]); // true for verbose output
 
-        let tx_detail: TransactionDetail =
-            self.rpc_call("gettransaction", params).await.map_err(|e| {
-                e.with_context(format!("Failed to get transaction details for {txid}"))
-            })?;
+        let tx_detail: TransactionDetail = self
+            .rpc_call("gettransaction", params)
+            .await
+            .map_err(|e| e.with_context(format!("Failed to get transaction details for {txid}")))?;
 
         tracing::debug!(
             "Retrieved transaction {} with {} confirmations",
@@ -1537,7 +1537,7 @@ impl ElementsRpc {
         estimated_fee: f64,
     ) -> Result<(String, Vec<Unspent>, f64), AmpError> {
         const DUST_THRESHOLD: f64 = 0.00001;
-        
+
         tracing::debug!(
             "Building distribution transaction for asset {} with {} outputs",
             asset_id,
@@ -1663,7 +1663,7 @@ impl ElementsRpc {
         signer: &dyn crate::signer::Signer,
     ) -> Result<String, AmpError> {
         const MIN_TX_SIZE: usize = 10; // Minimum bytes for a valid transaction
-        
+
         tracing::debug!(
             "Signing transaction: {}...",
             &unsigned_tx_hex[..std::cmp::min(unsigned_tx_hex.len(), 64)]
@@ -7678,48 +7678,51 @@ impl ApiClient {
         let api_assignments: Vec<DistributionAssignmentRequest> = assignments
             .into_iter()
             .enumerate()
-            .map(#[allow(clippy::cognitive_complexity)] |(index, assignment)| {
-                tracing::trace!(
-                    "Converting assignment {}: user_id={}, address={}, amount={}",
-                    index,
-                    assignment.user_id,
-                    assignment.address,
-                    assignment.amount
-                );
-
-                // Validate assignment data
-                if assignment.user_id.is_empty() {
-                    tracing::error!("Assignment {} has empty user_id", index);
-                    return Err(AmpError::validation(format!(
-                        "Assignment {index} has empty user_id"
-                    )));
-                }
-                if assignment.address.is_empty() {
-                    tracing::error!("Assignment {} has empty address", index);
-                    return Err(AmpError::validation(format!(
-                        "Assignment {index} has empty address"
-                    )));
-                }
-                if assignment.amount <= 0.0 {
-                    tracing::error!(
-                        "Assignment {} has non-positive amount: {}",
+            .map(
+                #[allow(clippy::cognitive_complexity)]
+                |(index, assignment)| {
+                    tracing::trace!(
+                        "Converting assignment {}: user_id={}, address={}, amount={}",
                         index,
+                        assignment.user_id,
+                        assignment.address,
                         assignment.amount
                     );
-                    return Err(AmpError::validation(format!(
-                        "Assignment {} has non-positive amount: {}",
-                        index, assignment.amount
-                    )));
-                }
 
-                total_amount += assignment.amount;
+                    // Validate assignment data
+                    if assignment.user_id.is_empty() {
+                        tracing::error!("Assignment {} has empty user_id", index);
+                        return Err(AmpError::validation(format!(
+                            "Assignment {index} has empty user_id"
+                        )));
+                    }
+                    if assignment.address.is_empty() {
+                        tracing::error!("Assignment {} has empty address", index);
+                        return Err(AmpError::validation(format!(
+                            "Assignment {index} has empty address"
+                        )));
+                    }
+                    if assignment.amount <= 0.0 {
+                        tracing::error!(
+                            "Assignment {} has non-positive amount: {}",
+                            index,
+                            assignment.amount
+                        );
+                        return Err(AmpError::validation(format!(
+                            "Assignment {} has non-positive amount: {}",
+                            index, assignment.amount
+                        )));
+                    }
 
-                Ok(DistributionAssignmentRequest {
-                    user_uuid: assignment.user_id, // Map user_id to user_uuid for API
-                    amount: assignment.amount,
-                    address: assignment.address,
-                })
-            })
+                    total_amount += assignment.amount;
+
+                    Ok(DistributionAssignmentRequest {
+                        user_uuid: assignment.user_id, // Map user_id to user_uuid for API
+                        amount: assignment.amount,
+                        address: assignment.address,
+                    })
+                },
+            )
             .collect::<Result<Vec<_>, AmpError>>()?;
 
         tracing::debug!(
@@ -7743,34 +7746,38 @@ impl ApiClient {
                 Some(&request),
             )
             .await
-            .map_err(#[allow(clippy::cognitive_complexity)] |e| {
-                let api_call_duration = api_call_start.elapsed();
-                let error_msg = format!(
-                    "Failed to create distribution after {api_call_duration:?}: {e}"
-                );
-                tracing::error!("{}", error_msg);
+            .map_err(
+                #[allow(clippy::cognitive_complexity)]
+                |e| {
+                    let api_call_duration = api_call_start.elapsed();
+                    let error_msg =
+                        format!("Failed to create distribution after {api_call_duration:?}: {e}");
+                    tracing::error!("{}", error_msg);
 
-                // Check for specific API error patterns
-                let error_str = e.to_string();
-                if error_str.contains("404") || error_str.contains("not found") {
-                    tracing::error!(
-                        "Asset {} not found - verify asset UUID is correct",
-                        asset_uuid
-                    );
-                } else if error_str.contains("400") || error_str.contains("bad request") {
-                    tracing::error!("Bad request - check assignment data format and values");
-                } else if error_str.contains("401") || error_str.contains("unauthorized") {
-                    tracing::error!("Unauthorized - check API credentials and token validity");
-                } else if error_str.contains("403") || error_str.contains("forbidden") {
-                    tracing::error!("Forbidden - check permissions for asset distribution");
-                } else if error_str.contains("429") || error_str.contains("rate limit") {
-                    tracing::error!("Rate limited - wait before retrying");
-                } else if error_str.contains("500") || error_str.contains("internal server") {
-                    tracing::error!("Server error - this may be a temporary issue, retry may help");
-                }
+                    // Check for specific API error patterns
+                    let error_str = e.to_string();
+                    if error_str.contains("404") || error_str.contains("not found") {
+                        tracing::error!(
+                            "Asset {} not found - verify asset UUID is correct",
+                            asset_uuid
+                        );
+                    } else if error_str.contains("400") || error_str.contains("bad request") {
+                        tracing::error!("Bad request - check assignment data format and values");
+                    } else if error_str.contains("401") || error_str.contains("unauthorized") {
+                        tracing::error!("Unauthorized - check API credentials and token validity");
+                    } else if error_str.contains("403") || error_str.contains("forbidden") {
+                        tracing::error!("Forbidden - check permissions for asset distribution");
+                    } else if error_str.contains("429") || error_str.contains("rate limit") {
+                        tracing::error!("Rate limited - wait before retrying");
+                    } else if error_str.contains("500") || error_str.contains("internal server") {
+                        tracing::error!(
+                            "Server error - this may be a temporary issue, retry may help"
+                        );
+                    }
 
-                AmpError::api(error_msg)
-            })?;
+                    AmpError::api(error_msg)
+                },
+            )?;
 
         let api_call_duration = api_call_start.elapsed();
         tracing::info!(
@@ -8576,8 +8583,7 @@ impl ApiClient {
         self.validate_elements_rpc_connection(node_rpc)
             .await
             .map_err(|e| {
-                let error =
-                    AmpError::rpc(format!("ElementsRpc connection validation failed: {e}"));
+                let error = AmpError::rpc(format!("ElementsRpc connection validation failed: {e}"));
                 tracing::error!("Elements RPC connection validation failed: {}", e);
                 error.with_context("Step 3: Elements RPC connection validation")
             })?;
@@ -8896,9 +8902,7 @@ impl ApiClient {
     /// - Assignment with non-positive amount
     /// - Assignment with invalid address format
     #[allow(clippy::cognitive_complexity)]
-    fn validate_assignments(
-        assignments: &[AssetDistributionAssignment],
-    ) -> Result<(), String> {
+    fn validate_assignments(assignments: &[AssetDistributionAssignment]) -> Result<(), String> {
         tracing::debug!("Validating {} assignments", assignments.len());
 
         if assignments.is_empty() {
@@ -9857,9 +9861,12 @@ mod tests {
         assert!(ApiClient::validate_asset_uuid("").is_err());
         assert!(ApiClient::validate_asset_uuid("invalid").is_err());
         assert!(ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716").is_err()); // Too short
-        assert!(ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra").is_err()); // Too long
+        assert!(
+            ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra").is_err()
+        ); // Too long
         assert!(ApiClient::validate_asset_uuid("550e8400xe29bx41d4xa716x446655440000").is_err()); // Wrong separators
-        assert!(ApiClient::validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000").is_err()); // Invalid hex char
+        assert!(ApiClient::validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000").is_err());
+        // Invalid hex char
     }
 
     #[test]
