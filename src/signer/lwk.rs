@@ -7,6 +7,11 @@ use lwk_signer::SwSigner;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use elements::secp256k1_zkp::Secp256k1;
+use elements::{Address, AddressParams};
+use bip39::{Mnemonic, Language};
+use elements::bitcoin::bip32::{Xpriv, DerivationPath, ChildNumber};
+use elements::bitcoin::PublicKey;
 
 /// JSON structure for persistent mnemonic storage
 ///
@@ -580,6 +585,7 @@ impl MnemonicStorage {
 #[derive(Debug)]
 pub struct LwkSoftwareSigner {
     signer: lwk_signer::SwSigner,
+    mnemonic: String,
     is_testnet: bool,
 }
 
@@ -662,6 +668,7 @@ impl LwkSoftwareSigner {
 
         Ok(Self {
             signer,
+            mnemonic: mnemonic_phrase.to_string(),
             is_testnet: true,
         })
     }
@@ -795,6 +802,161 @@ impl LwkSoftwareSigner {
         tracing::info!("Successfully created LwkSoftwareSigner with mnemonic at index {} (storage now has {} mnemonics)", 
                       index, storage.len());
         Ok((mnemonic, signer_instance))
+    }
+
+    /// Generate WPkH descriptor with Slip77 blinding for Liquid confidential addresses
+    ///
+    /// This method generates a single descriptor that covers both receive and change
+    /// addresses (using the `<0;1>/*` format) that can be imported into an Elements
+    /// wallet using the importdescriptors RPC call. This enables the wallet to scan
+    /// and recognize addresses/UTXOs from the mnemonic.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing:
+    /// - `Ok(String)` - The WPkH Slip77 descriptor covering both chains
+    /// - `Err(SignerError)` - Descriptor generation error
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::signer::{LwkSoftwareSigner, SignerError};
+    /// # fn main() -> Result<(), SignerError> {
+    /// let (_, signer) = LwkSoftwareSigner::generate_new()?;
+    /// let descriptor = signer.get_wpkh_slip77_descriptor()?;
+    /// println!("Descriptor: {}", descriptor);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_wpkh_slip77_descriptor(&self) -> Result<String, SignerError> {
+        tracing::debug!("Generating WPkH Slip77 descriptor for Elements wallet import");
+
+        // Get the descriptor from LWK - this covers both receive (0) and change (1) chains
+        let descriptor = self.signer.wpkh_slip77_descriptor()
+            .map_err(|e| {
+                tracing::error!("Failed to generate descriptor: {}", e);
+                SignerError::Lwk(format!("Failed to generate descriptor: {}", e))
+            })?;
+
+        tracing::info!("Successfully generated WPkH Slip77 descriptor");
+        tracing::debug!("Descriptor: {}", descriptor);
+
+        Ok(descriptor)
+    }
+
+    /// Generate WPkH descriptors with Slip77 blinding for Liquid confidential addresses
+    ///
+    /// This method generates descriptors that can be imported into an Elements wallet.
+    /// Since LWK generates a single descriptor covering both chains (`<0;1>/*`), this
+    /// method returns the same descriptor twice for compatibility with APIs expecting
+    /// separate receive and change descriptors.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing:
+    /// - `Ok((String, String))` - Tuple of (descriptor, descriptor) - same descriptor twice
+    /// - `Err(SignerError)` - Descriptor generation error
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::signer::{LwkSoftwareSigner, SignerError};
+    /// # fn main() -> Result<(), SignerError> {
+    /// let (_, signer) = LwkSoftwareSigner::generate_new()?;
+    /// let (receive_desc, change_desc) = signer.get_wpkh_slip77_descriptors()?;
+    /// println!("Receive: {}", receive_desc);
+    /// println!("Change: {}", change_desc);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_wpkh_slip77_descriptors(&self) -> Result<(String, String), SignerError> {
+        let descriptor = self.get_wpkh_slip77_descriptor()?;
+        
+        // LWK generates a single descriptor with <0;1>/* that covers both chains
+        // Return the same descriptor twice for compatibility
+        Ok((descriptor.clone(), descriptor))
+    }
+
+    /// Derive a receiving address from the signer's mnemonic
+    ///
+    /// This method derives a receiving address from the signer's mnemonic using standard
+    /// BIP44 derivation paths. The address is suitable for receiving assets and can be
+    /// used as a treasury address for asset operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Optional derivation index (defaults to 0 for first address)
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing:
+    /// - `Ok(String)` - Base58-encoded Liquid address
+    /// - `Err(SignerError)` - Address derivation error
+    ///
+    /// # Errors
+    ///
+    /// This function can return:
+    /// - `SignerError::Lwk` - Address derivation failures
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::signer::{LwkSoftwareSigner, SignerError};
+    /// # fn main() -> Result<(), SignerError> {
+    /// let signer = LwkSoftwareSigner::new("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")?;
+    /// let address = signer.derive_address(Some(0))?;
+    /// println!("Treasury address: {}", address);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn derive_address(&self, index: Option<u32>) -> Result<String, SignerError> {
+        let derivation_index = index.unwrap_or(0);
+        
+        tracing::debug!("Deriving address at index {} for testnet", derivation_index);
+        
+        // Parse the mnemonic
+        let mnemonic = Mnemonic::parse_in(Language::English, &self.mnemonic)
+            .map_err(|e| SignerError::InvalidMnemonic(format!("Failed to parse mnemonic: {}", e)))?;
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Generate seed from mnemonic
+        let seed = mnemonic.to_seed("");
+        
+        // Create master extended private key
+        let master_key = Xpriv::new_master(elements::bitcoin::Network::Regtest, &seed)
+            .map_err(|e| SignerError::Lwk(format!("Failed to create master key: {}", e)))?;
+        
+        // Derive using BIP44 path: m/44'/1776'/0'/0/index (1776 is Liquid's coin type)
+        let derivation_path = DerivationPath::from(vec![
+            ChildNumber::from_hardened_idx(44).unwrap(),
+            ChildNumber::from_hardened_idx(1776).unwrap(), // Liquid coin type
+            ChildNumber::from_hardened_idx(0).unwrap(),
+            ChildNumber::from_normal_idx(0).unwrap(),
+            ChildNumber::from_normal_idx(derivation_index).unwrap(),
+        ]);
+        
+        let derived_key = master_key.derive_priv(&secp, &derivation_path)
+            .map_err(|e| SignerError::Lwk(format!("Failed to derive key: {}", e)))?;
+        
+        // Get the public key and convert to bitcoin::PublicKey
+        let secp_public_key = derived_key.private_key.public_key(&secp);
+        let public_key = PublicKey::from(secp_public_key);
+        
+        // Create confidential address (using Liquid testnet parameters)
+        let address_params = &AddressParams::LIQUID_TESTNET;
+        // Generate a blinding key for confidential transactions
+        let blinding_key = derived_key.private_key;
+        let blinding_pubkey = blinding_key.public_key(&secp);
+        
+        // Try creating a P2SH-wrapped segwit address instead of native segwit
+        let address = Address::p2shwpkh(&public_key, Some(blinding_pubkey), address_params);
+        
+        let address_str = address.to_string();
+        tracing::info!("Successfully derived address at index {}: {}", derivation_index, address_str);
+        
+        Ok(address_str)
     }
 
     /// Check if this signer is configured for testnet/regtest networks

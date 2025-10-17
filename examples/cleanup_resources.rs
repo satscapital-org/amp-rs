@@ -1,15 +1,16 @@
-use amp_rs::ApiClient;
+use amp_rs::{ApiClient, model::Asset};
 use std::env;
 
 // Protected resources that should not be deleted
 const PROTECTED_CATEGORY_ID: i64 = 28273;
-const PROTECTED_USER_IDS: &[i64] = &[1194, 1203];
+const PROTECTED_USER_IDS: &[i64] = &[1194, 1203, 1880];
 
 // Test environment resources that should be preserved
 const TEST_CATEGORY_NAME: &str = "Test Environment Category";
 const TEST_USER_GAIDS: &[&str] = &[
     "GAbzSbgCZ6M6WU85rseKTrfehPsjt",
     "GAQzmXM7jVaKAwtHGXHENgn5KUUmL",
+    "GA42D48VRVzW8MxMEuWtRdJzDq4LBF",
 ];
 const TEST_ASSET_NAME: &str = "Test Environment Asset";
 
@@ -63,6 +64,7 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
             );
             if !assets.is_empty() {
                 let mut total_assignments = 0;
+                let mut total_category_removals = 0;
                 for asset in assets.iter().take(3) {
                     let assignment_count =
                         match client.get_asset_assignments(&asset.asset_uuid).await {
@@ -72,24 +74,33 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
                             }
                             Err(_) => 0,
                         };
+                    let category_count = asset.requirements.iter()
+                        .filter(|&&cat_id| cat_id != PROTECTED_CATEGORY_ID)
+                        .count();
+                    total_category_removals += category_count;
                     let lock_status = if asset.is_locked { " 🔒" } else { "" };
                     println!(
-                        "   • {} ({:?}) - {} assignments{}",
-                        asset.name, asset.ticker, assignment_count, lock_status
+                        "   • {} ({:?}) - {} assignments, {} categories{}",
+                        asset.name, asset.ticker, assignment_count, category_count, lock_status
                     );
                 }
                 if assets.len() > 3 {
-                    // Count assignments for remaining assets
+                    // Count assignments and categories for remaining assets
                     for asset in assets.iter().skip(3) {
                         if let Ok(assignments) =
                             client.get_asset_assignments(&asset.asset_uuid).await
                         {
                             total_assignments += assignments.len();
                         }
+                        let category_count = asset.requirements.iter()
+                            .filter(|&&cat_id| cat_id != PROTECTED_CATEGORY_ID)
+                            .count();
+                        total_category_removals += category_count;
                     }
                     println!("   ... and {} more assets", assets.len() - 3);
                 }
                 println!("   📋 Total assignments to delete: {}", total_assignments);
+                println!("   📁 Total category removals: {}", total_category_removals);
                 if locked_count > 0 {
                     println!(
                         "   🔓 {} locked assets will be unlocked before deletion",
@@ -215,6 +226,8 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     let mut unlocked_count = 0;
     let mut unlock_error_count = 0;
     let mut protected_assets = 0;
+    let mut total_categories_removed = 0;
+    let mut total_category_removal_errors = 0;
 
     for asset in assets {
         // Skip test environment asset
@@ -249,13 +262,20 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
             println!("     Asset is not locked");
         }
 
-        // First, delete all assignments for this asset
+        // Remove asset from all categories first to avoid "Cannot delete an asset which has some requirements" error
+        // The requirements field contains category IDs that the asset belongs to
+        let (categories_removed, category_errors) = 
+            remove_asset_from_all_categories(client, &asset).await;
+        total_categories_removed += categories_removed;
+        total_category_removal_errors += category_errors;
+
+        // Delete all assignments for this asset
         let (assignments_deleted, assignment_errors) =
             delete_asset_assignments(client, &asset.asset_uuid).await;
         total_assignments_deleted += assignments_deleted;
         total_assignment_errors += assignment_errors;
 
-        // Then delete the asset itself
+        // Finally delete the asset itself
         print!("     Deleting asset... ");
         match client.delete_asset(&asset.asset_uuid).await {
             Ok(_) => {
@@ -278,10 +298,48 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
         total_assignments_deleted, total_assignment_errors
     );
     println!(
+        "   📊 Categories removed: {} removed, {} errors",
+        total_categories_removed, total_category_removal_errors
+    );
+    println!(
         "   📊 Unlocked: {} assets, {} unlock errors",
         unlocked_count, unlock_error_count
     );
     Ok(())
+}
+
+async fn remove_asset_from_all_categories(client: &ApiClient, asset: &Asset) -> (usize, usize) {
+    if asset.requirements.is_empty() {
+        println!("     ✅ Asset not in any categories");
+        return (0, 0);
+    }
+
+    println!("     Found {} categories to remove asset from", asset.requirements.len());
+
+    let mut success_count = 0;
+    let mut error_count = 0;
+
+    for &category_id in &asset.requirements {
+        // Skip protected category
+        if category_id == PROTECTED_CATEGORY_ID {
+            println!("       Skipping protected category ID {}... 🛡️", category_id);
+            continue;
+        }
+
+        print!("       Removing from category {}... ", category_id);
+        match client.remove_asset_from_category(category_id, &asset.asset_uuid).await {
+            Ok(_) => {
+                println!("✅");
+                success_count += 1;
+            }
+            Err(e) => {
+                println!("❌ {}", e);
+                error_count += 1;
+            }
+        }
+    }
+
+    (success_count, error_count)
 }
 
 async fn delete_asset_assignments(client: &ApiClient, asset_uuid: &str) -> (usize, usize) {

@@ -760,15 +760,24 @@ pub struct BlockchainInfo {
     pub blocks: i64,
     pub headers: i64,
     pub bestblockhash: String,
-    pub difficulty: f64,
-    pub mediantime: i64,
-    pub verificationprogress: f64,
-    pub initialblockdownload: bool,
-    pub chainwork: String,
-    pub size_on_disk: i64,
-    pub pruned: bool,
-    pub softforks: serde_json::Value,
-    pub warnings: String,
+    #[serde(default)]
+    pub difficulty: Option<f64>,
+    #[serde(default)]
+    pub mediantime: Option<i64>,
+    #[serde(default)]
+    pub verificationprogress: Option<f64>,
+    #[serde(default)]
+    pub initialblockdownload: Option<bool>,
+    #[serde(default)]
+    pub chainwork: Option<String>,
+    #[serde(default)]
+    pub size_on_disk: Option<i64>,
+    #[serde(default)]
+    pub pruned: Option<bool>,
+    #[serde(default)]
+    pub softforks: Option<serde_json::Value>,
+    #[serde(default)]
+    pub warnings: Option<String>,
 }
 
 /// RPC request structure for Elements node
@@ -784,7 +793,7 @@ struct RpcRequest {
 #[derive(Debug, serde::Deserialize)]
 struct RpcResponse<T> {
     #[allow(dead_code)]
-    jsonrpc: String,
+    jsonrpc: Option<String>, // Optional for JSON-RPC 1.0 compatib
     #[allow(dead_code)]
     id: String,
     result: Option<T>,
@@ -1116,9 +1125,32 @@ impl ElementsRpc {
         let utxos: Vec<Unspent> = self
             .rpc_call("listunspent", params)
             .await
-            .map_err(|e| e.with_context("Failed to list unspent outputs"))?;
+            .map_err(|e| {
+                if let Some(asset) = asset_id {
+                    e.with_context(format!(
+                        "Failed to list unspent outputs for asset {}. \
+                        This may indicate that the treasury address is not imported in the Elements node. \
+                        Ensure the treasury address is properly imported as a watch-only address.",
+                        asset
+                    ))
+                } else {
+                    e.with_context("Failed to list unspent outputs")
+                }
+            })?;
 
         tracing::debug!("Found {} unspent outputs", utxos.len());
+        
+        // If we're looking for a specific asset and found no UTXOs, provide helpful context
+        if utxos.is_empty() && asset_id.is_some() {
+            tracing::warn!(
+                "No UTXOs found for asset {}. This may indicate:\n\
+                1. The treasury address is not imported in the Elements node\n\
+                2. The asset issuance transaction hasn't been confirmed yet\n\
+                3. The UTXOs have already been spent",
+                asset_id.unwrap()
+            );
+        }
+        
         Ok(utxos)
     }
 
@@ -1181,6 +1213,317 @@ impl ElementsRpc {
 
         tracing::debug!("Created raw transaction: {}", raw_tx);
         Ok(raw_tx)
+    }
+
+    /// Imports an address into the wallet as watch-only
+    ///
+    /// # Arguments
+    /// * `address` - The address to import
+    /// * `label` - Optional label for the address
+    /// * `rescan` - Whether to rescan the blockchain for transactions
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.import_address("vjU8L4dKa1XyyVcPqKBbTgjT1tRC7qYp5VJGwndZSCFk4ntpWey1pQe6hcSGDMVurr9CsZ21EGsqGjWA", Some("test_address"), false).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_address(&self, address: &str, label: Option<&str>, rescan: bool) -> Result<(), AmpError> {
+        tracing::debug!("Importing address: {} with label: {:?}, rescan: {}", address, label, rescan);
+
+        let params = serde_json::json!([
+            address,
+            label.unwrap_or(""),
+            rescan
+        ]);
+
+        // importaddress returns null on success
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importaddress".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&self.base_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error {}: {}",
+                error.code, error.message
+            )));
+        }
+
+        tracing::debug!("Successfully imported address: {}", address);
+        Ok(())
+    }
+
+    /// Creates or loads a wallet
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to create or load
+    /// * `disable_private_keys` - Whether to disable private keys (watch-only wallet)
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.create_wallet("test_wallet", true).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn create_wallet(&self, wallet_name: &str, disable_private_keys: bool) -> Result<(), AmpError> {
+        tracing::debug!("Creating wallet: {} with disable_private_keys: {}", wallet_name, disable_private_keys);
+
+        let params = serde_json::json!([
+            wallet_name,
+            disable_private_keys
+        ]);
+
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "createwallet".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&self.base_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            // Ignore "wallet already exists" error
+            if error.code != -4 {
+                return Err(AmpError::rpc(format!(
+                    "RPC error {}: {}",
+                    error.code, error.message
+                )));
+            }
+            tracing::debug!("Wallet {} already exists", wallet_name);
+        } else {
+            tracing::debug!("Successfully created wallet: {}", wallet_name);
+        }
+
+        Ok(())
+    }
+
+    /// Loads an existing wallet
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to load
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.load_wallet("test_wallet").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn load_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
+        tracing::debug!("Loading wallet: {}", wallet_name);
+
+        let params = serde_json::json!([wallet_name]);
+
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "loadwallet".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&self.base_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            // Ignore "wallet already loaded" error
+            if error.code != -35 {
+                return Err(AmpError::rpc(format!(
+                    "RPC error {}: {}",
+                    error.code, error.message
+                )));
+            }
+            tracing::debug!("Wallet {} already loaded", wallet_name);
+        } else {
+            tracing::debug!("Successfully loaded wallet: {}", wallet_name);
+        }
+
+        Ok(())
+    }
+
+    /// Lists all available wallets
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let wallets = rpc.list_wallets().await?;
+    /// println!("Available wallets: {:?}", wallets);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_wallets(&self) -> Result<Vec<String>, AmpError> {
+        tracing::debug!("Listing available wallets");
+
+        let params = serde_json::json!([]);
+
+        let wallets: Vec<String> = self
+            .rpc_call("listwallets", params)
+            .await
+            .map_err(|e| e.with_context("Failed to list wallets"))?;
+
+        tracing::debug!("Found {} wallets", wallets.len());
+        Ok(wallets)
+    }
+
+    /// Sets up a watch-only wallet with the given address
+    ///
+    /// This is a convenience method that creates a watch-only wallet and imports the address
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to create
+    /// * `address` - Address to import as watch-only
+    /// * `label` - Optional label for the address
+    ///
+    /// # Errors
+    /// Returns an error if wallet creation or address import fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.setup_watch_only_wallet("test_wallet", "vjU8L4dKa1XyyVcPqKBbTgjT1tRC7qYp5VJGwndZSCFk4ntpWey1pQe6hcSGDMVurr9CsZ21EGsqGjWA", Some("treasury")).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn setup_watch_only_wallet(&self, wallet_name: &str, address: &str, label: Option<&str>) -> Result<(), AmpError> {
+        tracing::info!("Setting up watch-only wallet '{}' with address: {}", wallet_name, address);
+
+        // Try the full wallet setup approach first
+        match self.setup_wallet_with_address(wallet_name, address, label).await {
+            Ok(()) => {
+                tracing::info!("Successfully set up watch-only wallet '{}' with address: {}", wallet_name, address);
+                return Ok(());
+            }
+            Err(e) => {
+                tracing::warn!("Full wallet setup failed: {}, trying direct address import", e);
+            }
+        }
+
+        // Fallback: Try to import the address directly without wallet operations
+        match self.import_address_direct(address, label).await {
+            Ok(()) => {
+                tracing::info!("Successfully imported address directly: {}", address);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Both wallet setup and direct import failed for address: {}", address);
+                Err(AmpError::rpc(format!(
+                    "Failed to set up watch-only wallet or import address: wallet setup error: {}, direct import error: {}",
+                    e, e
+                )))
+            }
+        }
+    }
+
+    /// Attempts to set up a wallet with address using the standard approach
+    async fn setup_wallet_with_address(&self, wallet_name: &str, address: &str, label: Option<&str>) -> Result<(), AmpError> {
+        // Try to create the wallet (will ignore if it already exists)
+        self.create_wallet(wallet_name, true).await?;
+
+        // Try to load the wallet (will ignore if already loaded)
+        self.load_wallet(wallet_name).await?;
+
+        // Import the address without rescanning (for faster setup)
+        self.import_address(address, label, false).await?;
+
+        Ok(())
+    }
+
+    /// Attempts to import an address directly without wallet operations
+    async fn import_address_direct(&self, address: &str, label: Option<&str>) -> Result<(), AmpError> {
+        tracing::debug!("Attempting direct address import for: {}", address);
+        
+        // Try to import the address directly (this might work even if wallet operations fail)
+        self.import_address(address, label, false).await
     }
 
     /// Broadcasts a signed raw transaction to the network
@@ -1443,7 +1786,16 @@ impl ElementsRpc {
 
         if utxos.is_empty() {
             return Err(AmpError::validation(format!(
-                "No spendable UTXOs found for asset {asset_id}"
+                "No spendable UTXOs found for asset {asset_id}. \
+                This typically means:\n\
+                1. The treasury address is not imported in the Elements node as a watch-only address\n\
+                2. The asset issuance transaction hasn't been confirmed yet\n\
+                3. The UTXOs have already been spent\n\
+                \n\
+                To fix this:\n\
+                - Ensure the treasury address is imported: `elements-cli importaddress <treasury_address> treasury false`\n\
+                - Wait for the asset issuance transaction to be confirmed\n\
+                - Check that the treasury address matches the one used for asset issuance"
             )));
         }
 
@@ -1911,6 +2263,334 @@ impl ElementsRpc {
         }
 
         Ok(change_utxos)
+    }
+
+    /// Creates a descriptor wallet in Elements
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name for the new wallet
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.create_descriptor_wallet("test_wallet").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn create_descriptor_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
+        let params = serde_json::json!([wallet_name, true]); // true enables descriptors
+        
+        let _result: serde_json::Value = self.rpc_call("createwallet", params).await?;
+        
+        tracing::info!("Successfully created descriptor wallet: {}", wallet_name);
+        Ok(())
+    }
+
+    /// Imports a single descriptor into an Elements wallet
+    ///
+    /// This method imports a descriptor that enables the wallet to scan and recognize
+    /// addresses/UTXOs from a mnemonic. For LWK descriptors with `<0;1>/*` format,
+    /// a single descriptor covers both receive and change addresses.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import descriptor into
+    /// * `descriptor` - The descriptor to import
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let descriptor = "ct(slip77(...),elwpkh([...]/84h/1h/0h]tpub.../<0;1>/*))#checksum";
+    /// rpc.import_descriptor("test_wallet", descriptor).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_descriptor(
+        &self,
+        wallet_name: &str,
+        descriptor: &str,
+    ) -> Result<(), AmpError> {
+        tracing::info!("Importing descriptor into wallet: {}", wallet_name);
+        tracing::debug!("Descriptor: {}", descriptor);
+
+        let descriptors = serde_json::json!([
+            {
+                "desc": descriptor,
+                "timestamp": "now",
+                "active": true,
+                "internal": false  // For LWK descriptors with <0;1>/*, this covers both chains
+            }
+        ]);
+
+        // Use -rpcwallet parameter to specify the wallet
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importdescriptors".to_string(),
+            params: descriptors,
+        };
+
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error {}: {}",
+                error.code, error.message
+            )));
+        }
+
+        let result = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("RPC response missing result field".to_string()))?;
+
+        // Check if descriptor was imported successfully
+        if let Some(results) = result.as_array() {
+            if let Some(result) = results.first() {
+                if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                    if !success {
+                        let error_msg = result.get("error")
+                            .and_then(|e| e.get("message"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("Unknown error");
+                        return Err(AmpError::rpc(format!(
+                            "Failed to import descriptor: {}",
+                            error_msg
+                        )));
+                    }
+                } else {
+                    return Err(AmpError::rpc(format!(
+                        "Invalid response format for descriptor import: {:?}",
+                        result
+                    )));
+                }
+            }
+        } else {
+            return Err(AmpError::rpc(format!(
+                "Invalid response format: expected array, got {:?}",
+                result
+            )));
+        }
+
+        tracing::info!("Successfully imported descriptor into wallet: {}", wallet_name);
+        Ok(())
+    }
+
+    /// Imports descriptors into an Elements wallet (legacy method for compatibility)
+    ///
+    /// This method imports descriptors that enable the wallet to scan and recognize
+    /// addresses/UTXOs from a mnemonic. If both descriptors are the same (as with LWK
+    /// descriptors using `<0;1>/*` format), only one descriptor is imported.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import descriptors into
+    /// * `receive_descriptor` - The receive descriptor
+    /// * `change_descriptor` - The change descriptor
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let descriptor = "ct(slip77(...),elwpkh([...]/84h/1h/0h]tpub.../<0;1>/*))#checksum";
+    /// rpc.import_descriptors("test_wallet", descriptor, descriptor).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_descriptors(
+        &self,
+        wallet_name: &str,
+        receive_descriptor: &str,
+        change_descriptor: &str,
+    ) -> Result<(), AmpError> {
+        // If both descriptors are the same (LWK case), import only once
+        if receive_descriptor == change_descriptor {
+            return self.import_descriptor(wallet_name, receive_descriptor).await;
+        }
+
+        tracing::info!("Importing separate receive and change descriptors into wallet: {}", wallet_name);
+        tracing::debug!("Receive descriptor: {}", receive_descriptor);
+        tracing::debug!("Change descriptor: {}", change_descriptor);
+
+        let descriptors = serde_json::json!([
+            {
+                "desc": receive_descriptor,
+                "timestamp": "now",
+                "active": true,
+                "internal": false
+            },
+            {
+                "desc": change_descriptor,
+                "timestamp": "now", 
+                "active": true,
+                "internal": true
+            }
+        ]);
+
+        // Use -rpcwallet parameter to specify the wallet
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importdescriptors".to_string(),
+            params: descriptors,
+        };
+
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error {}: {}",
+                error.code, error.message
+            )));
+        }
+
+        let result = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("RPC response missing result field".to_string()))?;
+
+        // Check if both descriptors were imported successfully
+        if let Some(results) = result.as_array() {
+            for (i, result) in results.iter().enumerate() {
+                if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                    if !success {
+                        let desc_type = if i == 0 { "receive" } else { "change" };
+                        let error_msg = result.get("error")
+                            .and_then(|e| e.get("message"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("Unknown error");
+                        return Err(AmpError::rpc(format!(
+                            "Failed to import {} descriptor: {}",
+                            desc_type, error_msg
+                        )));
+                    }
+                } else {
+                    return Err(AmpError::rpc(format!(
+                        "Invalid response format for descriptor import: {:?}",
+                        result
+                    )));
+                }
+            }
+        } else {
+            return Err(AmpError::rpc(format!(
+                "Invalid response format: expected array, got {:?}",
+                result
+            )));
+        }
+
+        tracing::info!("Successfully imported descriptors into wallet: {}", wallet_name);
+        Ok(())
+    }
+
+    /// Sets up a wallet with descriptors from a mnemonic
+    ///
+    /// This is a convenience method that combines wallet creation and descriptor import.
+    /// It creates a descriptor wallet and imports the receive and change descriptors
+    /// generated from the provided mnemonic.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name for the new wallet
+    /// * `receive_descriptor` - The receive descriptor (external chain /0/*)
+    /// * `change_descriptor` - The change descriptor (internal chain /1/*)
+    ///
+    /// # Errors
+    /// Returns an error if wallet creation or descriptor import fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let receive_desc = "wpkh([d34db33f/84h/1h/0h]xprv.../0/*)#checksum";
+    /// let change_desc = "wpkh([d34db33f/84h/1h/0h]xprv.../1/*)#checksum";
+    /// rpc.setup_wallet_with_descriptors("test_wallet", receive_desc, change_desc).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn setup_wallet_with_descriptors(
+        &self,
+        wallet_name: &str,
+        receive_descriptor: &str,
+        change_descriptor: &str,
+    ) -> Result<(), AmpError> {
+        tracing::info!("Setting up wallet with descriptors: {}", wallet_name);
+
+        // Try to create the wallet (may fail if it already exists)
+        match self.create_descriptor_wallet(wallet_name).await {
+            Ok(()) => {
+                tracing::info!("Created new descriptor wallet: {}", wallet_name);
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
+                    tracing::info!("Wallet {} already exists, proceeding with descriptor import", wallet_name);
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+
+        // Import the descriptors
+        self.import_descriptors(wallet_name, receive_descriptor, change_descriptor).await?;
+
+        tracing::info!("Successfully set up wallet with descriptors: {}", wallet_name);
+        Ok(())
     }
 }
 
@@ -5517,33 +6197,109 @@ impl ApiClient {
         path: &[&str],
         body: Option<impl serde::Serialize>,
     ) -> Result<reqwest::Response, Error> {
+        let debug_logging = std::env::var("AMP_DEBUG").is_ok() || std::env::var("AMP_TESTS").unwrap_or_default() == "live";
+        
+        if debug_logging {
+            eprintln!("🌐 HTTP Request: {} /{}", method, path.join("/"));
+        }
+        
         let token = self.get_token().await?;
         let mut url = self.base_url.clone();
         url.path_segments_mut().unwrap().extend(path);
 
-        let mut request_builder = self
-            .client
-            .request(method, url)
-            .header(AUTHORIZATION, format!("token {token}"));
-
-        if let Some(body) = body {
-            request_builder = request_builder.json(&body);
+        if debug_logging {
+            eprintln!("🔗 Full URL: {}", url);
         }
 
-        let response = request_builder.send().await?;
+        // Retry logic for network issues
+        let max_retries = 3;
+        let mut last_error = None;
+        
+        for attempt in 1..=max_retries {
+            if debug_logging && attempt > 1 {
+                eprintln!("🔄 Retry attempt {} of {}", attempt, max_retries);
+            }
+            
+            let mut request_builder = self
+                .client
+                .request(method.clone(), url.clone())
+                .header(AUTHORIZATION, format!("token {token}"))
+                .timeout(std::time::Duration::from_secs(60)); // Increase timeout to 60 seconds
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(Error::RequestFailed(format!(
-                "Request to {path:?} failed with status {status}: {error_text}"
-            )));
+            if let Some(ref body) = body {
+                if debug_logging && attempt == 1 {
+                    if let Ok(json_body) = serde_json::to_string_pretty(&body) {
+                        eprintln!("📤 Request body ({} bytes):\n{}", json_body.len(), json_body);
+                    } else {
+                        eprintln!("📤 Request body: [serialization failed]");
+                    }
+                }
+                request_builder = request_builder.json(&body);
+            } else if debug_logging && attempt == 1 {
+                eprintln!("📤 Request body: [empty]");
+            }
+
+            if debug_logging {
+                eprintln!("🚀 Sending HTTP request (attempt {})...", attempt);
+            }
+            
+            match request_builder.send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    
+                    if debug_logging {
+                        eprintln!("📥 Response status: {}", status);
+                    }
+
+                    if !status.is_success() {
+                        let error_text = response
+                            .text()
+                            .await
+                            .unwrap_or_else(|_| "Unknown error".to_string());
+                        
+                        if debug_logging {
+                            eprintln!("❌ Error response body: {}", error_text);
+                        }
+                        
+                        return Err(Error::RequestFailed(format!(
+                            "Request to {path:?} failed with status {status}: {error_text}"
+                        )));
+                    }
+
+                    if debug_logging {
+                        eprintln!("✅ HTTP request successful");
+                    }
+
+                    return Ok(response);
+                }
+                Err(e) => {
+                    if debug_logging {
+                        eprintln!("❌ HTTP request failed (attempt {}): {:?}", attempt, e);
+                        eprintln!("   Error kind: {:?}", e.is_timeout());
+                        eprintln!("   Is connect error: {}", e.is_connect());
+                        eprintln!("   Is request error: {}", e.is_request());
+                    }
+                    
+                    last_error = Some(e);
+                    
+                    // Only retry on network/connection errors, not on client errors
+                    if attempt < max_retries {
+                        let delay = std::time::Duration::from_millis(1000 * attempt as u64);
+                        if debug_logging {
+                            eprintln!("⏳ Waiting {}ms before retry...", delay.as_millis());
+                        }
+                        tokio::time::sleep(delay).await;
+                    }
+                }
+            }
         }
-
-        Ok(response)
+        
+        // If we get here, all retries failed
+        if debug_logging {
+            eprintln!("❌ All {} retry attempts failed", max_retries);
+        }
+        
+        Err(Error::Reqwest(last_error.unwrap()))
     }
 
     async fn request_json<T: DeserializeOwned>(
@@ -7741,7 +8497,7 @@ impl ApiClient {
         // Make the API call
         let response: crate::model::DistributionResponse = self
             .request_json(
-                Method::POST,
+                Method::GET,
                 &["assets", asset_uuid, "distributions", "create"],
                 Some(&request),
             )
@@ -8937,15 +9693,16 @@ impl ApiClient {
 
             // Basic address format validation (should start with appropriate prefix for Liquid)
             if !assignment.address.starts_with("lq")
+                && !assignment.address.starts_with("vj")
                 && !assignment.address.starts_with("VJ")
                 && !assignment.address.starts_with("VT")
             {
                 tracing::error!(
-                    "Assignment {} validation failed: invalid address format '{}' (should start with 'lq', 'VJ', or 'VT')",
+                    "Assignment {} validation failed: invalid address format '{}' (should start with 'lq', 'vj', 'VJ', or 'VT')",
                     index, assignment.address
                 );
                 return Err(format!(
-                    "Assignment {} has invalid address format: '{}' (should start with 'lq', 'VJ', or 'VT')",
+                    "Assignment {} has invalid address format: '{}' (should start with 'lq', 'vj', 'VJ', or 'VT')",
                     index, assignment.address
                 ));
             }
@@ -9080,30 +9837,31 @@ impl ApiClient {
             format!("Failed to get blockchain info: {e}")
         })?;
 
+        let sync_progress = blockchain_info.verificationprogress.unwrap_or(1.0) * 100.0;
         tracing::debug!(
             "Blockchain info retrieved - chain: {}, blocks: {}, sync_progress: {:.2}%",
             blockchain_info.chain,
             blockchain_info.blocks,
-            blockchain_info.verificationprogress * 100.0
+            sync_progress
         );
 
         // Check if node is still in initial block download
-        if blockchain_info.initialblockdownload {
+        if blockchain_info.initialblockdownload.unwrap_or(false) {
             tracing::error!(
                 "Elements node is still in initial block download (sync progress: {:.2}%)",
-                blockchain_info.verificationprogress * 100.0
+                sync_progress
             );
             return Err(format!(
                 "Elements node is still in initial block download (sync progress: {:.2}%)",
-                blockchain_info.verificationprogress * 100.0
+                sync_progress
             ));
         }
 
         // Check sync progress
-        if blockchain_info.verificationprogress < 0.99 {
+        if blockchain_info.verificationprogress.unwrap_or(1.0) < 0.99 {
             tracing::warn!(
                 "Elements node may not be fully synced (sync progress: {:.2}%)",
-                blockchain_info.verificationprogress * 100.0
+                sync_progress
             );
         }
 
@@ -9112,11 +9870,13 @@ impl ApiClient {
             tracing::warn!("Elements node network warnings: {}", network_info.warnings);
         }
 
-        if !blockchain_info.warnings.is_empty() {
-            tracing::warn!(
-                "Elements node blockchain warnings: {}",
-                blockchain_info.warnings
-            );
+        if let Some(warnings) = &blockchain_info.warnings {
+            if !warnings.is_empty() {
+                tracing::warn!(
+                    "Elements node blockchain warnings: {}",
+                    warnings
+                );
+            }
         }
 
         tracing::debug!(
@@ -9124,7 +9884,7 @@ impl ApiClient {
             blockchain_info.chain,
             blockchain_info.blocks,
             network_info.connections,
-            blockchain_info.verificationprogress * 100.0
+            sync_progress
         );
 
         Ok(())

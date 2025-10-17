@@ -1,6 +1,7 @@
 use amp_rs::mocks;
 use amp_rs::ApiClient;
 use httpmock::prelude::*;
+use secrecy::Secret;
 use serial_test::serial;
 use std::env;
 use std::process::Command;
@@ -432,9 +433,11 @@ async fn test_remove_asset_from_category_mock() {
 
 #[tokio::test]
 async fn test_issue_asset_live() {
+    eprintln!("🚀 Starting test_issue_asset_live");
+    
     dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
-        println!("Skipping live test");
+        eprintln!("⏭️  Skipping live test (AMP_TESTS != 'live')");
         return;
     }
     // This test is ignored by default because it performs a state-changing operation.
@@ -443,16 +446,25 @@ async fn test_issue_asset_live() {
     // 2. Run `cargo test -- --ignored`.
     // Note: This test uses GAID GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z and gets addresses via address.py
 
+    eprintln!("🔐 Checking environment variables...");
     if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        eprintln!("❌ Missing required environment variables");
         panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
     }
+    eprintln!("✅ Environment variables found");
 
     // Use first GAID from gaids.json: GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z
+    eprintln!("🏠 Getting destination address for GAID: GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z");
     let destination_address = get_destination_address_for_gaid("GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z")
         .await
         .expect("Failed to get destination address for GAID GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z");
+    eprintln!("✅ Got destination address: {}", destination_address);
 
+    eprintln!("🔌 Getting shared client...");
     let client = get_shared_client().await.unwrap();
+    eprintln!("✅ Client obtained successfully");
+
+    eprintln!("📋 Building issuance request...");
     let issuance_request = amp_rs::model::IssuanceRequest {
         name: "Test Asset".to_string(),
         amount: 1000,
@@ -467,9 +479,80 @@ async fn test_issue_asset_live() {
         reissuance_address: None,
         transfer_restricted: Some(true),
     };
+    
+    eprintln!("📝 Issuance request details:");
+    eprintln!("   Name: {}", issuance_request.name);
+    eprintln!("   Amount: {}", issuance_request.amount);
+    eprintln!("   Destination: {}", issuance_request.destination_address);
+    eprintln!("   Domain: {}", issuance_request.domain);
+    eprintln!("   Ticker: {}", issuance_request.ticker);
+    eprintln!("   Pubkey: {}", issuance_request.pubkey);
+    eprintln!("   Precision: {:?}", issuance_request.precision);
+    eprintln!("   Confidential: {:?}", issuance_request.is_confidential);
+    eprintln!("   Reissuable: {:?}", issuance_request.is_reissuable);
+    eprintln!("   Transfer restricted: {:?}", issuance_request.transfer_restricted);
 
+    // Test basic connectivity first
+    // Test basic connectivity first
+    eprintln!("🔍 Testing basic connectivity to AMP API...");
+    match client.get_changelog().await {
+        Ok(_) => eprintln!("✅ Basic connectivity test passed"),
+        Err(e) => {
+            eprintln!("❌ Basic connectivity test failed: {:?}", e);
+            eprintln!("   This suggests a fundamental connectivity issue");
+        }
+    }
+    
+    // Test with curl to compare
+    eprintln!("🔍 Testing with curl for comparison...");
+    match std::process::Command::new("curl")
+        .args(&[
+            "-s", "-o", "/dev/null", "-w", "%{http_code}",
+            "https://amp-test.blockstream.com/api/changelog"
+        ])
+        .output() {
+        Ok(output) => {
+            let status_code = String::from_utf8_lossy(&output.stdout);
+            eprintln!("✅ Curl test result: HTTP {}", status_code);
+        }
+        Err(e) => {
+            eprintln!("❌ Curl test failed: {}", e);
+        }
+    }
+    
+    // Test a simple POST request to see if the issue is with POST requests in general
+    eprintln!("🔍 Testing simple POST request (password change - expect failure but should connect)...");
+    match client.user_change_password(Secret::new("dummy_password".to_string())).await {
+        Ok(_) => eprintln!("✅ POST request succeeded (unexpected)"),
+        Err(e) => {
+            eprintln!("📝 POST request failed as expected: {:?}", e);
+            // We expect this to fail with authentication/validation error, not connection error
+            let error_str = format!("{:?}", e);
+            if error_str.contains("IncompleteMessage") || error_str.contains("connection closed") {
+                eprintln!("❌ POST request failed with connection issue - same problem as asset issuance");
+            } else {
+                eprintln!("✅ POST request failed with different error - connection is working for POST");
+            }
+        }
+    }
+    
+    eprintln!("🚀 Calling issue_asset API...");
     let result = client.issue_asset(&issuance_request).await;
-    assert!(result.is_ok());
+    
+    match &result {
+        Ok(response) => {
+            eprintln!("✅ API call successful!");
+            eprintln!("   Asset ID: {}", response.asset_id);
+            eprintln!("   Asset UUID: {}", response.asset_uuid);
+            eprintln!("   Transaction ID: {}", response.txid);
+        }
+        Err(e) => {
+            eprintln!("❌ API call failed with error: {:?}", e);
+            eprintln!("   Error details: {}", e);
+        }
+    }
+    
+    assert!(result.is_ok(), "Asset issuance failed: {:?}", result.err());
 
     let issuance_response = result.unwrap();
     println!("Asset issued successfully!");
@@ -478,16 +561,28 @@ async fn test_issue_asset_live() {
     println!("Destination address: {}", destination_address);
 
     // Clean up: delete the created asset
+    eprintln!("🧹 Starting cleanup: deleting asset with UUID {}", issuance_response.asset_uuid);
     println!(
         "Cleaning up: deleting asset with UUID {}",
         issuance_response.asset_uuid
     );
+    
+    eprintln!("🗑️  Calling delete_asset API...");
     let delete_result = client.delete_asset(&issuance_response.asset_uuid).await;
-    if let Err(e) = &delete_result {
-        println!("Warning: Failed to delete asset: {:?}", e);
-    } else {
-        println!("Successfully deleted test asset");
+    
+    match &delete_result {
+        Ok(_) => {
+            eprintln!("✅ Asset deletion successful");
+            println!("Successfully deleted test asset");
+        }
+        Err(e) => {
+            eprintln!("⚠️  Asset deletion failed: {:?}", e);
+            eprintln!("   Error details: {}", e);
+            println!("Warning: Failed to delete asset: {:?}", e);
+        }
     }
+    
+    eprintln!("🏁 test_issue_asset_live completed");
 }
 
 #[tokio::test]

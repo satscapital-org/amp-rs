@@ -30,6 +30,10 @@ path = "examples/asset_summary.rs"
 name = "signer_usage"
 path = "examples/signer_usage.rs"
 
+[[example]]
+name = "descriptor_wallet_setup"
+path = "examples/descriptor_wallet_setup.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -47,10 +51,10 @@ zeroize = { version = "1.5", features = ["derive"] }
 httpmock = { version = "0.6.8" }
 dotenvy = "0.15"
 rand = "0.8"
-lwk_signer = "0.5"
-lwk_common = "0.5"
+lwk_signer = "0.12.0"
+lwk_common = "0.12.0"
 bip39 = "2.0"
-elements = "0.24"
+elements = "0.25.0"
 hex = "0.4"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
