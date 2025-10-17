@@ -31,6 +31,9 @@ pub mod mocks;
 pub mod model;
 pub mod signer;
 
-pub use client::{ApiClient, AmpError, ElementsRpc, Error};
-pub use model::{AssetDistributionAssignment, ConfirmDistributionRequest, DistributionResponse, DistributionTxData, TransactionDetail, TxInput, Unspent};
+pub use client::{AmpError, ApiClient, ElementsRpc, Error};
+pub use model::{
+    AssetDistributionAssignment, ConfirmDistributionRequest, DistributionResponse,
+    DistributionTxData, TransactionDetail, TxInput, Unspent,
+};
 pub use signer::{LwkSoftwareSigner, Signer, SignerError};

@@ -16,12 +16,12 @@ use secrecy::ExposeSecret;
 use secrecy::Secret;
 
 use crate::model::{
-    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary, Assignment, Balance, BroadcastResponse,
-    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
-    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, 
-    GaidBalanceEntry, GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, 
-    Password, TokenData, TokenInfo, TokenRequest, TokenResponse, 
-    TransactionDetail, TxInput, Unspent, Utxo,
+    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary, Assignment,
+    Balance, BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
+    ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
+    GaidBalanceEntry, GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
+    Password, TokenData, TokenInfo, TokenRequest, TokenResponse, TransactionDetail, TxInput,
+    Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -422,30 +422,30 @@ pub enum Error {
     Token(#[from] TokenError),
 }
 
-/// Enhanced error enum for distribution operations and ElementsRpc
+/// Enhanced error enum for distribution operations and `ElementsRpc`
 #[derive(Error, Debug)]
 pub enum AmpError {
     #[error("API error: {0}")]
     Api(String),
-    
+
     #[error("RPC error: {0}")]
     Rpc(String),
-    
+
     #[error("Signer error: {0}")]
     Signer(#[from] SignerError),
-    
+
     #[error("Timeout waiting for confirmations: {0}")]
     Timeout(String),
-    
+
     #[error("Validation error: {0}")]
     Validation(String),
-    
+
     #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error(transparent)]
     Existing(#[from] Error),
 }
@@ -455,45 +455,46 @@ impl AmpError {
     pub fn api<S: Into<String>>(message: S) -> Self {
         Self::Api(message.into())
     }
-    
+
     /// Creates a new RPC error
     pub fn rpc<S: Into<String>>(message: S) -> Self {
         Self::Rpc(message.into())
     }
-    
+
     /// Creates a new timeout error
     pub fn timeout<S: Into<String>>(message: S) -> Self {
         Self::Timeout(message.into())
     }
-    
+
     /// Creates a new validation error
     pub fn validation<S: Into<String>>(message: S) -> Self {
         Self::Validation(message.into())
     }
-    
+
     /// Adds context to an error
+    #[must_use]
     pub fn with_context<S: Into<String>>(self, context: S) -> Self {
         let context_str = context.into();
         match self {
-            Self::Api(msg) => Self::Api(format!("{}: {}", context_str, msg)),
-            Self::Rpc(msg) => Self::Rpc(format!("{}: {}", context_str, msg)),
-            Self::Timeout(msg) => Self::Timeout(format!("{}: {}", context_str, msg)),
-            Self::Validation(msg) => Self::Validation(format!("{}: {}", context_str, msg)),
+            Self::Api(msg) => Self::Api(format!("{context_str}: {msg}")),
+            Self::Rpc(msg) => Self::Rpc(format!("{context_str}: {msg}")),
+            Self::Timeout(msg) => Self::Timeout(format!("{context_str}: {msg}")),
+            Self::Validation(msg) => Self::Validation(format!("{context_str}: {msg}")),
             other => other, // Don't modify other error types
         }
     }
-    
+
     /// Returns true if this error indicates a retryable condition
-    pub fn is_retryable(&self) -> bool {
+    pub const fn is_retryable(&self) -> bool {
         match self {
-            Self::Network(_) => true,
-            Self::Rpc(_) => true, // RPC errors might be transient
+            Self::Network(_) | Self::Rpc(_) => true, // RPC errors might be transient
             Self::Existing(Error::Token(token_err)) => token_err.is_retryable(),
             _ => false,
         }
     }
-    
+
     /// Provides user-friendly retry instructions when applicable
+    #[must_use]
     pub fn retry_instructions(&self) -> Option<String> {
         match self {
             Self::Network(_) => Some("Check network connection and retry".to_string()),
@@ -501,9 +502,11 @@ impl AmpError {
             Self::Timeout(msg) if msg.contains("txid") => {
                 Some("Use the transaction ID to manually confirm the distribution".to_string())
             }
-            Self::Existing(Error::Token(TokenError::RateLimited { retry_after_seconds })) => {
-                Some(format!("Rate limited. Retry after {} seconds", retry_after_seconds))
-            }
+            Self::Existing(Error::Token(TokenError::RateLimited {
+                retry_after_seconds,
+            })) => Some(format!(
+                "Rate limited. Retry after {retry_after_seconds} seconds"
+            )),
             _ => None,
         }
     }
@@ -613,27 +616,27 @@ impl From<serde_json::Error> for TokenError {
 #[cfg(test)]
 mod amp_error_tests {
     use super::*;
-    
+
     #[test]
     fn test_amp_error_creation_helpers() {
         let api_error = AmpError::api("Failed to create distribution");
         assert!(matches!(api_error, AmpError::Api(_)));
-        
+
         let rpc_error = AmpError::rpc("Elements node connection failed");
         assert!(matches!(rpc_error, AmpError::Rpc(_)));
-        
+
         let validation_error = AmpError::validation("Invalid asset UUID format");
         assert!(matches!(validation_error, AmpError::Validation(_)));
-        
+
         let timeout_error = AmpError::timeout("Confirmation timeout");
         assert!(matches!(timeout_error, AmpError::Timeout(_)));
     }
-    
+
     #[test]
     fn test_amp_error_with_context() {
         let api_error = AmpError::api("Failed to create distribution");
         let contextual_error = api_error.with_context("During distribution creation");
-        
+
         match contextual_error {
             AmpError::Api(msg) => {
                 assert!(msg.contains("During distribution creation"));
@@ -641,74 +644,80 @@ mod amp_error_tests {
             }
             _ => panic!("Expected Api error variant"),
         }
-        
+
         // Test that context doesn't modify errors that already have good context
         let signer_error = AmpError::Signer(SignerError::Lwk("Test error".to_string()));
         let contextual_signer = signer_error.with_context("Additional context");
         assert!(matches!(contextual_signer, AmpError::Signer(_)));
     }
-    
+
     #[test]
     fn test_amp_error_retryability() {
         let api_error = AmpError::api("Failed to create distribution");
         assert!(!api_error.is_retryable());
-        
+
         let rpc_error = AmpError::rpc("Elements node connection failed");
         assert!(rpc_error.is_retryable());
-        
+
         let validation_error = AmpError::validation("Invalid asset UUID format");
         assert!(!validation_error.is_retryable());
-        
+
         let timeout_error = AmpError::timeout("Confirmation timeout");
         assert!(!timeout_error.is_retryable());
-        
+
         let signer_error = AmpError::Signer(SignerError::Lwk("Test error".to_string()));
         assert!(!signer_error.is_retryable());
     }
-    
+
     #[test]
     fn test_amp_error_retry_instructions() {
         let rpc_error = AmpError::rpc("Elements node connection failed");
         let instructions = rpc_error.retry_instructions();
         assert!(instructions.is_some());
         assert!(instructions.unwrap().contains("Elements node"));
-        
+
         let validation_error = AmpError::validation("Invalid asset UUID format");
         assert!(validation_error.retry_instructions().is_none());
-        
+
         let timeout_with_txid = AmpError::timeout("Confirmation timeout for txid abc123");
         let timeout_instructions = timeout_with_txid.retry_instructions();
         assert!(timeout_instructions.is_some());
         assert!(timeout_instructions.unwrap().contains("transaction ID"));
     }
-    
+
     #[test]
     fn test_amp_error_display() {
         let api_error = AmpError::api("Test API error");
         assert_eq!(format!("{}", api_error), "API error: Test API error");
-        
+
         let rpc_error = AmpError::rpc("Test RPC error");
         assert_eq!(format!("{}", rpc_error), "RPC error: Test RPC error");
-        
+
         let validation_error = AmpError::validation("Test validation error");
-        assert_eq!(format!("{}", validation_error), "Validation error: Test validation error");
-        
+        assert_eq!(
+            format!("{}", validation_error),
+            "Validation error: Test validation error"
+        );
+
         let timeout_error = AmpError::timeout("Test timeout error");
-        assert_eq!(format!("{}", timeout_error), "Timeout waiting for confirmations: Test timeout error");
+        assert_eq!(
+            format!("{}", timeout_error),
+            "Timeout waiting for confirmations: Test timeout error"
+        );
     }
-    
+
     #[test]
     fn test_amp_error_from_conversions() {
         // Test conversion from SignerError
         let signer_error = SignerError::Lwk("Test LWK error".to_string());
         let amp_error = AmpError::from(signer_error);
         assert!(matches!(amp_error, AmpError::Signer(_)));
-        
+
         // Test conversion from existing Error
         let existing_error = Error::MissingEnvVar("TEST_VAR".to_string());
         let amp_error = AmpError::from(existing_error);
         assert!(matches!(amp_error, AmpError::Existing(_)));
-        
+
         // Test conversion from serde_json::Error
         let json_error = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
         let amp_error = AmpError::from(json_error);
@@ -789,23 +798,27 @@ struct RpcError {
 }
 
 impl ElementsRpc {
-    /// Creates a new ElementsRpc client with connection parameters
+    /// Creates a new `ElementsRpc` client with connection parameters
     ///
     /// # Arguments
-    /// * `url` - The RPC endpoint URL (e.g., "http://localhost:18884")
+    /// * `url` - The RPC endpoint URL (e.g., <http://localhost:18884>)
     /// * `username` - RPC authentication username
     /// * `password` - RPC authentication password
     ///
     /// # Examples
     /// ```
     /// use amp_rs::ElementsRpc;
-    /// 
+    ///
     /// let rpc = ElementsRpc::new(
     ///     "http://localhost:18884".to_string(),
     ///     "user".to_string(),
     ///     "pass".to_string()
     /// );
     /// ```
+    /// # Panics
+    ///
+    /// Panics if the HTTP client cannot be created.
+    #[must_use]
     pub fn new(url: String, username: String, password: String) -> Self {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
@@ -820,7 +833,7 @@ impl ElementsRpc {
         }
     }
 
-    /// Creates a new ElementsRpc client from environment variables
+    /// Creates a new `ElementsRpc` client from environment variables
     ///
     /// Expected environment variables:
     /// - `ELEMENTS_RPC_URL`: RPC endpoint URL
@@ -833,7 +846,7 @@ impl ElementsRpc {
     /// # Examples
     /// ```no_run
     /// use amp_rs::ElementsRpc;
-    /// 
+    ///
     /// let rpc = ElementsRpc::from_env().unwrap();
     /// ```
     pub fn from_env() -> Result<Self, AmpError> {
@@ -841,8 +854,9 @@ impl ElementsRpc {
             .map_err(|_| AmpError::validation("Missing ELEMENTS_RPC_URL environment variable"))?;
         let username = env::var("ELEMENTS_RPC_USER")
             .map_err(|_| AmpError::validation("Missing ELEMENTS_RPC_USER environment variable"))?;
-        let password = env::var("ELEMENTS_RPC_PASSWORD")
-            .map_err(|_| AmpError::validation("Missing ELEMENTS_RPC_PASSWORD environment variable"))?;
+        let password = env::var("ELEMENTS_RPC_PASSWORD").map_err(|_| {
+            AmpError::validation("Missing ELEMENTS_RPC_PASSWORD environment variable")
+        })?;
 
         Ok(Self::new(url, username, password))
     }
@@ -876,7 +890,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             return Err(AmpError::rpc(format!(
@@ -888,7 +902,7 @@ impl ElementsRpc {
         let rpc_response: RpcResponse<T> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -897,9 +911,9 @@ impl ElementsRpc {
             )));
         }
 
-        rpc_response.result.ok_or_else(|| {
-            AmpError::rpc("RPC response missing result field".to_string())
-        })
+        rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("RPC response missing result field".to_string()))
     }
 
     /// Retrieves network information from the Elements node
@@ -965,7 +979,7 @@ impl ElementsRpc {
     /// ```
     pub async fn wallet_passphrase(&self, passphrase: &str, timeout: u64) -> Result<(), AmpError> {
         let params = serde_json::json!([passphrase, timeout]);
-        
+
         // wallet_passphrase returns null on success, so we need to handle this specially
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -981,7 +995,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             return Err(AmpError::rpc(format!(
@@ -993,7 +1007,7 @@ impl ElementsRpc {
         let rpc_response: RpcResponse<serde_json::Value> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -1026,17 +1040,22 @@ impl ElementsRpc {
     /// # }
     /// ```
     pub async fn validate_connection(&self) -> Result<(), AmpError> {
-        tracing::info!("Validating connection to Elements node at {}", self.base_url);
-        
-        let network_info = self.get_network_info().await
+        tracing::info!(
+            "Validating connection to Elements node at {}",
+            self.base_url
+        );
+
+        let network_info = self
+            .get_network_info()
+            .await
             .map_err(|e| e.with_context("Failed to validate Elements node connection"))?;
-        
+
         tracing::info!(
             "Successfully connected to Elements node - Version: {}, Connections: {}",
             network_info.version,
             network_info.connections
         );
-        
+
         Ok(())
     }
 
@@ -1062,7 +1081,7 @@ impl ElementsRpc {
     pub async fn get_node_status(&self) -> Result<(NetworkInfo, BlockchainInfo), AmpError> {
         let network_info = self.get_network_info().await?;
         let blockchain_info = self.get_blockchain_info().await?;
-        
+
         Ok((network_info, blockchain_info))
     }
 
@@ -1087,15 +1106,17 @@ impl ElementsRpc {
     /// ```
     pub async fn list_unspent(&self, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
         tracing::debug!("Listing unspent outputs for asset: {:?}", asset_id);
-        
+
         let params = match asset_id {
-            Some(asset) => serde_json::json!([1, 9999999, [], true, {"asset": asset}]),
-            None => serde_json::json!([1, 9999999, [], true]),
+            Some(asset) => serde_json::json!([1, 9_999_999, [], true, {"asset": asset}]),
+            None => serde_json::json!([1, 9_999_999, [], true]),
         };
-        
-        let utxos: Vec<Unspent> = self.rpc_call("listunspent", params).await
+
+        let utxos: Vec<Unspent> = self
+            .rpc_call("listunspent", params)
+            .await
             .map_err(|e| e.with_context("Failed to list unspent outputs"))?;
-        
+
         tracing::debug!("Found {} unspent outputs", utxos.len());
         Ok(utxos)
     }
@@ -1141,20 +1162,22 @@ impl ElementsRpc {
             inputs.len(),
             outputs.len()
         );
-        
+
         // Elements RPC createrawtransaction expects:
         // createrawtransaction inputs outputs locktime replaceable assets
         let params = serde_json::json!([
-            inputs,      // inputs as TxInput array
-            outputs,     // outputs as address->amount map
-            0,           // locktime (0 = no locktime)
-            false,       // replaceable (false = not replaceable)
-            assets       // assets as address->asset_id map
+            inputs,  // inputs as TxInput array
+            outputs, // outputs as address->amount map
+            0,       // locktime (0 = no locktime)
+            false,   // replaceable (false = not replaceable)
+            assets   // assets as address->asset_id map
         ]);
-        
-        let raw_tx: String = self.rpc_call("createrawtransaction", params).await
+
+        let raw_tx: String = self
+            .rpc_call("createrawtransaction", params)
+            .await
             .map_err(|e| e.with_context("Failed to create raw transaction"))?;
-        
+
         tracing::debug!("Created raw transaction: {}", raw_tx);
         Ok(raw_tx)
     }
@@ -1180,13 +1203,18 @@ impl ElementsRpc {
     /// # }
     /// ```
     pub async fn send_raw_transaction(&self, hex: &str) -> Result<String, AmpError> {
-        tracing::debug!("Broadcasting raw transaction: {}", &hex[..std::cmp::min(hex.len(), 64)]);
-        
+        tracing::debug!(
+            "Broadcasting raw transaction: {}",
+            &hex[..std::cmp::min(hex.len(), 64)]
+        );
+
         let params = serde_json::json!([hex]);
-        
-        let txid: String = self.rpc_call("sendrawtransaction", params).await
+
+        let txid: String = self
+            .rpc_call("sendrawtransaction", params)
+            .await
             .map_err(|e| e.with_context("Failed to broadcast raw transaction"))?;
-        
+
         tracing::info!("Successfully broadcast transaction with ID: {}", txid);
         Ok(txid)
     }
@@ -1212,18 +1240,20 @@ impl ElementsRpc {
     /// ```
     pub async fn get_transaction(&self, txid: &str) -> Result<TransactionDetail, AmpError> {
         tracing::debug!("Retrieving transaction details for: {}", txid);
-        
+
         let params = serde_json::json!([txid, true]); // true for verbose output
-        
-        let tx_detail: TransactionDetail = self.rpc_call("gettransaction", params).await
-            .map_err(|e| e.with_context(format!("Failed to get transaction details for {}", txid)))?;
-        
+
+        let tx_detail: TransactionDetail =
+            self.rpc_call("gettransaction", params).await.map_err(|e| {
+                e.with_context(format!("Failed to get transaction details for {}", txid))
+            })?;
+
         tracing::debug!(
             "Retrieved transaction {} with {} confirmations",
             txid,
             tx_detail.confirmations
         );
-        
+
         Ok(tx_detail)
     }
 
@@ -1262,12 +1292,8 @@ impl ElementsRpc {
         min_confirmations: Option<u32>,
         timeout_minutes: Option<u64>,
     ) -> Result<TransactionDetail, AmpError> {
-        self.wait_for_confirmations_with_interval(
-            txid,
-            min_confirmations,
-            timeout_minutes,
-            None,
-        ).await
+        self.wait_for_confirmations_with_interval(txid, min_confirmations, timeout_minutes, None)
+            .await
     }
 
     /// Internal method for waiting for confirmations with configurable poll interval
@@ -1287,29 +1313,28 @@ impl ElementsRpc {
             std::time::Duration::from_secs(timeout_minutes * 60)
         };
         let poll_interval = std::time::Duration::from_secs(poll_interval_secs.unwrap_or(15));
-        
+
         tracing::info!(
             "Starting confirmation monitoring for transaction {} (min_confirmations: {}, timeout: {} minutes)",
             txid,
             min_confirmations,
             timeout_minutes
         );
-        
+
         let start_time = std::time::Instant::now();
-        
+
         loop {
             // Check if we've exceeded the timeout
             if start_time.elapsed() >= timeout_duration {
                 let error_msg = format!(
                     "Timeout waiting for confirmations after {} minutes. Transaction ID: {}. \
                     You can retry confirmation by calling the confirmation API with this txid.",
-                    timeout_minutes,
-                    txid
+                    timeout_minutes, txid
                 );
                 tracing::error!("{}", error_msg);
                 return Err(AmpError::Timeout(error_msg));
             }
-            
+
             // Get current transaction details
             match self.get_transaction(txid).await {
                 Ok(tx_detail) => {
@@ -1319,7 +1344,7 @@ impl ElementsRpc {
                         tx_detail.confirmations,
                         min_confirmations
                     );
-                    
+
                     if tx_detail.confirmations >= min_confirmations {
                         tracing::info!(
                             "Transaction {} confirmed with {} confirmations",
@@ -1328,7 +1353,7 @@ impl ElementsRpc {
                         );
                         return Ok(tx_detail);
                     }
-                    
+
                     // Log progress every few polls to avoid spam
                     if start_time.elapsed().as_secs() % 60 < 15 {
                         tracing::info!(
@@ -1350,7 +1375,7 @@ impl ElementsRpc {
                     // might not be visible immediately after broadcasting
                 }
             }
-            
+
             // Wait before next poll
             tokio::time::sleep(poll_interval).await;
         }
@@ -1416,7 +1441,11 @@ impl ElementsRpc {
         }
 
         // Sort UTXOs by amount (largest first) for efficient selection
-        utxos.sort_by(|a, b| b.amount.partial_cmp(&a.amount).unwrap_or(std::cmp::Ordering::Equal));
+        utxos.sort_by(|a, b| {
+            b.amount
+                .partial_cmp(&a.amount)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let required_amount = target_amount + estimated_fee;
         let mut selected_utxos = Vec::new();
@@ -1436,10 +1465,7 @@ impl ElementsRpc {
         if total_selected < required_amount {
             return Err(AmpError::validation(format!(
                 "Insufficient UTXOs: need {}, have {} (target: {}, fee: {})",
-                required_amount,
-                total_selected,
-                target_amount,
-                estimated_fee
+                required_amount, total_selected, target_amount, estimated_fee
             )));
         }
 
@@ -1485,7 +1511,7 @@ impl ElementsRpc {
     /// let mut address_amounts = HashMap::new();
     /// address_amounts.insert("address1".to_string(), 100.0);
     /// address_amounts.insert("address2".to_string(), 50.0);
-    /// 
+    ///
     /// let (raw_tx, utxos, change) = rpc.build_distribution_transaction(
     ///     "asset_id_hex",
     ///     address_amounts,
@@ -1511,10 +1537,10 @@ impl ElementsRpc {
 
         // Calculate total distribution amount
         let total_distribution: f64 = address_amounts.values().sum();
-        
+
         if total_distribution <= 0.0 {
             return Err(AmpError::validation(
-                "Total distribution amount must be greater than zero".to_string()
+                "Total distribution amount must be greater than zero".to_string(),
             ));
         }
 
@@ -1544,14 +1570,14 @@ impl ElementsRpc {
 
         // Calculate change amount (total selected - distribution - fee)
         let change_amount = total_selected - total_distribution - estimated_fee;
-        
+
         // Add change output if there's a significant amount left
         // Use a small threshold to avoid dust outputs
         const DUST_THRESHOLD: f64 = 0.00001;
         if change_amount > DUST_THRESHOLD {
             outputs.insert(change_address.to_string(), change_amount);
             assets.insert(change_address.to_string(), asset_id.to_string());
-            
+
             tracing::debug!(
                 "Adding change output: {} {} to address {}",
                 change_amount,
@@ -1576,7 +1602,11 @@ impl ElementsRpc {
             "Built distribution transaction: {} inputs, {} outputs, change: {}",
             selected_utxos.len(),
             address_amounts.len() + if change_amount > DUST_THRESHOLD { 1 } else { 0 },
-            if change_amount > DUST_THRESHOLD { change_amount } else { 0.0 }
+            if change_amount > DUST_THRESHOLD {
+                change_amount
+            } else {
+                0.0
+            }
         );
 
         Ok((raw_transaction, selected_utxos, change_amount))
@@ -1630,20 +1660,22 @@ impl ElementsRpc {
 
         // Validate unsigned transaction hex format
         if unsigned_tx_hex.is_empty() {
-            return Err(AmpError::validation("Unsigned transaction hex cannot be empty".to_string()));
+            return Err(AmpError::validation(
+                "Unsigned transaction hex cannot be empty".to_string(),
+            ));
         }
 
         // Check if hex string has valid format (even length, valid hex characters)
         if unsigned_tx_hex.len() % 2 != 0 {
             return Err(AmpError::validation(
-                "Unsigned transaction hex must have even length".to_string()
+                "Unsigned transaction hex must have even length".to_string(),
             ));
         }
 
         // Validate hex characters
         if !unsigned_tx_hex.chars().all(|c| c.is_ascii_hexdigit()) {
             return Err(AmpError::validation(
-                "Unsigned transaction contains invalid hex characters".to_string()
+                "Unsigned transaction contains invalid hex characters".to_string(),
             ));
         }
 
@@ -1671,21 +1703,21 @@ impl ElementsRpc {
         // Validate signed transaction format and structure
         if signed_tx_hex.is_empty() {
             return Err(AmpError::validation(
-                "Signed transaction hex cannot be empty".to_string()
+                "Signed transaction hex cannot be empty".to_string(),
             ));
         }
 
         // Check if signed transaction has valid hex format
         if signed_tx_hex.len() % 2 != 0 {
             return Err(AmpError::validation(
-                "Signed transaction hex must have even length".to_string()
+                "Signed transaction hex must have even length".to_string(),
             ));
         }
 
         // Validate hex characters in signed transaction
         if !signed_tx_hex.chars().all(|c| c.is_ascii_hexdigit()) {
             return Err(AmpError::validation(
-                "Signed transaction contains invalid hex characters".to_string()
+                "Signed transaction contains invalid hex characters".to_string(),
             ));
         }
 
@@ -1698,7 +1730,8 @@ impl ElementsRpc {
         // (signatures add data, so signed tx should be larger or equal)
         if signed_tx_bytes.len() < _tx_bytes.len() {
             return Err(AmpError::validation(
-                "Signed transaction is shorter than unsigned transaction, which is invalid".to_string()
+                "Signed transaction is shorter than unsigned transaction, which is invalid"
+                    .to_string(),
             ));
         }
 
@@ -1759,11 +1792,15 @@ impl ElementsRpc {
         tracing::info!("Signing and broadcasting transaction");
 
         // Sign the transaction
-        let signed_tx_hex = self.sign_transaction(unsigned_tx_hex, signer).await
+        let signed_tx_hex = self
+            .sign_transaction(unsigned_tx_hex, signer)
+            .await
             .map_err(|e| e.with_context("Failed during transaction signing phase"))?;
 
         // Broadcast the signed transaction
-        let txid = self.send_raw_transaction(&signed_tx_hex).await
+        let txid = self
+            .send_raw_transaction(&signed_tx_hex)
+            .await
             .map_err(|e| e.with_context("Failed during transaction broadcast phase"))?;
 
         tracing::info!("Successfully signed and broadcast transaction: {}", txid);
@@ -1797,7 +1834,7 @@ impl ElementsRpc {
     ///     "asset_id_hex",
     ///     "transaction_id_hex"
     /// ).await?;
-    /// 
+    ///
     /// if change_data.is_empty() {
     ///     println!("No change outputs found for this transaction");
     /// } else {
@@ -1818,8 +1855,9 @@ impl ElementsRpc {
         );
 
         // Query all unspent outputs for the specified asset
-        let all_utxos = self.list_unspent(Some(asset_id)).await
-            .map_err(|e| e.with_context("Failed to query unspent outputs for change data collection"))?;
+        let all_utxos = self.list_unspent(Some(asset_id)).await.map_err(|e| {
+            e.with_context("Failed to query unspent outputs for change data collection")
+        })?;
 
         // Filter UTXOs to only include those from the specified transaction
         let change_utxos: Vec<Unspent> = all_utxos
@@ -1868,10 +1906,10 @@ impl ElementsRpc {
 #[cfg(test)]
 mod elements_rpc_tests {
     use super::*;
-    use serial_test::serial;
     use httpmock::prelude::*;
+    use serial_test::serial;
     use std::collections::HashMap;
-    
+
     #[test]
     fn test_elements_rpc_new() {
         let rpc = ElementsRpc::new(
@@ -1879,12 +1917,12 @@ mod elements_rpc_tests {
             "user".to_string(),
             "pass".to_string(),
         );
-        
+
         assert_eq!(rpc.base_url, "http://localhost:18884");
         assert_eq!(rpc.username, "user");
         assert_eq!(rpc.password, "pass");
     }
-    
+
     #[test]
     #[serial]
     fn test_elements_rpc_from_env_missing_vars() {
@@ -1892,22 +1930,28 @@ mod elements_rpc_tests {
         let original_url = env::var("ELEMENTS_RPC_URL").ok();
         let original_user = env::var("ELEMENTS_RPC_USER").ok();
         let original_password = env::var("ELEMENTS_RPC_PASSWORD").ok();
-        
+
         // Clear environment variables to test error handling
         env::remove_var("ELEMENTS_RPC_URL");
         env::remove_var("ELEMENTS_RPC_USER");
         env::remove_var("ELEMENTS_RPC_PASSWORD");
-        
+
         let result = ElementsRpc::from_env();
-        assert!(result.is_err(), "ElementsRpc::from_env() should fail when env vars are missing");
-        
+        assert!(
+            result.is_err(),
+            "ElementsRpc::from_env() should fail when env vars are missing"
+        );
+
         match result.unwrap_err() {
             AmpError::Validation(msg) => {
-                assert!(msg.contains("ELEMENTS_RPC_URL"), "Error message should mention missing ELEMENTS_RPC_URL");
+                assert!(
+                    msg.contains("ELEMENTS_RPC_URL"),
+                    "Error message should mention missing ELEMENTS_RPC_URL"
+                );
             }
             _ => panic!("Expected validation error"),
         }
-        
+
         // Restore original values or keep removed if they weren't set
         if let Some(val) = original_url {
             env::set_var("ELEMENTS_RPC_URL", val);
@@ -1919,7 +1963,7 @@ mod elements_rpc_tests {
             env::set_var("ELEMENTS_RPC_PASSWORD", val);
         }
     }
-    
+
     #[test]
     #[serial]
     fn test_elements_rpc_from_env_success() {
@@ -1927,20 +1971,23 @@ mod elements_rpc_tests {
         let original_url = env::var("ELEMENTS_RPC_URL").ok();
         let original_user = env::var("ELEMENTS_RPC_USER").ok();
         let original_password = env::var("ELEMENTS_RPC_PASSWORD").ok();
-        
+
         // Set test values
         env::set_var("ELEMENTS_RPC_URL", "http://localhost:18884");
         env::set_var("ELEMENTS_RPC_USER", "testuser");
         env::set_var("ELEMENTS_RPC_PASSWORD", "testpass");
-        
+
         let result = ElementsRpc::from_env();
-        assert!(result.is_ok(), "ElementsRpc::from_env() should succeed when all env vars are set");
-        
+        assert!(
+            result.is_ok(),
+            "ElementsRpc::from_env() should succeed when all env vars are set"
+        );
+
         let rpc = result.unwrap();
         assert_eq!(rpc.base_url, "http://localhost:18884");
         assert_eq!(rpc.username, "testuser");
         assert_eq!(rpc.password, "testpass");
-        
+
         // Restore original values or remove if they weren't set
         match original_url {
             Some(val) => env::set_var("ELEMENTS_RPC_URL", val),
@@ -1955,7 +2002,7 @@ mod elements_rpc_tests {
             None => env::remove_var("ELEMENTS_RPC_PASSWORD"),
         }
     }
-    
+
     #[test]
     fn test_elements_rpc_method_signatures() {
         // Test that all new methods have correct signatures and can be called
@@ -1964,11 +2011,12 @@ mod elements_rpc_tests {
             "user".to_string(),
             "pass".to_string(),
         );
-        
+
         // Test that methods exist and have correct signatures (compilation test)
-        let _: std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Unspent>, AmpError>> + Send + '_>> = 
-            Box::pin(rpc.list_unspent(Some("test_asset")));
-        
+        let _: std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<Vec<Unspent>, AmpError>> + Send + '_>,
+        > = Box::pin(rpc.list_unspent(Some("test_asset")));
+
         let inputs = vec![TxInput {
             txid: "test_txid".to_string(),
             vout: 0,
@@ -1976,23 +2024,26 @@ mod elements_rpc_tests {
         }];
         let outputs = std::collections::HashMap::new();
         let assets = std::collections::HashMap::new();
-        
-        let _: std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, AmpError>> + Send + '_>> = 
-            Box::pin(rpc.create_raw_transaction(inputs, outputs, assets));
-        
-        let _: std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, AmpError>> + Send + '_>> = 
-            Box::pin(rpc.send_raw_transaction("test_hex"));
-        
-        let _: std::pin::Pin<Box<dyn std::future::Future<Output = Result<TransactionDetail, AmpError>> + Send + '_>> = 
-            Box::pin(rpc.get_transaction("test_txid"));
+
+        let _: std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<String, AmpError>> + Send + '_>,
+        > = Box::pin(rpc.create_raw_transaction(inputs, outputs, assets));
+
+        let _: std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<String, AmpError>> + Send + '_>,
+        > = Box::pin(rpc.send_raw_transaction("test_hex"));
+
+        let _: std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<TransactionDetail, AmpError>> + Send + '_>,
+        > = Box::pin(rpc.get_transaction("test_txid"));
     }
 
     // Mock RPC response tests for UTXO and transaction operations
-    
+
     #[tokio::test]
     async fn test_get_network_info_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2012,7 +2063,7 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2027,23 +2078,23 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_ok());
         let network_info = result.unwrap();
         assert_eq!(network_info.version, 220000);
         assert_eq!(network_info.subversion, "/Liquid:22.0.0/");
         assert_eq!(network_info.connections, 8);
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_get_blockchain_info_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2063,7 +2114,7 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2078,23 +2129,23 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_blockchain_info().await;
-        
+
         assert!(result.is_ok());
         let blockchain_info = result.unwrap();
         assert_eq!(blockchain_info.chain, "liquidregtest");
         assert_eq!(blockchain_info.blocks, 12345);
         assert_eq!(blockchain_info.bestblockhash, "abc123def456789");
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_list_unspent_with_asset_filter() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2120,9 +2171,9 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2137,10 +2188,10 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.list_unspent(Some(asset_id)).await;
-        
+
         assert!(result.is_ok());
         let utxos = result.unwrap();
         assert_eq!(utxos.len(), 2);
@@ -2149,14 +2200,14 @@ mod elements_rpc_tests {
         assert_eq!(utxos[0].asset, asset_id);
         assert_eq!(utxos[1].txid, "def456abc123789");
         assert_eq!(utxos[1].amount, 50.0);
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_list_unspent_without_filter() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2172,7 +2223,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2187,29 +2238,29 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.list_unspent(None).await;
-        
+
         assert!(result.is_ok());
         let utxos = result.unwrap();
         assert_eq!(utxos.len(), 1);
         assert_eq!(utxos[0].txid, "ghi789jkl012345");
         assert_eq!(utxos[0].amount, 25.0);
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_create_raw_transaction_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": "0200000000010abc123def456789abc123def456789abc123def456789abc123def456789abc123def456789000000006b483045022100..."
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2240,45 +2291,48 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         let inputs = vec![TxInput {
             txid: "input_txid_123".to_string(),
             vout: 0,
             sequence: Some(0xffffffff),
         }];
-        
+
         let mut outputs = HashMap::new();
-        outputs.insert("lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(), 100.0);
-        
+        outputs.insert(
+            "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            100.0,
+        );
+
         let mut assets = HashMap::new();
         assets.insert(
             "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
             "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d".to_string(),
         );
-        
+
         let result = rpc.create_raw_transaction(inputs, outputs, assets).await;
-        
+
         assert!(result.is_ok());
         let raw_tx = result.unwrap();
         assert!(raw_tx.starts_with("0200000000010abc123def456789"));
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_send_raw_transaction_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": "abc123def456789abc123def456789abc123def456789abc123def456789abc123de"
         });
-        
+
         let signed_tx_hex = "0200000000010abc123def456789abc123def456789abc123def456789abc123def456789abc123def456789000000006b483045022100...";
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2293,21 +2347,24 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.send_raw_transaction(signed_tx_hex).await;
-        
+
         assert!(result.is_ok());
         let txid = result.unwrap();
-        assert_eq!(txid, "abc123def456789abc123def456789abc123def456789abc123def456789abc123de");
-        
+        assert_eq!(
+            txid,
+            "abc123def456789abc123def456789abc123def456789abc123def456789abc123de"
+        );
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_get_transaction_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2322,9 +2379,9 @@ mod elements_rpc_tests {
                 "timereceived": 1640995180
             }
         });
-        
+
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2339,22 +2396,22 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_transaction(txid).await;
-        
+
         assert!(result.is_ok());
         let tx_detail = result.unwrap();
         assert_eq!(tx_detail.txid, txid);
         assert_eq!(tx_detail.confirmations, 6);
         assert_eq!(tx_detail.blockheight, Some(12345));
         assert_eq!(tx_detail.blocktime, Some(1640995200));
-        
+
         mock.assert();
     }
-    
+
     // Error handling tests
-    
+
     #[tokio::test]
     async fn test_rpc_call_network_failure() {
         // Use an invalid URL to simulate network failure
@@ -2363,10 +2420,10 @@ mod elements_rpc_tests {
             "user".to_string(),
             "pass".to_string(),
         );
-        
+
         let result = rpc.get_network_info().await;
         assert!(result.is_err());
-        
+
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
                 assert!(msg.contains("Failed to send RPC request"));
@@ -2374,21 +2431,21 @@ mod elements_rpc_tests {
             _ => panic!("Expected RPC error for network failure"),
         }
     }
-    
+
     #[tokio::test]
     async fn test_rpc_call_http_error_status() {
         let server = MockServer::start();
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST).path("/");
             then.status(500)
                 .header("content-type", "application/json")
                 .body("Internal Server Error");
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
@@ -2396,24 +2453,24 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected RPC error for HTTP error status"),
         }
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_rpc_call_invalid_json_response() {
         let server = MockServer::start();
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST).path("/");
             then.status(200)
                 .header("content-type", "application/json")
                 .body("invalid json response");
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
@@ -2421,14 +2478,14 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected RPC error for invalid JSON"),
         }
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_rpc_call_error_response() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2438,17 +2495,17 @@ mod elements_rpc_tests {
                 "message": "Method not found"
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST).path("/");
             then.status(200)
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
@@ -2456,31 +2513,31 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected RPC error for error response"),
         }
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_rpc_call_missing_result() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": null,
             "error": null
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST).path("/");
             then.status(200)
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
@@ -2488,16 +2545,16 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected RPC error for missing result"),
         }
-        
+
         mock.assert();
     }
-    
+
     // Authentication tests
-    
+
     #[tokio::test]
     async fn test_rpc_authentication_headers() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2517,7 +2574,7 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         // Test with custom username and password
         let mock = server.mock(|when, then| {
             when.method(POST)
@@ -2533,26 +2590,30 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
-        let rpc = ElementsRpc::new(server.url("/"), "testuser".to_string(), "testpass".to_string());
+
+        let rpc = ElementsRpc::new(
+            server.url("/"),
+            "testuser".to_string(),
+            "testpass".to_string(),
+        );
         let result = rpc.get_network_info().await;
-        
+
         assert!(result.is_ok());
         mock.assert();
     }
-    
+
     // Wallet passphrase tests
-    
+
     #[tokio::test]
     async fn test_wallet_passphrase_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": null
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2567,20 +2628,20 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.wallet_passphrase("my_passphrase", 300).await;
-        
+
         assert!(result.is_ok());
         mock.assert();
     }
-    
+
     // Connection validation tests
-    
+
     #[tokio::test]
     async fn test_validate_connection_success() {
         let server = MockServer::start();
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2600,25 +2661,25 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST).path("/");
             then.status(200)
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.validate_connection().await;
-        
+
         assert!(result.is_ok());
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_get_node_status_success() {
         let server = MockServer::start();
-        
+
         let network_mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2638,7 +2699,7 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         let blockchain_mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2658,55 +2719,51 @@ mod elements_rpc_tests {
                 "warnings": ""
             }
         });
-        
+
         let network_mock = server.mock(|when, then| {
-            when.method(POST)
-                .path("/")
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "method": "getnetworkinfo",
-                    "params": []
-                }));
+            when.method(POST).path("/").json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "getnetworkinfo",
+                "params": []
+            }));
             then.status(200)
                 .header("content-type", "application/json")
                 .json_body(network_mock_response);
         });
-        
+
         let blockchain_mock = server.mock(|when, then| {
-            when.method(POST)
-                .path("/")
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "method": "getblockchaininfo",
-                    "params": []
-                }));
+            when.method(POST).path("/").json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "getblockchaininfo",
+                "params": []
+            }));
             then.status(200)
                 .header("content-type", "application/json")
                 .json_body(blockchain_mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.get_node_status().await;
-        
+
         assert!(result.is_ok());
         let (network_info, blockchain_info) = result.unwrap();
         assert_eq!(network_info.version, 220000);
         assert_eq!(blockchain_info.blocks, 12345);
-        
+
         network_mock.assert();
         blockchain_mock.assert();
     }
-    
+
     // Tests for UTXO selection and transaction building logic
-    
+
     #[tokio::test]
     async fn test_select_utxos_for_amount_success() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2740,7 +2797,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2755,15 +2812,15 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Test selecting UTXOs for 120.0 + 1.0 fee = 121.0 total
         let result = rpc.select_utxos_for_amount(asset_id, 120.0, 1.0).await;
-        
+
         assert!(result.is_ok());
         let (selected_utxos, total_amount) = result.unwrap();
-        
+
         // Should select the largest UTXOs first: 100.0 + 75.0 = 175.0 >= 121.0
         assert_eq!(selected_utxos.len(), 2);
         assert_eq!(selected_utxos[0].txid, "utxo1_txid");
@@ -2771,16 +2828,16 @@ mod elements_rpc_tests {
         assert_eq!(selected_utxos[1].txid, "utxo2_txid");
         assert_eq!(selected_utxos[1].amount, 75.0);
         assert_eq!(total_amount, 175.0);
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_select_utxos_for_amount_insufficient_funds() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -2796,7 +2853,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2811,12 +2868,12 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Try to select UTXOs for 100.0 + 1.0 fee = 101.0 total, but only have 10.0
         let result = rpc.select_utxos_for_amount(asset_id, 100.0, 1.0).await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Validation(msg) => {
@@ -2826,22 +2883,22 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected validation error for insufficient funds"),
         }
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_select_utxos_for_amount_no_spendable_utxos() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": []
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2856,11 +2913,11 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         let result = rpc.select_utxos_for_amount(asset_id, 50.0, 1.0).await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Validation(msg) => {
@@ -2869,16 +2926,16 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected validation error for no spendable UTXOs"),
         }
-        
+
         mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_build_distribution_transaction_success() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         // Mock listunspent response
         let listunspent_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -2895,14 +2952,14 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         // Mock createrawtransaction response
         let createrawtx_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": "0200000000010123456789abcdef..."
         });
-        
+
         let listunspent_mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2917,7 +2974,7 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(listunspent_response);
         });
-        
+
         let createrawtx_mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -2927,36 +2984,38 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(createrawtx_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Create distribution with 100.0 + 50.0 = 150.0 total
         let mut address_amounts = HashMap::new();
         address_amounts.insert("recipient1".to_string(), 100.0);
         address_amounts.insert("recipient2".to_string(), 50.0);
-        
-        let result = rpc.build_distribution_transaction(
-            asset_id,
-            address_amounts,
-            "change_address",
-            1.0, // 1.0 fee
-        ).await;
-        
+
+        let result = rpc
+            .build_distribution_transaction(
+                asset_id,
+                address_amounts,
+                "change_address",
+                1.0, // 1.0 fee
+            )
+            .await;
+
         assert!(result.is_ok());
         let (raw_tx, selected_utxos, change_amount) = result.unwrap();
-        
+
         assert_eq!(raw_tx, "0200000000010123456789abcdef...");
         assert_eq!(selected_utxos.len(), 1);
         assert_eq!(selected_utxos[0].txid, "funding_utxo");
         assert_eq!(selected_utxos[0].amount, 200.0);
-        
+
         // Change should be 200.0 - 150.0 - 1.0 = 49.0
         assert_eq!(change_amount, 49.0);
-        
+
         listunspent_mock.assert();
         createrawtx_mock.assert();
     }
-    
+
     #[tokio::test]
     async fn test_build_distribution_transaction_zero_amount() {
         let rpc = ElementsRpc::new(
@@ -2964,16 +3023,13 @@ mod elements_rpc_tests {
             "user".to_string(),
             "pass".to_string(),
         );
-        
+
         let address_amounts = HashMap::new(); // Empty distribution
-        
-        let result = rpc.build_distribution_transaction(
-            "asset_id",
-            address_amounts,
-            "change_address",
-            1.0,
-        ).await;
-        
+
+        let result = rpc
+            .build_distribution_transaction("asset_id", address_amounts, "change_address", 1.0)
+            .await;
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Validation(msg) => {
@@ -2982,13 +3038,13 @@ mod elements_rpc_tests {
             _ => panic!("Expected validation error for zero distribution amount"),
         }
     }
-    
+
     #[tokio::test]
     async fn test_build_distribution_transaction_with_dust_change() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-        
+
         // Mock listunspent response - UTXO that will create dust change
         let listunspent_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3005,14 +3061,14 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         // Mock createrawtransaction response - should only have distribution outputs, no change
         let createrawtx_response = serde_json::json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "result": "0200000000010123456789abcdef..."
         });
-        
+
         let listunspent_mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3027,7 +3083,7 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(listunspent_response);
         });
-        
+
         let createrawtx_mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3037,29 +3093,35 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(createrawtx_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Create distribution that will result in dust change
         let mut address_amounts = HashMap::new();
         address_amounts.insert("recipient1".to_string(), 100.0);
-        
-        let result = rpc.build_distribution_transaction(
-            asset_id,
-            address_amounts,
-            "change_address",
-            0.0, // No fee to make change exactly 0.00001 (dust)
-        ).await;
-        
+
+        let result = rpc
+            .build_distribution_transaction(
+                asset_id,
+                address_amounts,
+                "change_address",
+                0.0, // No fee to make change exactly 0.00001 (dust)
+            )
+            .await;
+
         assert!(result.is_ok());
         let (raw_tx, selected_utxos, change_amount) = result.unwrap();
-        
+
         assert_eq!(raw_tx, "0200000000010123456789abcdef...");
         assert_eq!(selected_utxos.len(), 1);
-        
+
         // Change amount should be approximately 0.00001 but won't be added to outputs due to dust threshold
-        assert!((change_amount - 0.00001).abs() < 1e-10, "Change amount {} should be approximately 0.00001", change_amount);
-        
+        assert!(
+            (change_amount - 0.00001).abs() < 1e-10,
+            "Change amount {} should be approximately 0.00001",
+            change_amount
+        );
+
         listunspent_mock.assert();
         createrawtx_mock.assert();
     }
@@ -3080,12 +3142,20 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for MockSigner {
-            async fn sign_transaction(&self, _unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                _unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 if self.should_fail {
-                    Err(crate::signer::SignerError::Lwk("Mock signing failure".to_string()))
+                    Err(crate::signer::SignerError::Lwk(
+                        "Mock signing failure".to_string(),
+                    ))
                 } else {
                     // Return a longer hex string to simulate signed transaction (20+ bytes when decoded)
-                    Ok(format!("{}deadbeefcafebabe1234567890abcdef", self.return_value))
+                    Ok(format!(
+                        "{}deadbeefcafebabe1234567890abcdef",
+                        self.return_value
+                    ))
                 }
             }
         }
@@ -3107,7 +3177,10 @@ mod elements_rpc_tests {
         // Test invalid hex characters
         let result = rpc.sign_transaction("abcg", &mock_signer).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid hex characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid hex characters"));
 
         // Test signer failure
         let mock_signer = MockSigner {
@@ -3116,7 +3189,10 @@ mod elements_rpc_tests {
         };
         let result = rpc.sign_transaction("abcd", &mock_signer).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Mock signing failure"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Mock signing failure"));
 
         // Test successful signing
         let mock_signer = MockSigner {
@@ -3149,7 +3225,10 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for BadMockSigner {
-            async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 if self.return_empty {
                     Ok("".to_string())
                 } else if self.return_odd_length {
@@ -3195,7 +3274,10 @@ mod elements_rpc_tests {
         };
         let result = rpc.sign_transaction("abcd", &bad_signer).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid hex characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid hex characters"));
 
         // Test signer returning shorter transaction (invalid)
         let bad_signer = BadMockSigner {
@@ -3206,7 +3288,10 @@ mod elements_rpc_tests {
         };
         let result = rpc.sign_transaction("abcd", &bad_signer).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("shorter than unsigned transaction"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("shorter than unsigned transaction"));
     }
 
     #[tokio::test]
@@ -3222,7 +3307,10 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for TinyMockSigner {
-            async fn sign_transaction(&self, _unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                _unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 Ok("abcd".to_string()) // Only 2 bytes when decoded
             }
         }
@@ -3248,18 +3336,21 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for GoodMockSigner {
-            async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 // Return a longer valid hex string (20+ bytes when decoded)
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
             }
         }
 
         let good_signer = GoodMockSigner;
-        
+
         // Test with a reasonable sized unsigned transaction
         let unsigned_tx = "0200000000010123456789abcdef"; // 14 bytes when decoded
         let result = rpc.sign_transaction(unsigned_tx, &good_signer).await;
-        
+
         assert!(result.is_ok());
         let signed_tx = result.unwrap();
         assert!(signed_tx.starts_with(unsigned_tx));
@@ -3271,50 +3362,48 @@ mod elements_rpc_tests {
     async fn test_sign_and_broadcast_transaction_mock() {
         // Create a mock server for testing the broadcast part
         let server = MockServer::start();
-        
+
         // Mock the RPC response for sendrawtransaction
         let mock = server.mock(|when, then| {
-            when.method(POST)
-                .path("/")
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "method": "sendrawtransaction",
-                    "params": ["0200000000010123456789abcdefdeadbeefcafebabe1234567890abcdef"]
-                }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": "abc123def456789",
-                    "error": null
-                }));
+            when.method(POST).path("/").json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "sendrawtransaction",
+                "params": ["0200000000010123456789abcdefdeadbeefcafebabe1234567890abcdef"]
+            }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": "abc123def456789",
+                "error": null
+            }));
         });
 
-        let rpc = ElementsRpc::new(
-            server.url("/"),
-            "user".to_string(),
-            "pass".to_string(),
-        );
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
         // Mock signer for testing
         struct TestMockSigner;
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for TestMockSigner {
-            async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
             }
         }
 
         let signer = TestMockSigner;
         let unsigned_tx = "0200000000010123456789abcdef";
-        
-        let result = rpc.sign_and_broadcast_transaction(unsigned_tx, &signer).await;
-        
+
+        let result = rpc
+            .sign_and_broadcast_transaction(unsigned_tx, &signer)
+            .await;
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "abc123def456789");
-        
+
         // Verify the mock was called
         mock.assert();
     }
@@ -3332,14 +3421,21 @@ mod elements_rpc_tests {
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for FailingSigner {
-            async fn sign_transaction(&self, _unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
-                Err(crate::signer::SignerError::Lwk("Signing failed".to_string()))
+            async fn sign_transaction(
+                &self,
+                _unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
+                Err(crate::signer::SignerError::Lwk(
+                    "Signing failed".to_string(),
+                ))
             }
         }
 
         let failing_signer = FailingSigner;
-        let result = rpc.sign_and_broadcast_transaction("abcd", &failing_signer).await;
-        
+        let result = rpc
+            .sign_and_broadcast_transaction("abcd", &failing_signer)
+            .await;
+
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         // The error should be a Signer error containing the original failure message
@@ -3351,57 +3447,56 @@ mod elements_rpc_tests {
     async fn test_sign_and_broadcast_transaction_broadcast_failure() {
         // Create a mock server that returns an error for broadcast
         let server = MockServer::start();
-        
+
         let mock = server.mock(|when, then| {
-            when.method(POST)
-                .path("/");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": null,
-                    "error": {
-                        "code": -26,
-                        "message": "Transaction rejected"
-                    }
-                }));
+            when.method(POST).path("/");
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": null,
+                "error": {
+                    "code": -26,
+                    "message": "Transaction rejected"
+                }
+            }));
         });
 
-        let rpc = ElementsRpc::new(
-            server.url("/"),
-            "user".to_string(),
-            "pass".to_string(),
-        );
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
         // Mock signer that succeeds
         struct WorkingSigner;
 
         #[async_trait::async_trait]
         impl crate::signer::Signer for WorkingSigner {
-            async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, crate::signer::SignerError> {
+            async fn sign_transaction(
+                &self,
+                unsigned_tx: &str,
+            ) -> Result<String, crate::signer::SignerError> {
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
             }
         }
 
         let working_signer = WorkingSigner;
         let unsigned_tx = "0200000000010123456789abcdef";
-        
-        let result = rpc.sign_and_broadcast_transaction(unsigned_tx, &working_signer).await;
-        
+
+        let result = rpc
+            .sign_and_broadcast_transaction(unsigned_tx, &working_signer)
+            .await;
+
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Failed during transaction broadcast phase"));
         assert!(error_msg.contains("Transaction rejected"));
-        
+
         mock.assert();
     }
 
     #[tokio::test]
     async fn test_wait_for_confirmations_success() {
         let server = MockServer::start();
-        
+
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // First call returns 1 confirmation (not enough)
         let _mock_response_1 = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3417,7 +3512,7 @@ mod elements_rpc_tests {
                 "timereceived": 1640995180
             }
         });
-        
+
         // Second call returns 2 confirmations (sufficient)
         let mock_response_2 = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3433,7 +3528,7 @@ mod elements_rpc_tests {
                 "timereceived": 1640995180
             }
         });
-        
+
         // Create a mock that returns 2 confirmations immediately (simpler test)
         let mock = server.mock(|when, then| {
             when.method(POST)
@@ -3449,17 +3544,19 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response_2); // Return sufficient confirmations immediately
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Use fast polling (1 second) for testing
-        let result = rpc.wait_for_confirmations_with_interval(txid, Some(2), Some(1), Some(1)).await;
-        
+        let result = rpc
+            .wait_for_confirmations_with_interval(txid, Some(2), Some(1), Some(1))
+            .await;
+
         assert!(result.is_ok());
         let tx_detail = result.unwrap();
         assert_eq!(tx_detail.confirmations, 2);
         assert_eq!(tx_detail.txid, txid);
-        
+
         // Mock should have been called once
         mock.assert();
     }
@@ -3467,9 +3564,9 @@ mod elements_rpc_tests {
     #[tokio::test]
     async fn test_wait_for_confirmations_timeout() {
         let server = MockServer::start();
-        
+
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Always return insufficient confirmations
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3485,7 +3582,7 @@ mod elements_rpc_tests {
                 "timereceived": null
             }
         });
-        
+
         let _mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3500,12 +3597,14 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         // Use a very short timeout for testing (0 = 3 seconds) and fast polling (1 second)
-        let result = rpc.wait_for_confirmations_with_interval(txid, Some(2), Some(0), Some(1)).await;
-        
+        let result = rpc
+            .wait_for_confirmations_with_interval(txid, Some(2), Some(0), Some(1))
+            .await;
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Timeout(msg) => {
@@ -3515,7 +3614,7 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected timeout error"),
         }
-        
+
         // Mock will be called multiple times during the timeout period
         // We don't assert on the exact number since it depends on timing
     }
@@ -3523,9 +3622,9 @@ mod elements_rpc_tests {
     #[tokio::test]
     async fn test_wait_for_confirmations_immediate_success() {
         let server = MockServer::start();
-        
+
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Transaction already has sufficient confirmations
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3541,7 +3640,7 @@ mod elements_rpc_tests {
                 "timereceived": 1640995180
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3556,16 +3655,16 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        
+
         let result = rpc.wait_for_confirmations(txid, Some(2), Some(10)).await;
-        
+
         assert!(result.is_ok());
         let tx_detail = result.unwrap();
         assert_eq!(tx_detail.confirmations, 5);
         assert_eq!(tx_detail.txid, txid);
-        
+
         // Should only need one call since confirmations are already sufficient
         mock.assert();
     }
@@ -3573,10 +3672,10 @@ mod elements_rpc_tests {
     #[tokio::test]
     async fn test_collect_change_data_with_change_outputs() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Mock response with UTXOs including change outputs from the specified transaction
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3612,7 +3711,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3627,40 +3726,40 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.collect_change_data(asset_id, txid).await;
-        
+
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
-        
+
         // Should return 2 UTXOs from the specified transaction (vout 1 and 2)
         assert_eq!(change_utxos.len(), 2);
-        
+
         // Verify the first change UTXO
         assert_eq!(change_utxos[0].txid, txid);
         assert_eq!(change_utxos[0].vout, 1);
         assert_eq!(change_utxos[0].amount, 25.5);
         assert_eq!(change_utxos[0].asset, asset_id);
         assert!(change_utxos[0].spendable);
-        
+
         // Verify the second change UTXO
         assert_eq!(change_utxos[1].txid, txid);
         assert_eq!(change_utxos[1].vout, 2);
         assert_eq!(change_utxos[1].amount, 10.0);
         assert_eq!(change_utxos[1].asset, asset_id);
         assert!(change_utxos[1].spendable);
-        
+
         mock.assert();
     }
 
     #[tokio::test]
     async fn test_collect_change_data_no_change_outputs() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Mock response with UTXOs but none from the specified transaction
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3686,7 +3785,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3701,26 +3800,26 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.collect_change_data(asset_id, txid).await;
-        
+
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
-        
+
         // Should return empty vector since no UTXOs match the specified transaction
         assert_eq!(change_utxos.len(), 0);
-        
+
         mock.assert();
     }
 
     #[tokio::test]
     async fn test_collect_change_data_filters_unspendable() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Mock response with UTXOs including unspendable ones from the specified transaction
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3746,7 +3845,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3761,31 +3860,31 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.collect_change_data(asset_id, txid).await;
-        
+
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
-        
+
         // Should return only 1 UTXO (the spendable one), filtering out the unspendable one
         assert_eq!(change_utxos.len(), 1);
         assert_eq!(change_utxos[0].txid, txid);
         assert_eq!(change_utxos[0].vout, 1);
         assert_eq!(change_utxos[0].amount, 25.5);
         assert!(change_utxos[0].spendable);
-        
+
         mock.assert();
     }
 
     #[tokio::test]
     async fn test_collect_change_data_filters_wrong_asset() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
         let different_asset_id = "different_asset_id_123456789abcdef123456789abcdef123456789abcdef";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Mock response with UTXOs from the specified transaction but wrong asset
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3802,7 +3901,7 @@ mod elements_rpc_tests {
                 }
             ]
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3817,28 +3916,28 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.collect_change_data(asset_id, txid).await;
-        
+
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
-        
+
         // Should return empty vector since the UTXO has wrong asset ID
         // (Note: This test assumes the mock returns wrong asset despite the filter,
         // which wouldn't happen in reality but tests our filtering logic)
         assert_eq!(change_utxos.len(), 0);
-        
+
         mock.assert();
     }
 
     #[tokio::test]
     async fn test_collect_change_data_rpc_error() {
         let server = MockServer::start();
-        
+
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
-        
+
         // Mock RPC error response
         let mock_response = serde_json::json!({
             "jsonrpc": "1.0",
@@ -3849,7 +3948,7 @@ mod elements_rpc_tests {
                 "message": "RPC connection failed"
             }
         });
-        
+
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
@@ -3864,10 +3963,10 @@ mod elements_rpc_tests {
                 .header("content-type", "application/json")
                 .json_body(mock_response);
         });
-        
+
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.collect_change_data(asset_id, txid).await;
-        
+
         assert!(result.is_err());
         match result.unwrap_err() {
             AmpError::Rpc(msg) => {
@@ -3876,7 +3975,7 @@ mod elements_rpc_tests {
             }
             _ => panic!("Expected RPC error"),
         }
-        
+
         mock.assert();
     }
 }
@@ -7570,21 +7669,37 @@ impl ApiClient {
             .map(|(index, assignment)| {
                 tracing::trace!(
                     "Converting assignment {}: user_id={}, address={}, amount={}",
-                    index, assignment.user_id, assignment.address, assignment.amount
+                    index,
+                    assignment.user_id,
+                    assignment.address,
+                    assignment.amount
                 );
-                
+
                 // Validate assignment data
                 if assignment.user_id.is_empty() {
                     tracing::error!("Assignment {} has empty user_id", index);
-                    return Err(AmpError::validation(format!("Assignment {} has empty user_id", index)));
+                    return Err(AmpError::validation(format!(
+                        "Assignment {} has empty user_id",
+                        index
+                    )));
                 }
                 if assignment.address.is_empty() {
                     tracing::error!("Assignment {} has empty address", index);
-                    return Err(AmpError::validation(format!("Assignment {} has empty address", index)));
+                    return Err(AmpError::validation(format!(
+                        "Assignment {} has empty address",
+                        index
+                    )));
                 }
                 if assignment.amount <= 0.0 {
-                    tracing::error!("Assignment {} has non-positive amount: {}", index, assignment.amount);
-                    return Err(AmpError::validation(format!("Assignment {} has non-positive amount: {}", index, assignment.amount)));
+                    tracing::error!(
+                        "Assignment {} has non-positive amount: {}",
+                        index,
+                        assignment.amount
+                    );
+                    return Err(AmpError::validation(format!(
+                        "Assignment {} has non-positive amount: {}",
+                        index, assignment.amount
+                    )));
                 }
 
                 total_amount += assignment.amount;
@@ -7620,13 +7735,19 @@ impl ApiClient {
             .await
             .map_err(|e| {
                 let api_call_duration = api_call_start.elapsed();
-                let error_msg = format!("Failed to create distribution after {:?}: {}", api_call_duration, e);
+                let error_msg = format!(
+                    "Failed to create distribution after {:?}: {}",
+                    api_call_duration, e
+                );
                 tracing::error!("{}", error_msg);
-                
+
                 // Check for specific API error patterns
                 let error_str = e.to_string();
                 if error_str.contains("404") || error_str.contains("not found") {
-                    tracing::error!("Asset {} not found - verify asset UUID is correct", asset_uuid);
+                    tracing::error!(
+                        "Asset {} not found - verify asset UUID is correct",
+                        asset_uuid
+                    );
                 } else if error_str.contains("400") || error_str.contains("bad request") {
                     tracing::error!("Bad request - check assignment data format and values");
                 } else if error_str.contains("401") || error_str.contains("unauthorized") {
@@ -7638,7 +7759,7 @@ impl ApiClient {
                 } else if error_str.contains("500") || error_str.contains("internal server") {
                     tracing::error!("Server error - this may be a temporary issue, retry may help");
                 }
-                
+
                 AmpError::api(error_msg)
             })?;
 
@@ -7704,7 +7825,7 @@ impl ApiClient {
     /// # let client = ApiClient::new("https://amp.blockstream.com".to_string()).unwrap();
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let distribution_uuid = "dist-550e8400-e29b-41d4-a716-446655440000";
-    /// 
+    ///
     /// // Transaction details from Elements node gettransaction call
     /// let tx_detail = TransactionDetail {
     ///     txid: "abc123def456...".to_string(),
@@ -7716,12 +7837,12 @@ impl ApiClient {
     ///     time: Some(1640995200),
     ///     timereceived: Some(1640995180),
     /// };
-    /// 
+    ///
     /// let tx_data = DistributionTxData {
     ///     details: tx_detail,
     ///     txid: "abc123def456...".to_string(),
     /// };
-    /// 
+    ///
     /// // Change UTXOs from Elements node listunspent call
     /// let change_data = vec![
     ///     Unspent {
@@ -7737,7 +7858,7 @@ impl ApiClient {
     ///         witnessscript: None,
     ///     }
     /// ];
-    /// 
+    ///
     /// client.confirm_distribution(asset_uuid, distribution_uuid, tx_data, change_data).await?;
     /// println!("Distribution confirmed successfully");
     /// # Ok(())
@@ -7795,7 +7916,8 @@ impl ApiClient {
         if tx_data.txid != tx_data.details.txid {
             tracing::error!(
                 "Transaction ID mismatch: tx_data.txid '{}' != tx_data.details.txid '{}'",
-                tx_data.txid, tx_data.details.txid
+                tx_data.txid,
+                tx_data.details.txid
             );
             return Err(AmpError::validation(format!(
                 "Transaction ID mismatch: tx_data.txid '{}' != tx_data.details.txid '{}'",
@@ -7807,7 +7929,8 @@ impl ApiClient {
         if tx_data.details.confirmations < 1 {
             tracing::error!(
                 "Transaction {} has insufficient confirmations: {} (minimum 1 required)",
-                tx_data.txid, tx_data.details.confirmations
+                tx_data.txid,
+                tx_data.details.confirmations
             );
             return Err(AmpError::validation(format!(
                 "Transaction {} has insufficient confirmations: {} (minimum 1 required)",
@@ -7831,11 +7954,15 @@ impl ApiClient {
                 change_data.len(),
                 total_change
             );
-            
+
             for (i, utxo) in change_data.iter().enumerate() {
                 tracing::trace!(
                     "Change UTXO {}: txid={}, vout={}, amount={}, spendable={}",
-                    i, utxo.txid, utxo.vout, utxo.amount, utxo.spendable
+                    i,
+                    utxo.txid,
+                    utxo.vout,
+                    utxo.amount,
+                    utxo.spendable
                 );
             }
         } else {
@@ -7864,7 +7991,7 @@ impl ApiClient {
                 distribution_uuid, api_call_duration, e, tx_data.txid
             );
             tracing::error!("{}", error_msg);
-            
+
             // Check for specific API error patterns
             let error_str = e.to_string();
             if error_str.contains("404") || error_str.contains("not found") {
@@ -7878,7 +8005,7 @@ impl ApiClient {
             } else if error_str.contains("500") || error_str.contains("internal server") {
                 tracing::error!("Server error - this may be a temporary issue, retry with txid: {}", tx_data.txid);
             }
-            
+
             AmpError::api(error_msg)
         })?;
 
@@ -8370,7 +8497,7 @@ impl ApiClient {
     /// let client = ApiClient::new().await?;
     /// let elements_rpc = ElementsRpc::from_env()?;
     /// let (_, signer) = LwkSoftwareSigner::generate_new()?;
-    /// 
+    ///
     /// let assignments = vec![
     ///     AssetDistributionAssignment {
     ///         user_id: "user123".to_string(),
@@ -8378,7 +8505,7 @@ impl ApiClient {
     ///         amount: 100.0,
     ///     },
     /// ];
-    /// 
+    ///
     /// client.distribute_asset(
     ///     "550e8400-e29b-41d4-a716-446655440000",
     ///     assignments,
@@ -8408,73 +8535,76 @@ impl ApiClient {
             assignment_count = assignments.len()
         );
         let _enter = distribution_span.enter();
-        
+
         tracing::info!(
             "Starting asset distribution workflow for asset: {} with {} assignments",
             asset_uuid,
             assignments.len()
         );
-        
+
         // Step 1: Input validation - asset_uuid format
         tracing::debug!("Step 1: Validating asset UUID format");
-        self.validate_asset_uuid(asset_uuid)
-            .map_err(|e| {
-                let error = AmpError::validation(format!("Invalid asset UUID: {}", e));
-                tracing::error!("Asset UUID validation failed: {}", e);
-                error.with_context("Step 1: Asset UUID validation")
-            })?;
+        self.validate_asset_uuid(asset_uuid).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid asset UUID: {}", e));
+            tracing::error!("Asset UUID validation failed: {}", e);
+            error.with_context("Step 1: Asset UUID validation")
+        })?;
         tracing::debug!("Asset UUID validation passed");
-        
+
         // Step 2: Input validation - assignments data structure
         tracing::debug!("Step 2: Validating {} assignments", assignments.len());
-        self.validate_assignments(&assignments)
-            .map_err(|e| {
-                let error = AmpError::validation(format!("Invalid assignments: {}", e));
-                tracing::error!("Assignments validation failed: {}", e);
-                error.with_context("Step 2: Assignments validation")
-            })?;
+        self.validate_assignments(&assignments).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid assignments: {}", e));
+            tracing::error!("Assignments validation failed: {}", e);
+            error.with_context("Step 2: Assignments validation")
+        })?;
         tracing::debug!("Assignments validation passed");
-        
+
         // Step 3: Check ElementsRpc connection availability
         tracing::debug!("Step 3: Validating Elements RPC connection");
-        self.validate_elements_rpc_connection(node_rpc).await
+        self.validate_elements_rpc_connection(node_rpc)
+            .await
             .map_err(|e| {
-                let error = AmpError::rpc(format!("ElementsRpc connection validation failed: {}", e));
+                let error =
+                    AmpError::rpc(format!("ElementsRpc connection validation failed: {}", e));
                 tracing::error!("Elements RPC connection validation failed: {}", e);
                 error.with_context("Step 3: Elements RPC connection validation")
             })?;
         tracing::debug!("Elements RPC connection validation passed");
-        
+
         // Step 4: Check signer interface availability
         tracing::debug!("Step 4: Validating signer interface");
-        self.validate_signer_interface(signer).await
-            .map_err(|e| {
-                let error = AmpError::validation(format!("Signer interface validation failed: {}", e));
-                tracing::error!("Signer interface validation failed: {}", e);
-                error.with_context("Step 4: Signer interface validation")
-            })?;
+        self.validate_signer_interface(signer).await.map_err(|e| {
+            let error = AmpError::validation(format!("Signer interface validation failed: {}", e));
+            tracing::error!("Signer interface validation failed: {}", e);
+            error.with_context("Step 4: Signer interface validation")
+        })?;
         tracing::debug!("Signer interface validation passed");
-        
+
         tracing::info!("✓ All input validations completed successfully");
 
         // Step 5: Authenticate with AMP API using existing TokenManager
         tracing::debug!("Step 5: Authenticating with AMP API");
-        let _token = self.token_strategy.get_token().await
-            .map_err(|e| {
-                tracing::error!("AMP API authentication failed: {}", e);
-                let amp_error = AmpError::Existing(e);
-                if amp_error.is_retryable() {
-                    if let Some(instructions) = amp_error.retry_instructions() {
-                        tracing::warn!("Retry instructions: {}", instructions);
-                    }
+        let _token = self.token_strategy.get_token().await.map_err(|e| {
+            tracing::error!("AMP API authentication failed: {}", e);
+            let amp_error = AmpError::Existing(e);
+            if amp_error.is_retryable() {
+                if let Some(instructions) = amp_error.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
                 }
-                amp_error.with_context("Step 5: AMP API authentication")
-            })?;
+            }
+            amp_error.with_context("Step 5: AMP API authentication")
+        })?;
         tracing::info!("✓ Successfully authenticated with AMP API");
 
         // Step 6: Create distribution request and parse response data
-        tracing::debug!("Step 6: Creating distribution request with {} assignments", assignments.len());
-        let distribution_response = self.create_distribution(asset_uuid, assignments).await
+        tracing::debug!(
+            "Step 6: Creating distribution request with {} assignments",
+            assignments.len()
+        );
+        let distribution_response = self
+            .create_distribution(asset_uuid, assignments)
+            .await
             .map_err(|e| {
                 tracing::error!("Distribution creation failed: {}", e);
                 if e.is_retryable() {
@@ -8484,7 +8614,7 @@ impl ApiClient {
                 }
                 e.with_context("Step 6: Distribution creation")
             })?;
-        
+
         tracing::info!(
             "✓ Distribution created successfully: {} with asset_id: {}",
             distribution_response.distribution_uuid,
@@ -8493,17 +8623,16 @@ impl ApiClient {
 
         // Step 7: Verify Elements node status and execute transaction workflow
         tracing::debug!("Step 7: Verifying Elements node status");
-        let (network_info, blockchain_info) = node_rpc.get_node_status().await
-            .map_err(|e| {
-                tracing::error!("Elements node status verification failed: {}", e);
-                if e.is_retryable() {
-                    if let Some(instructions) = e.retry_instructions() {
-                        tracing::warn!("Retry instructions: {}", instructions);
-                    }
+        let (network_info, blockchain_info) = node_rpc.get_node_status().await.map_err(|e| {
+            tracing::error!("Elements node status verification failed: {}", e);
+            if e.is_retryable() {
+                if let Some(instructions) = e.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
                 }
-                e.with_context("Step 7: Elements node status verification")
-            })?;
-        
+            }
+            e.with_context("Step 7: Elements node status verification")
+        })?;
+
         tracing::info!(
             "✓ Elements node verified - chain: {}, blocks: {}, connections: {}",
             blockchain_info.chain,
@@ -8515,16 +8644,21 @@ impl ApiClient {
         tracing::debug!("Step 8: Building distribution transaction");
         let estimated_fee = 0.001; // Conservative fee estimate for Liquid
         tracing::debug!("Using estimated fee: {} for transaction", estimated_fee);
-        
+
         // Get a change address from the signer (we'll use the first address from assignments as fallback)
-        let change_address = distribution_response.map_address_amount.keys().next()
+        let change_address = distribution_response
+            .map_address_amount
+            .keys()
+            .next()
             .ok_or_else(|| {
                 let error = AmpError::validation("No addresses found in distribution response");
-                tracing::error!("No addresses found in distribution response - this should not happen");
+                tracing::error!(
+                    "No addresses found in distribution response - this should not happen"
+                );
                 error
             })?;
         tracing::debug!("Using change address: {}", change_address);
-        
+
         let (raw_transaction, selected_utxos, change_amount) = node_rpc
             .build_distribution_transaction(
                 &distribution_response.asset_id,
@@ -8552,12 +8686,16 @@ impl ApiClient {
 
         // Step 9: Sign and broadcast transaction
         tracing::debug!("Step 9: Signing and broadcasting transaction");
-        let txid = node_rpc.sign_and_broadcast_transaction(&raw_transaction, signer).await
+        let txid = node_rpc
+            .sign_and_broadcast_transaction(&raw_transaction, signer)
+            .await
             .map_err(|e| {
                 tracing::error!("Transaction signing and broadcasting failed: {}", e);
                 match &e {
                     AmpError::Signer(_) => {
-                        tracing::error!("Signing failed - check signer configuration and credentials");
+                        tracing::error!(
+                            "Signing failed - check signer configuration and credentials"
+                        );
                     }
                     AmpError::Rpc(_) => {
                         if e.is_retryable() {
@@ -8570,7 +8708,7 @@ impl ApiClient {
                 }
                 e.with_context("Step 9: Transaction signing and broadcasting")
             })?;
-        
+
         tracing::info!("✓ Transaction broadcast successfully with ID: {}", txid);
 
         // Step 10: Wait for confirmations
@@ -8584,7 +8722,7 @@ impl ApiClient {
                     elapsed,
                     e
                 );
-                
+
                 match &e {
                     AmpError::Timeout(_) => {
                         tracing::warn!(
@@ -8608,7 +8746,7 @@ impl ApiClient {
                     }
                 }
             })?;
-        
+
         let confirmation_duration = confirmation_start.elapsed();
         tracing::info!(
             "✓ Transaction confirmed with {} confirmations at block height: {:?} (took {:?})",
@@ -8619,7 +8757,9 @@ impl ApiClient {
 
         // Step 11: Collect change data for confirmation
         tracing::debug!("Step 11: Collecting change data for distribution confirmation");
-        let change_data = node_rpc.collect_change_data(&distribution_response.asset_id, &txid).await
+        let change_data = node_rpc
+            .collect_change_data(&distribution_response.asset_id, &txid)
+            .await
             .map_err(|e| {
                 tracing::error!("Change data collection failed: {}", e);
                 if e.is_retryable() {
@@ -8629,7 +8769,7 @@ impl ApiClient {
                 }
                 e.with_context("Step 11: Change data collection")
             })?;
-        
+
         tracing::info!("✓ Collected {} change UTXOs", change_data.len());
         if !change_data.is_empty() {
             tracing::debug!("Change UTXOs: {:?}", change_data);
@@ -8647,26 +8787,25 @@ impl ApiClient {
             &distribution_response.distribution_uuid,
             tx_data,
             change_data,
-        ).await
+        )
+        .await
         .map_err(|e| {
             tracing::error!("Distribution confirmation failed: {}", e);
-            
+
             // For confirmation failures, always provide retry instructions with txid
             let confirmation_error = AmpError::api(format!(
                 "Failed to confirm distribution {}: {}. \
                 IMPORTANT: Transaction {} was successful on blockchain. \
                 Use this txid to manually retry confirmation.",
-                distribution_response.distribution_uuid,
-                e,
-                txid
+                distribution_response.distribution_uuid, e, txid
             ));
-            
+
             if e.is_retryable() {
                 if let Some(instructions) = e.retry_instructions() {
                     tracing::warn!("Retry instructions: {}", instructions);
                 }
             }
-            
+
             confirmation_error.with_context("Step 12: Distribution confirmation")
         })?;
 
@@ -8697,7 +8836,7 @@ impl ApiClient {
         if asset_uuid.trim().is_empty() {
             return Err("Asset UUID cannot be empty".to_string());
         }
-        
+
         // Basic UUID format validation (8-4-4-4-12 pattern)
         // Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         let parts: Vec<&str> = asset_uuid.split('-').collect();
@@ -8707,26 +8846,29 @@ impl ApiClient {
                 asset_uuid
             ));
         }
-        
+
         // Check each part has the correct length and contains only hex characters
         let expected_lengths = [8, 4, 4, 4, 12];
         for (i, (part, &expected_len)) in parts.iter().zip(expected_lengths.iter()).enumerate() {
             if part.len() != expected_len {
                 return Err(format!(
                     "Asset UUID part {} has length {} but expected {}",
-                    i + 1, part.len(), expected_len
+                    i + 1,
+                    part.len(),
+                    expected_len
                 ));
             }
-            
+
             // Check if all characters are valid hexadecimal
             if !part.chars().all(|c| c.is_ascii_hexdigit()) {
                 return Err(format!(
                     "Asset UUID part {} contains non-hexadecimal characters: '{}'",
-                    i + 1, part
+                    i + 1,
+                    part
                 ));
             }
         }
-        
+
         tracing::debug!("Asset UUID validation passed: {}", asset_uuid);
         Ok(())
     }
@@ -8747,36 +8889,47 @@ impl ApiClient {
     /// - Assignment with empty address
     /// - Assignment with non-positive amount
     /// - Assignment with invalid address format
-    fn validate_assignments(&self, assignments: &[AssetDistributionAssignment]) -> Result<(), String> {
+    fn validate_assignments(
+        &self,
+        assignments: &[AssetDistributionAssignment],
+    ) -> Result<(), String> {
         tracing::debug!("Validating {} assignments", assignments.len());
-        
+
         if assignments.is_empty() {
             tracing::error!("Assignments validation failed: empty assignments vector");
             return Err("Assignments vector cannot be empty".to_string());
         }
-        
+
         let mut total_amount = 0.0;
         let mut unique_addresses = std::collections::HashSet::new();
         let mut unique_users = std::collections::HashSet::new();
-        
+
         for (index, assignment) in assignments.iter().enumerate() {
-            tracing::trace!("Validating assignment {}: user_id={}, address={}, amount={}", 
-                index, assignment.user_id, assignment.address, assignment.amount);
-            
+            tracing::trace!(
+                "Validating assignment {}: user_id={}, address={}, amount={}",
+                index,
+                assignment.user_id,
+                assignment.address,
+                assignment.amount
+            );
+
             // Validate user_id
             if assignment.user_id.trim().is_empty() {
                 tracing::error!("Assignment {} validation failed: empty user_id", index);
                 return Err(format!("Assignment {} has empty user_id", index));
             }
-            
+
             // Validate address
             if assignment.address.trim().is_empty() {
                 tracing::error!("Assignment {} validation failed: empty address", index);
                 return Err(format!("Assignment {} has empty address", index));
             }
-            
+
             // Basic address format validation (should start with appropriate prefix for Liquid)
-            if !assignment.address.starts_with("lq") && !assignment.address.starts_with("VJ") && !assignment.address.starts_with("VT") {
+            if !assignment.address.starts_with("lq")
+                && !assignment.address.starts_with("VJ")
+                && !assignment.address.starts_with("VT")
+            {
                 tracing::error!(
                     "Assignment {} validation failed: invalid address format '{}' (should start with 'lq', 'VJ', or 'VT')",
                     index, assignment.address
@@ -8786,16 +8939,20 @@ impl ApiClient {
                     index, assignment.address
                 ));
             }
-            
+
             // Validate amount
             if assignment.amount <= 0.0 {
-                tracing::error!("Assignment {} validation failed: non-positive amount {}", index, assignment.amount);
+                tracing::error!(
+                    "Assignment {} validation failed: non-positive amount {}",
+                    index,
+                    assignment.amount
+                );
                 return Err(format!(
                     "Assignment {} has non-positive amount: {}",
                     index, assignment.amount
                 ));
             }
-            
+
             // Check for reasonable amount limits (prevent overflow issues)
             if assignment.amount > 21_000_000.0 {
                 tracing::error!(
@@ -8807,34 +8964,38 @@ impl ApiClient {
                     index, assignment.amount
                 ));
             }
-            
+
             // Check for precision issues (more than 8 decimal places)
             let amount_str = format!("{:.8}", assignment.amount);
-            if amount_str.len() > 20 { // Reasonable length check
+            if amount_str.len() > 20 {
+                // Reasonable length check
                 tracing::warn!(
                     "Assignment {} has high precision amount: {} - may cause precision issues",
-                    index, assignment.amount
+                    index,
+                    assignment.amount
                 );
             }
-            
+
             // Track duplicates for warnings
             if !unique_addresses.insert(&assignment.address) {
                 tracing::warn!(
                     "Assignment {} uses duplicate address: {} (this may be intentional)",
-                    index, assignment.address
+                    index,
+                    assignment.address
                 );
             }
-            
+
             if !unique_users.insert(&assignment.user_id) {
                 tracing::warn!(
                     "Assignment {} uses duplicate user_id: {} (this may be intentional)",
-                    index, assignment.user_id
+                    index,
+                    assignment.user_id
                 );
             }
-            
+
             total_amount += assignment.amount;
         }
-        
+
         tracing::debug!(
             "Assignments validation passed - {} assignments, total amount: {}, unique addresses: {}, unique users: {}",
             assignments.len(),
@@ -8842,14 +9003,14 @@ impl ApiClient {
             unique_addresses.len(),
             unique_users.len()
         );
-        
+
         if total_amount > 100_000_000.0 {
             tracing::warn!(
                 "Total distribution amount is very large: {} - ensure this is intentional",
                 total_amount
             );
         }
-        
+
         Ok(())
     }
 
@@ -8870,50 +9031,51 @@ impl ApiClient {
     /// - RPC authentication fails
     async fn validate_elements_rpc_connection(&self, node_rpc: &ElementsRpc) -> Result<(), String> {
         tracing::debug!("Validating Elements RPC connection");
-        
+
         // Test basic connectivity by getting network info
         tracing::trace!("Testing Elements RPC connectivity with getnetworkinfo");
-        let network_info = node_rpc.get_network_info().await
-            .map_err(|e| {
-                tracing::error!("Failed to get network info from Elements node: {}", e);
-                format!("Failed to get network info: {}", e)
-            })?;
-        
+        let network_info = node_rpc.get_network_info().await.map_err(|e| {
+            tracing::error!("Failed to get network info from Elements node: {}", e);
+            format!("Failed to get network info: {}", e)
+        })?;
+
         tracing::debug!(
             "Network info retrieved - version: {}, connections: {}, network_active: {}",
             network_info.version,
             network_info.connections,
             network_info.networkactive
         );
-        
+
         // Check if network is active
         if !network_info.networkactive {
             tracing::error!("Elements node network is not active");
             return Err("Elements node network is not active".to_string());
         }
-        
+
         // Verify we have active connections (for non-regtest environments)
         if network_info.connections == 0 {
             tracing::warn!("Elements node has no peer connections (may be regtest environment)");
         } else {
-            tracing::debug!("Elements node has {} peer connections", network_info.connections);
+            tracing::debug!(
+                "Elements node has {} peer connections",
+                network_info.connections
+            );
         }
-        
+
         // Test blockchain info to ensure node is operational
         tracing::trace!("Testing Elements RPC with getblockchaininfo");
-        let blockchain_info = node_rpc.get_blockchain_info().await
-            .map_err(|e| {
-                tracing::error!("Failed to get blockchain info from Elements node: {}", e);
-                format!("Failed to get blockchain info: {}", e)
-            })?;
-        
+        let blockchain_info = node_rpc.get_blockchain_info().await.map_err(|e| {
+            tracing::error!("Failed to get blockchain info from Elements node: {}", e);
+            format!("Failed to get blockchain info: {}", e)
+        })?;
+
         tracing::debug!(
             "Blockchain info retrieved - chain: {}, blocks: {}, sync_progress: {:.2}%",
             blockchain_info.chain,
             blockchain_info.blocks,
             blockchain_info.verificationprogress * 100.0
         );
-        
+
         // Check if node is still in initial block download
         if blockchain_info.initialblockdownload {
             tracing::error!(
@@ -8925,7 +9087,7 @@ impl ApiClient {
                 blockchain_info.verificationprogress * 100.0
             ));
         }
-        
+
         // Check sync progress
         if blockchain_info.verificationprogress < 0.99 {
             tracing::warn!(
@@ -8933,16 +9095,19 @@ impl ApiClient {
                 blockchain_info.verificationprogress * 100.0
             );
         }
-        
+
         // Check for warnings
         if !network_info.warnings.is_empty() {
             tracing::warn!("Elements node network warnings: {}", network_info.warnings);
         }
-        
+
         if !blockchain_info.warnings.is_empty() {
-            tracing::warn!("Elements node blockchain warnings: {}", blockchain_info.warnings);
+            tracing::warn!(
+                "Elements node blockchain warnings: {}",
+                blockchain_info.warnings
+            );
         }
-        
+
         tracing::debug!(
             "ElementsRpc connection validation passed - chain: {}, blocks: {}, connections: {}, sync: {:.2}%",
             blockchain_info.chain,
@@ -8950,7 +9115,7 @@ impl ApiClient {
             network_info.connections,
             blockchain_info.verificationprogress * 100.0
         );
-        
+
         Ok(())
     }
 
@@ -8969,13 +9134,13 @@ impl ApiClient {
     /// - Signer fails basic functionality test
     async fn validate_signer_interface(&self, signer: &dyn Signer) -> Result<(), String> {
         tracing::debug!("Validating signer interface");
-        
+
         // Test signer with a minimal dummy transaction hex
         // This is a minimal Elements transaction structure that should parse but not be valid for signing
         let dummy_tx = "0200000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        
+
         tracing::trace!("Testing signer interface with dummy transaction");
-        
+
         // Attempt to sign the dummy transaction - we expect this to fail with a specific error
         // but the signer should be responsive and not panic
         let validation_start = std::time::Instant::now();
@@ -9011,7 +9176,10 @@ impl ApiClient {
                     );
                 } else {
                     tracing::error!("Signer interface test failed with LWK error: {}", msg);
-                    return Err(format!("Signer interface test failed with LWK error: {}", msg));
+                    return Err(format!(
+                        "Signer interface test failed with LWK error: {}",
+                        msg
+                    ));
                 }
             }
             Err(e) => {
@@ -9020,13 +9188,13 @@ impl ApiClient {
                 return Err(format!("Signer interface test failed: {}", e));
             }
         }
-        
+
         let validation_duration = validation_start.elapsed();
         tracing::debug!(
             "Signer interface validation completed in {:?}",
             validation_duration
         );
-        
+
         // Warn if signer is very slow (might indicate performance issues)
         if validation_duration > std::time::Duration::from_secs(5) {
             tracing::warn!(
@@ -9034,7 +9202,7 @@ impl ApiClient {
                 validation_duration
             );
         }
-        
+
         Ok(())
     }
 }
@@ -9098,8 +9266,8 @@ pub async fn create_token_strategy_for_environment(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio;
     use crate::signer::LwkSoftwareSigner;
+    use tokio;
 
     #[tokio::test]
     async fn test_mock_token_strategy_basic_functionality() {
@@ -9616,35 +9784,31 @@ mod tests {
         // Create a mock client for testing
         let client = ApiClient::with_mock_token(
             reqwest::Url::parse("http://localhost:8080/api").unwrap(),
-            "test_token".to_string()
-        ).unwrap();
+            "test_token".to_string(),
+        )
+        .unwrap();
 
         // Test invalid asset UUID
-        let assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
-                amount: 100.0,
-            },
-        ];
+        let assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 100.0,
+        }];
 
         // Create a mock ElementsRpc (this will fail connection validation, but that's expected)
         let elements_rpc = ElementsRpc::new(
             "http://localhost:18884".to_string(),
             "user".to_string(),
-            "pass".to_string()
+            "pass".to_string(),
         );
 
         // Create a mock signer
         let (_, signer) = LwkSoftwareSigner::generate_new().unwrap();
 
         // Test with invalid UUID format
-        let result = client.distribute_asset(
-            "invalid-uuid",
-            assignments.clone(),
-            &elements_rpc,
-            &signer
-        ).await;
+        let result = client
+            .distribute_asset("invalid-uuid", assignments.clone(), &elements_rpc, &signer)
+            .await;
 
         assert!(result.is_err());
         if let Err(AmpError::Validation(msg)) = result {
@@ -9654,12 +9818,14 @@ mod tests {
         }
 
         // Test with empty assignments
-        let result = client.distribute_asset(
-            "550e8400-e29b-41d4-a716-446655440000",
-            vec![],
-            &elements_rpc,
-            &signer
-        ).await;
+        let result = client
+            .distribute_asset(
+                "550e8400-e29b-41d4-a716-446655440000",
+                vec![],
+                &elements_rpc,
+                &signer,
+            )
+            .await;
 
         assert!(result.is_err());
         if let Err(AmpError::Validation(msg)) = result {
@@ -9673,89 +9839,89 @@ mod tests {
     fn test_validate_asset_uuid() {
         let client = ApiClient::with_mock_token(
             reqwest::Url::parse("http://localhost:8080/api").unwrap(),
-            "test_token".to_string()
-        ).unwrap();
+            "test_token".to_string(),
+        )
+        .unwrap();
 
         // Valid UUID
-        assert!(client.validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000").is_ok());
+        assert!(client
+            .validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000")
+            .is_ok());
 
         // Invalid UUIDs
         assert!(client.validate_asset_uuid("").is_err());
         assert!(client.validate_asset_uuid("invalid").is_err());
-        assert!(client.validate_asset_uuid("550e8400-e29b-41d4-a716").is_err()); // Too short
-        assert!(client.validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra").is_err()); // Too long
-        assert!(client.validate_asset_uuid("550e8400xe29bx41d4xa716x446655440000").is_err()); // Wrong separators
-        assert!(client.validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000").is_err()); // Invalid hex char
+        assert!(client
+            .validate_asset_uuid("550e8400-e29b-41d4-a716")
+            .is_err()); // Too short
+        assert!(client
+            .validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra")
+            .is_err()); // Too long
+        assert!(client
+            .validate_asset_uuid("550e8400xe29bx41d4xa716x446655440000")
+            .is_err()); // Wrong separators
+        assert!(client
+            .validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000")
+            .is_err()); // Invalid hex char
     }
 
     #[test]
     fn test_validate_assignments() {
         let client = ApiClient::with_mock_token(
             reqwest::Url::parse("http://localhost:8080/api").unwrap(),
-            "test_token".to_string()
-        ).unwrap();
+            "test_token".to_string(),
+        )
+        .unwrap();
 
         // Valid assignments
-        let valid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
-                amount: 100.0,
-            },
-        ];
+        let valid_assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 100.0,
+        }];
         assert!(client.validate_assignments(&valid_assignments).is_ok());
 
         // Empty assignments
         assert!(client.validate_assignments(&[]).is_err());
 
         // Assignment with empty user_id
-        let invalid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "".to_string(),
-                address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
-                amount: 100.0,
-            },
-        ];
+        let invalid_assignments = vec![AssetDistributionAssignment {
+            user_id: "".to_string(),
+            address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 100.0,
+        }];
         assert!(client.validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with empty address
-        let invalid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "".to_string(),
-                amount: 100.0,
-            },
-        ];
+        let invalid_assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "".to_string(),
+            amount: 100.0,
+        }];
         assert!(client.validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with invalid address format
-        let invalid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "invalid_address".to_string(),
-                amount: 100.0,
-            },
-        ];
+        let invalid_assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "invalid_address".to_string(),
+            amount: 100.0,
+        }];
         assert!(client.validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with non-positive amount
-        let invalid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
-                amount: 0.0,
-            },
-        ];
+        let invalid_assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 0.0,
+        }];
         assert!(client.validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with unreasonably large amount
-        let invalid_assignments = vec![
-            AssetDistributionAssignment {
-                user_id: "user123".to_string(),
-                address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
-                amount: 25_000_000.0,
-            },
-        ];
+        let invalid_assignments = vec![AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 25_000_000.0,
+        }];
         assert!(client.validate_assignments(&invalid_assignments).is_err());
     }
 
@@ -9764,7 +9930,7 @@ mod tests {
         // Test AmpError creation and context enhancement
         let api_error = AmpError::api("Distribution creation failed");
         let contextual_error = api_error.with_context("Step 6: Distribution creation");
-        
+
         match contextual_error {
             AmpError::Api(msg) => {
                 assert!(msg.contains("Step 6: Distribution creation"));
@@ -9777,7 +9943,10 @@ mod tests {
         let rpc_error = AmpError::rpc("Connection failed");
         assert!(rpc_error.is_retryable());
         assert!(rpc_error.retry_instructions().is_some());
-        assert!(rpc_error.retry_instructions().unwrap().contains("Elements node"));
+        assert!(rpc_error
+            .retry_instructions()
+            .unwrap()
+            .contains("Elements node"));
 
         let validation_error = AmpError::validation("Invalid UUID");
         assert!(!validation_error.is_retryable());
@@ -9790,7 +9959,8 @@ mod tests {
         assert!(instructions.unwrap().contains("transaction ID"));
 
         // Test error helper methods
-        let signer_error = AmpError::Signer(crate::signer::SignerError::Lwk("Test error".to_string()));
+        let signer_error =
+            AmpError::Signer(crate::signer::SignerError::Lwk("Test error".to_string()));
         assert!(!signer_error.is_retryable());
         assert!(signer_error.retry_instructions().is_none());
 
