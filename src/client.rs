@@ -485,6 +485,7 @@ impl AmpError {
     }
 
     /// Returns true if this error indicates a retryable condition
+    #[must_use]
     pub const fn is_retryable(&self) -> bool {
         match self {
             Self::Network(_) | Self::Rpc(_) => true, // RPC errors might be transient
@@ -1107,10 +1108,10 @@ impl ElementsRpc {
     pub async fn list_unspent(&self, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
         tracing::debug!("Listing unspent outputs for asset: {:?}", asset_id);
 
-        let params = match asset_id {
-            Some(asset) => serde_json::json!([1, 9_999_999, [], true, {"asset": asset}]),
-            None => serde_json::json!([1, 9_999_999, [], true]),
-        };
+        let params = asset_id.map_or_else(
+            || serde_json::json!([1, 9_999_999, [], true]),
+            |asset| serde_json::json!([1, 9_999_999, [], true, {"asset": asset}])
+        );
 
         let utxos: Vec<Unspent> = self
             .rpc_call("listunspent", params)
@@ -1245,7 +1246,7 @@ impl ElementsRpc {
 
         let tx_detail: TransactionDetail =
             self.rpc_call("gettransaction", params).await.map_err(|e| {
-                e.with_context(format!("Failed to get transaction details for {}", txid))
+                e.with_context(format!("Failed to get transaction details for {txid}"))
             })?;
 
         tracing::debug!(
@@ -1269,11 +1270,11 @@ impl ElementsRpc {
     /// * `timeout_minutes` - Timeout in minutes (default: 10)
     ///
     /// # Returns
-    /// Returns the final TransactionDetail when sufficient confirmations are reached
+    /// Returns the final `TransactionDetail` when sufficient confirmations are reached
     ///
     /// # Errors
-    /// Returns AmpError::Timeout if the timeout is exceeded before confirmations are received
-    /// Returns AmpError::Rpc if there are issues communicating with the Elements node
+    /// Returns `AmpError::Timeout` if the timeout is exceeded before confirmations are received
+    /// Returns `AmpError::Rpc` if there are issues communicating with the Elements node
     ///
     /// # Examples
     /// ```no_run
@@ -1298,6 +1299,14 @@ impl ElementsRpc {
 
     /// Internal method for waiting for confirmations with configurable poll interval
     /// This is primarily used for testing to avoid long waits
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The timeout is exceeded before confirmations are received
+    /// - There are issues communicating with the Elements node
+    /// - The transaction cannot be found or is invalid
+    #[allow(clippy::cognitive_complexity)]
     pub async fn wait_for_confirmations_with_interval(
         &self,
         txid: &str,
@@ -1327,9 +1336,8 @@ impl ElementsRpc {
             // Check if we've exceeded the timeout
             if start_time.elapsed() >= timeout_duration {
                 let error_msg = format!(
-                    "Timeout waiting for confirmations after {} minutes. Transaction ID: {}. \
-                    You can retry confirmation by calling the confirmation API with this txid.",
-                    timeout_minutes, txid
+                    "Timeout waiting for confirmations after {timeout_minutes} minutes. Transaction ID: {txid}. \
+                    You can retry confirmation by calling the confirmation API with this txid."
                 );
                 tracing::error!("{}", error_msg);
                 return Err(AmpError::Timeout(error_msg));
@@ -1394,7 +1402,7 @@ impl ElementsRpc {
     /// * `estimated_fee` - Estimated transaction fee in the same asset
     ///
     /// # Returns
-    /// Returns a tuple of (selected_utxos, total_selected_amount)
+    /// Returns a tuple of (`selected_utxos`, `total_selected_amount`)
     ///
     /// # Errors
     /// Returns an error if insufficient UTXOs are available or RPC calls fail
@@ -1435,8 +1443,7 @@ impl ElementsRpc {
 
         if utxos.is_empty() {
             return Err(AmpError::validation(format!(
-                "No spendable UTXOs found for asset {}",
-                asset_id
+                "No spendable UTXOs found for asset {asset_id}"
             )));
         }
 
@@ -1464,8 +1471,7 @@ impl ElementsRpc {
         // Check if we have sufficient funds
         if total_selected < required_amount {
             return Err(AmpError::validation(format!(
-                "Insufficient UTXOs: need {}, have {} (target: {}, fee: {})",
-                required_amount, total_selected, target_amount, estimated_fee
+                "Insufficient UTXOs: need {required_amount}, have {total_selected} (target: {target_amount}, fee: {estimated_fee})"
             )));
         }
 
@@ -1496,7 +1502,7 @@ impl ElementsRpc {
     /// * `estimated_fee` - Estimated transaction fee
     ///
     /// # Returns
-    /// Returns a tuple of (raw_transaction_hex, selected_utxos, change_amount)
+    /// Returns a tuple of (`raw_transaction_hex`, `selected_utxos`, `change_amount`)
     ///
     /// # Errors
     /// Returns an error if UTXO selection fails or transaction building fails
@@ -1522,6 +1528,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn build_distribution_transaction(
         &self,
         asset_id: &str,
@@ -1529,6 +1536,8 @@ impl ElementsRpc {
         change_address: &str,
         estimated_fee: f64,
     ) -> Result<(String, Vec<Unspent>, f64), AmpError> {
+        const DUST_THRESHOLD: f64 = 0.00001;
+        
         tracing::debug!(
             "Building distribution transaction for asset {} with {} outputs",
             asset_id,
@@ -1573,7 +1582,6 @@ impl ElementsRpc {
 
         // Add change output if there's a significant amount left
         // Use a small threshold to avoid dust outputs
-        const DUST_THRESHOLD: f64 = 0.00001;
         if change_amount > DUST_THRESHOLD {
             outputs.insert(change_address.to_string(), change_amount);
             assets.insert(change_address.to_string(), asset_id.to_string());
@@ -1601,7 +1609,7 @@ impl ElementsRpc {
         tracing::info!(
             "Built distribution transaction: {} inputs, {} outputs, change: {}",
             selected_utxos.len(),
-            address_amounts.len() + if change_amount > DUST_THRESHOLD { 1 } else { 0 },
+            address_amounts.len() + usize::from(change_amount > DUST_THRESHOLD),
             if change_amount > DUST_THRESHOLD {
                 change_amount
             } else {
@@ -1617,7 +1625,7 @@ impl ElementsRpc {
     /// This method integrates with the Signer trait to sign unsigned transactions.
     /// It handles the complete signing workflow including:
     /// 1. Validation of the unsigned transaction hex format
-    /// 2. Calling the signer's sign_transaction method
+    /// 2. Calling the signer's `sign_transaction` method
     /// 3. Validation of the signed transaction format and structure
     /// 4. Proper error handling and context propagation
     ///
@@ -1648,11 +1656,14 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn sign_transaction(
         &self,
         unsigned_tx_hex: &str,
         signer: &dyn crate::signer::Signer,
     ) -> Result<String, AmpError> {
+        const MIN_TX_SIZE: usize = 10; // Minimum bytes for a valid transaction
+        
         tracing::debug!(
             "Signing transaction: {}...",
             &unsigned_tx_hex[..std::cmp::min(unsigned_tx_hex.len(), 64)]
@@ -1680,8 +1691,8 @@ impl ElementsRpc {
         }
 
         // Attempt to decode hex to validate transaction structure
-        let _tx_bytes = hex::decode(unsigned_tx_hex).map_err(|e| {
-            AmpError::validation(format!("Failed to decode unsigned transaction hex: {}", e))
+        let tx_bytes = hex::decode(unsigned_tx_hex).map_err(|e| {
+            AmpError::validation(format!("Failed to decode unsigned transaction hex: {e}"))
         })?;
 
         tracing::debug!("Unsigned transaction validation passed, calling signer");
@@ -1723,12 +1734,12 @@ impl ElementsRpc {
 
         // Attempt to decode signed transaction to validate structure
         let signed_tx_bytes = hex::decode(&signed_tx_hex).map_err(|e| {
-            AmpError::validation(format!("Failed to decode signed transaction hex: {}", e))
+            AmpError::validation(format!("Failed to decode signed transaction hex: {e}"))
         })?;
 
         // Basic validation: signed transaction should be at least as long as unsigned
         // (signatures add data, so signed tx should be larger or equal)
-        if signed_tx_bytes.len() < _tx_bytes.len() {
+        if signed_tx_bytes.len() < tx_bytes.len() {
             return Err(AmpError::validation(
                 "Signed transaction is shorter than unsigned transaction, which is invalid"
                     .to_string(),
@@ -1737,7 +1748,6 @@ impl ElementsRpc {
 
         // Additional validation: check that the transaction structure is reasonable
         // Minimum transaction size for Elements (very basic check)
-        const MIN_TX_SIZE: usize = 10; // Minimum bytes for a valid transaction
         if signed_tx_bytes.len() < MIN_TX_SIZE {
             return Err(AmpError::validation(format!(
                 "Signed transaction does not meet minimum size ({} bytes), minimum is {} bytes",
@@ -1748,7 +1758,7 @@ impl ElementsRpc {
 
         tracing::info!(
             "Transaction signed successfully - unsigned: {} bytes, signed: {} bytes",
-            _tx_bytes.len(),
+            tx_bytes.len(),
             signed_tx_bytes.len()
         );
 
@@ -1843,6 +1853,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn collect_change_data(
         &self,
         asset_id: &str,
@@ -7628,6 +7639,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`get_asset_assignments`](Self::get_asset_assignments) - List assignments for an asset
     /// - [`create_asset_assignments`](Self::create_asset_assignments) - Create new assignments
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub async fn create_distribution(
         &self,
         asset_uuid: &str,
@@ -7666,7 +7678,7 @@ impl ApiClient {
         let api_assignments: Vec<DistributionAssignmentRequest> = assignments
             .into_iter()
             .enumerate()
-            .map(|(index, assignment)| {
+            .map(#[allow(clippy::cognitive_complexity)] |(index, assignment)| {
                 tracing::trace!(
                     "Converting assignment {}: user_id={}, address={}, amount={}",
                     index,
@@ -7679,15 +7691,13 @@ impl ApiClient {
                 if assignment.user_id.is_empty() {
                     tracing::error!("Assignment {} has empty user_id", index);
                     return Err(AmpError::validation(format!(
-                        "Assignment {} has empty user_id",
-                        index
+                        "Assignment {index} has empty user_id"
                     )));
                 }
                 if assignment.address.is_empty() {
                     tracing::error!("Assignment {} has empty address", index);
                     return Err(AmpError::validation(format!(
-                        "Assignment {} has empty address",
-                        index
+                        "Assignment {index} has empty address"
                     )));
                 }
                 if assignment.amount <= 0.0 {
@@ -7733,11 +7743,10 @@ impl ApiClient {
                 Some(&request),
             )
             .await
-            .map_err(|e| {
+            .map_err(#[allow(clippy::cognitive_complexity)] |e| {
                 let api_call_duration = api_call_start.elapsed();
                 let error_msg = format!(
-                    "Failed to create distribution after {:?}: {}",
-                    api_call_duration, e
+                    "Failed to create distribution after {api_call_duration:?}: {e}"
                 );
                 tracing::error!("{}", error_msg);
 
@@ -7804,7 +7813,7 @@ impl ApiClient {
     ///
     /// # Arguments
     /// * `asset_uuid` - The UUID of the asset being distributed
-    /// * `distribution_uuid` - The UUID of the distribution to confirm (from create_distribution response)
+    /// * `distribution_uuid` - The UUID of the distribution to confirm (from `create_distribution` response)
     /// * `tx_data` - Transaction data containing details and txid from the blockchain
     /// * `change_data` - Vector of change UTXOs from the transaction
     ///
@@ -7868,6 +7877,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`create_distribution`](Self::create_distribution) - Create a new distribution
     /// - [`get_asset_assignments`](Self::get_asset_assignments) - List assignments for an asset
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub async fn confirm_distribution(
         &self,
         asset_uuid: &str,
@@ -7947,7 +7957,9 @@ impl ApiClient {
         );
 
         // Log change data details
-        if !change_data.is_empty() {
+        if change_data.is_empty() {
+            tracing::debug!("No change UTXOs to include in confirmation");
+        } else {
             let total_change: f64 = change_data.iter().map(|utxo| utxo.amount).sum();
             tracing::debug!(
                 "Change data - {} UTXOs, total amount: {}",
@@ -7965,8 +7977,6 @@ impl ApiClient {
                     utxo.spendable
                 );
             }
-        } else {
-            tracing::debug!("No change UTXOs to include in confirmation");
         }
 
         let request = ConfirmDistributionRequest {
@@ -7984,7 +7994,7 @@ impl ApiClient {
             Some(&request),
         )
         .await
-        .map_err(|e| {
+        .map_err(#[allow(clippy::cognitive_complexity)] |e| {
             let api_call_duration = api_call_start.elapsed();
             let error_msg = format!(
                 "Failed to confirm distribution {} after {:?}: {}. IMPORTANT: Transaction {} was successful on blockchain. Use this txid to manually retry confirmation.",
@@ -8461,7 +8471,7 @@ impl ApiClient {
     ///
     /// This method orchestrates the complete asset distribution process:
     /// 1. Validates input parameters (asset UUID format, assignments structure)
-    /// 2. Verifies ElementsRpc connection and signer interface availability
+    /// 2. Verifies `ElementsRpc` connection and signer interface availability
     /// 3. Authenticates with the AMP API using the client's token
     /// 4. Creates a distribution request via the AMP API
     /// 5. Constructs and signs the blockchain transaction using the provided signer
@@ -8471,14 +8481,14 @@ impl ApiClient {
     ///
     /// # Arguments
     /// * `asset_uuid` - The UUID of the asset to distribute (must be valid UUID format)
-    /// * `assignments` - Vector of assignments specifying user_id, address, and amount
-    /// * `node_rpc` - ElementsRpc client for blockchain operations
+    /// * `assignments` - Vector of assignments specifying `user_id`, address, and amount
+    /// * `node_rpc` - `ElementsRpc` client for blockchain operations
     /// * `signer` - Signer implementation for transaction signing
     ///
     /// # Returns
     /// Returns `Ok(())` if the distribution completes successfully, or an `AmpError` if:
     /// - Input validation fails (invalid UUID format, empty assignments, etc.)
-    /// - ElementsRpc connection cannot be established
+    /// - `ElementsRpc` connection cannot be established
     /// - Signer interface is not available
     /// - Authentication with AMP API fails
     /// - Distribution creation fails
@@ -8522,6 +8532,7 @@ impl ApiClient {
     /// - 2.2: Assignment details validation
     /// - 2.4: Input validation for all parameters
     /// - 5.1: Comprehensive error handling with context
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     pub async fn distribute_asset(
         &self,
         asset_uuid: &str,
@@ -8544,8 +8555,8 @@ impl ApiClient {
 
         // Step 1: Input validation - asset_uuid format
         tracing::debug!("Step 1: Validating asset UUID format");
-        self.validate_asset_uuid(asset_uuid).map_err(|e| {
-            let error = AmpError::validation(format!("Invalid asset UUID: {}", e));
+        Self::validate_asset_uuid(asset_uuid).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid asset UUID: {e}"));
             tracing::error!("Asset UUID validation failed: {}", e);
             error.with_context("Step 1: Asset UUID validation")
         })?;
@@ -8553,8 +8564,8 @@ impl ApiClient {
 
         // Step 2: Input validation - assignments data structure
         tracing::debug!("Step 2: Validating {} assignments", assignments.len());
-        self.validate_assignments(&assignments).map_err(|e| {
-            let error = AmpError::validation(format!("Invalid assignments: {}", e));
+        Self::validate_assignments(&assignments).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid assignments: {e}"));
             tracing::error!("Assignments validation failed: {}", e);
             error.with_context("Step 2: Assignments validation")
         })?;
@@ -8566,7 +8577,7 @@ impl ApiClient {
             .await
             .map_err(|e| {
                 let error =
-                    AmpError::rpc(format!("ElementsRpc connection validation failed: {}", e));
+                    AmpError::rpc(format!("ElementsRpc connection validation failed: {e}"));
                 tracing::error!("Elements RPC connection validation failed: {}", e);
                 error.with_context("Step 3: Elements RPC connection validation")
             })?;
@@ -8575,7 +8586,7 @@ impl ApiClient {
         // Step 4: Check signer interface availability
         tracing::debug!("Step 4: Validating signer interface");
         self.validate_signer_interface(signer).await.map_err(|e| {
-            let error = AmpError::validation(format!("Signer interface validation failed: {}", e));
+            let error = AmpError::validation(format!("Signer interface validation failed: {e}"));
             tracing::error!("Signer interface validation failed: {}", e);
             error.with_context("Step 4: Signer interface validation")
         })?;
@@ -8723,27 +8734,23 @@ impl ApiClient {
                     e
                 );
 
-                match &e {
-                    AmpError::Timeout(_) => {
-                        tracing::warn!(
-                            "Confirmation timeout - transaction {} may still be pending. \
-                            Use this txid to manually confirm the distribution if it gets confirmed later.",
-                            txid
-                        );
-                        let timeout_error = AmpError::timeout(format!(
-                            "Confirmation timeout for txid: {}. Use this txid to manually confirm the distribution.",
-                            txid
-                        ));
-                        timeout_error.with_context("Step 10: Confirmation waiting")
-                    }
-                    _ => {
-                        if e.is_retryable() {
-                            if let Some(instructions) = e.retry_instructions() {
-                                tracing::warn!("Retry instructions: {}", instructions);
-                            }
+                if let AmpError::Timeout(_) = &e {
+                    tracing::warn!(
+                        "Confirmation timeout - transaction {} may still be pending. \
+                        Use this txid to manually confirm the distribution if it gets confirmed later.",
+                        txid
+                    );
+                    let timeout_error = AmpError::timeout(format!(
+                        "Confirmation timeout for txid: {txid}. Use this txid to manually confirm the distribution."
+                    ));
+                    timeout_error.with_context("Step 10: Confirmation waiting")
+                } else {
+                    if e.is_retryable() {
+                        if let Some(instructions) = e.retry_instructions() {
+                            tracing::warn!("Retry instructions: {}", instructions);
                         }
-                        e.with_context(format!("Step 10: Confirmation waiting for txid: {}", txid))
                     }
+                    e.with_context(format!("Step 10: Confirmation waiting for txid: {txid}"))
                 }
             })?;
 
@@ -8832,7 +8839,7 @@ impl ApiClient {
     /// - Empty or whitespace-only UUID
     /// - Invalid UUID format (not matching standard UUID pattern)
     /// - UUID contains invalid characters
-    fn validate_asset_uuid(&self, asset_uuid: &str) -> Result<(), String> {
+    fn validate_asset_uuid(asset_uuid: &str) -> Result<(), String> {
         if asset_uuid.trim().is_empty() {
             return Err("Asset UUID cannot be empty".to_string());
         }
@@ -8842,8 +8849,7 @@ impl ApiClient {
         let parts: Vec<&str> = asset_uuid.split('-').collect();
         if parts.len() != 5 {
             return Err(format!(
-                "Asset UUID '{}' does not have 5 parts separated by hyphens",
-                asset_uuid
+                "Asset UUID '{asset_uuid}' does not have 5 parts separated by hyphens"
             ));
         }
 
@@ -8885,12 +8891,12 @@ impl ApiClient {
     ///
     /// # Errors
     /// - Empty assignments vector
-    /// - Assignment with empty user_id
+    /// - Assignment with empty `user_id`
     /// - Assignment with empty address
     /// - Assignment with non-positive amount
     /// - Assignment with invalid address format
+    #[allow(clippy::cognitive_complexity)]
     fn validate_assignments(
-        &self,
         assignments: &[AssetDistributionAssignment],
     ) -> Result<(), String> {
         tracing::debug!("Validating {} assignments", assignments.len());
@@ -8916,13 +8922,13 @@ impl ApiClient {
             // Validate user_id
             if assignment.user_id.trim().is_empty() {
                 tracing::error!("Assignment {} validation failed: empty user_id", index);
-                return Err(format!("Assignment {} has empty user_id", index));
+                return Err(format!("Assignment {index} has empty user_id"));
             }
 
             // Validate address
             if assignment.address.trim().is_empty() {
                 tracing::error!("Assignment {} validation failed: empty address", index);
-                return Err(format!("Assignment {} has empty address", index));
+                return Err(format!("Assignment {index} has empty address"));
             }
 
             // Basic address format validation (should start with appropriate prefix for Liquid)
@@ -9014,12 +9020,12 @@ impl ApiClient {
         Ok(())
     }
 
-    /// Validates ElementsRpc connection availability
+    /// Validates `ElementsRpc` connection availability
     ///
     /// Attempts to connect to the Elements node and verify basic functionality
     ///
     /// # Arguments
-    /// * `node_rpc` - ElementsRpc client to validate
+    /// * `node_rpc` - `ElementsRpc` client to validate
     ///
     /// # Returns
     /// Returns `Ok(())` if connection is valid, or an error describing the failure
@@ -9029,6 +9035,7 @@ impl ApiClient {
     /// - Node is not synchronized
     /// - Node version is incompatible
     /// - RPC authentication fails
+    #[allow(clippy::cognitive_complexity)]
     async fn validate_elements_rpc_connection(&self, node_rpc: &ElementsRpc) -> Result<(), String> {
         tracing::debug!("Validating Elements RPC connection");
 
@@ -9036,7 +9043,7 @@ impl ApiClient {
         tracing::trace!("Testing Elements RPC connectivity with getnetworkinfo");
         let network_info = node_rpc.get_network_info().await.map_err(|e| {
             tracing::error!("Failed to get network info from Elements node: {}", e);
-            format!("Failed to get network info: {}", e)
+            format!("Failed to get network info: {e}")
         })?;
 
         tracing::debug!(
@@ -9066,7 +9073,7 @@ impl ApiClient {
         tracing::trace!("Testing Elements RPC with getblockchaininfo");
         let blockchain_info = node_rpc.get_blockchain_info().await.map_err(|e| {
             tracing::error!("Failed to get blockchain info from Elements node: {}", e);
-            format!("Failed to get blockchain info: {}", e)
+            format!("Failed to get blockchain info: {e}")
         })?;
 
         tracing::debug!(
@@ -9132,6 +9139,7 @@ impl ApiClient {
     /// # Errors
     /// - Signer interface is not responsive
     /// - Signer fails basic functionality test
+    #[allow(clippy::cognitive_complexity)]
     async fn validate_signer_interface(&self, signer: &dyn Signer) -> Result<(), String> {
         tracing::debug!("Validating signer interface");
 
@@ -9177,15 +9185,14 @@ impl ApiClient {
                 } else {
                     tracing::error!("Signer interface test failed with LWK error: {}", msg);
                     return Err(format!(
-                        "Signer interface test failed with LWK error: {}",
-                        msg
+                        "Signer interface test failed with LWK error: {msg}"
                     ));
                 }
             }
             Err(e) => {
                 // Other errors might indicate signer interface issues
                 tracing::error!("Signer interface test failed: {}", e);
-                return Err(format!("Signer interface test failed: {}", e));
+                return Err(format!("Signer interface test failed: {e}"));
             }
         }
 
@@ -9837,37 +9844,27 @@ mod tests {
 
     #[test]
     fn test_validate_asset_uuid() {
-        let client = ApiClient::with_mock_token(
+        let _client = ApiClient::with_mock_token(
             reqwest::Url::parse("http://localhost:8080/api").unwrap(),
             "test_token".to_string(),
         )
         .unwrap();
 
         // Valid UUID
-        assert!(client
-            .validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000")
-            .is_ok());
+        assert!(ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000").is_ok());
 
         // Invalid UUIDs
-        assert!(client.validate_asset_uuid("").is_err());
-        assert!(client.validate_asset_uuid("invalid").is_err());
-        assert!(client
-            .validate_asset_uuid("550e8400-e29b-41d4-a716")
-            .is_err()); // Too short
-        assert!(client
-            .validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra")
-            .is_err()); // Too long
-        assert!(client
-            .validate_asset_uuid("550e8400xe29bx41d4xa716x446655440000")
-            .is_err()); // Wrong separators
-        assert!(client
-            .validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000")
-            .is_err()); // Invalid hex char
+        assert!(ApiClient::validate_asset_uuid("").is_err());
+        assert!(ApiClient::validate_asset_uuid("invalid").is_err());
+        assert!(ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716").is_err()); // Too short
+        assert!(ApiClient::validate_asset_uuid("550e8400-e29b-41d4-a716-446655440000-extra").is_err()); // Too long
+        assert!(ApiClient::validate_asset_uuid("550e8400xe29bx41d4xa716x446655440000").is_err()); // Wrong separators
+        assert!(ApiClient::validate_asset_uuid("550e8400-e29g-41d4-a716-446655440000").is_err()); // Invalid hex char
     }
 
     #[test]
     fn test_validate_assignments() {
-        let client = ApiClient::with_mock_token(
+        let _client = ApiClient::with_mock_token(
             reqwest::Url::parse("http://localhost:8080/api").unwrap(),
             "test_token".to_string(),
         )
@@ -9879,10 +9876,10 @@ mod tests {
             address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
             amount: 100.0,
         }];
-        assert!(client.validate_assignments(&valid_assignments).is_ok());
+        assert!(ApiClient::validate_assignments(&valid_assignments).is_ok());
 
         // Empty assignments
-        assert!(client.validate_assignments(&[]).is_err());
+        assert!(ApiClient::validate_assignments(&[]).is_err());
 
         // Assignment with empty user_id
         let invalid_assignments = vec![AssetDistributionAssignment {
@@ -9890,7 +9887,7 @@ mod tests {
             address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
             amount: 100.0,
         }];
-        assert!(client.validate_assignments(&invalid_assignments).is_err());
+        assert!(ApiClient::validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with empty address
         let invalid_assignments = vec![AssetDistributionAssignment {
@@ -9898,7 +9895,7 @@ mod tests {
             address: "".to_string(),
             amount: 100.0,
         }];
-        assert!(client.validate_assignments(&invalid_assignments).is_err());
+        assert!(ApiClient::validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with invalid address format
         let invalid_assignments = vec![AssetDistributionAssignment {
@@ -9906,7 +9903,7 @@ mod tests {
             address: "invalid_address".to_string(),
             amount: 100.0,
         }];
-        assert!(client.validate_assignments(&invalid_assignments).is_err());
+        assert!(ApiClient::validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with non-positive amount
         let invalid_assignments = vec![AssetDistributionAssignment {
@@ -9914,7 +9911,7 @@ mod tests {
             address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
             amount: 0.0,
         }];
-        assert!(client.validate_assignments(&invalid_assignments).is_err());
+        assert!(ApiClient::validate_assignments(&invalid_assignments).is_err());
 
         // Assignment with unreasonably large amount
         let invalid_assignments = vec![AssetDistributionAssignment {
@@ -9922,7 +9919,7 @@ mod tests {
             address: "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
             amount: 25_000_000.0,
         }];
-        assert!(client.validate_assignments(&invalid_assignments).is_err());
+        assert!(ApiClient::validate_assignments(&invalid_assignments).is_err());
     }
 
     #[test]
