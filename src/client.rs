@@ -1154,6 +1154,99 @@ impl ElementsRpc {
         Ok(utxos)
     }
 
+    /// List unspent outputs for a specific wallet
+    ///
+    /// This method lists unspent transaction outputs (UTXOs) for a specific wallet,
+    /// optionally filtered by asset ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `wallet_name` - Name of the Elements wallet to query
+    /// * `asset_id` - Optional asset ID to filter UTXOs by
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of unspent outputs
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let utxos = rpc.list_unspent_for_wallet("test_wallet", None).await?;
+    /// println!("Found {} UTXOs", utxos.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_unspent_for_wallet(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!("Listing unspent outputs for wallet {} and asset: {:?}", wallet_name, asset_id);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = asset_id.map_or_else(
+            || serde_json::json!([1, 9_999_999, [], true]),
+            |asset| serde_json::json!([1, 9_999_999, [], true, {"asset": asset}]),
+        );
+
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "listunspent".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<Vec<Unspent>> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error listing unspent outputs: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let utxos = rpc_response.result.unwrap_or_default();
+        
+        tracing::debug!("Found {} unspent outputs for wallet {}", utxos.len(), wallet_name);
+        
+        // If we're looking for a specific asset and found no UTXOs, provide helpful context
+        if utxos.is_empty() && asset_id.is_some() {
+            tracing::warn!(
+                "No UTXOs found for asset {} in wallet {}. This may indicate:\n\
+                1. The asset issuance transaction hasn't been confirmed yet\n\
+                2. The UTXOs have already been spent\n\
+                3. The wallet doesn't contain the expected addresses",
+                asset_id.unwrap(), wallet_name
+            );
+        }
+        
+        Ok(utxos)
+    }
+
     /// Creates a raw transaction with the specified inputs and outputs
     ///
     /// # Arguments
@@ -1206,12 +1299,207 @@ impl ElementsRpc {
             assets   // assets as address->asset_id map
         ]);
 
+        // Debug: Log the exact parameters being sent to createrawtransaction
+        tracing::error!("createrawtransaction parameters:");
+        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
+        tracing::error!("  outputs: {}", serde_json::to_string_pretty(&outputs).unwrap_or_default());
+        tracing::error!("  assets: {}", serde_json::to_string_pretty(&assets).unwrap_or_default());
+
         let raw_tx: String = self
             .rpc_call("createrawtransaction", params)
             .await
-            .map_err(|e| e.with_context("Failed to create raw transaction"))?;
+            .map_err(|e| {
+                tracing::error!("createrawtransaction RPC call failed: {}", e);
+                e.with_context("Failed to create raw transaction")
+            })?;
 
         tracing::debug!("Created raw transaction: {}", raw_tx);
+        Ok(raw_tx)
+    }
+
+    /// Imports an address into a specific wallet as watch-only
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import into
+    /// * `address` - The address to import
+    /// * `label` - Optional label for the address
+    /// * `rescan` - Whether to rescan the blockchain for transactions
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    async fn import_address_to_wallet(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        label: Option<&str>,
+        rescan: bool,
+    ) -> Result<(), AmpError> {
+        tracing::debug!("Importing address {} into wallet {}", address, wallet_name);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([
+            address,
+            label.unwrap_or(""),
+            rescan
+        ]);
+
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importaddress".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            // Ignore "already imported" errors
+            if error.code != -4 {
+                return Err(AmpError::rpc(format!(
+                    "RPC error importing address: {} (code: {})",
+                    error.message, error.code
+                )));
+            }
+        }
+
+        tracing::debug!("Successfully imported address {} into wallet {}", address, wallet_name);
+        Ok(())
+    }
+
+    /// Creates a raw transaction using a specific wallet context
+    ///
+    /// This method uses the wallet-specific RPC endpoint which is necessary
+    /// for confidential transactions that require wallet context for blinding keys.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to use for transaction creation
+    /// * `inputs` - Transaction inputs
+    /// * `outputs` - Map of addresses to amounts
+    /// * `assets` - Map of addresses to asset IDs
+    ///
+    /// # Returns
+    /// Returns the raw transaction hex
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    async fn create_raw_transaction_with_wallet(
+        &self,
+        wallet_name: &str,
+        inputs: Vec<TxInput>,
+        outputs: std::collections::HashMap<String, f64>,
+        assets: std::collections::HashMap<String, String>,
+    ) -> Result<String, AmpError> {
+        tracing::debug!(
+            "Creating raw transaction with wallet {} - {} inputs and {} outputs",
+            wallet_name,
+            inputs.len(),
+            outputs.len()
+        );
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        // Elements RPC createrawtransaction expects outputs as an array of objects
+        // Each output object should contain both address, amount, and asset
+        let mut outputs_array = Vec::new();
+        
+        for (address, amount) in &outputs {
+            let asset_id = assets.get(address).ok_or_else(|| {
+                AmpError::validation(format!("No asset ID found for address {}", address))
+            })?;
+            
+            // Convert amount to string with proper precision for Elements
+            let amount_str = format!("{:.8}", amount);
+            
+            outputs_array.push(serde_json::json!({
+                address.clone(): amount_str,
+                "asset": asset_id
+            }));
+        }
+
+        let params = serde_json::json!([
+            inputs,        // inputs as TxInput array
+            outputs_array, // outputs as array of {address: amount, asset: id} objects
+            0,             // locktime (0 = no locktime)
+            false,         // replaceable (false = not replaceable)
+        ]);
+
+        // Debug: Log the exact parameters being sent to createrawtransaction
+        tracing::error!("createrawtransaction parameters (wallet-specific, corrected format):");
+        tracing::error!("  wallet: {}", wallet_name);
+        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
+        tracing::error!("  outputs_array: {}", serde_json::to_string_pretty(&outputs_array).unwrap_or_default());
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "createrawtransaction".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<String> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error creating raw transaction: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let raw_tx = rpc_response.result.ok_or_else(|| {
+            AmpError::rpc("No raw transaction returned".to_string())
+        })?;
+
+        tracing::debug!("Created raw transaction with wallet {}: {}", wallet_name, raw_tx);
         Ok(raw_tx)
     }
 
@@ -1395,9 +1683,20 @@ impl ElementsRpc {
             .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            tracing::debug!("Load wallet failed with status: {} - Body: {}", status, error_body);
+            
+            // For wallet loading, we want to be more permissive with errors
+            // since the wallet might already be loaded
+            if status == 500 && error_body.contains("already loaded") {
+                tracing::debug!("Wallet {} appears to already be loaded (500 error)", wallet_name);
+                return Ok(());
+            }
+            
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {}",
-                response.status()
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
             )));
         }
 
@@ -1767,19 +2066,21 @@ impl ElementsRpc {
     /// ```
     pub async fn select_utxos_for_amount(
         &self,
+        wallet_name: &str,
         asset_id: &str,
         target_amount: f64,
         estimated_fee: f64,
     ) -> Result<(Vec<Unspent>, f64), AmpError> {
         tracing::debug!(
-            "Selecting UTXOs for asset {} - target: {}, fee: {}",
+            "Selecting UTXOs for asset {} from wallet {} - target: {}, fee: {}",
             asset_id,
+            wallet_name,
             target_amount,
             estimated_fee
         );
 
-        // Get all UTXOs for this asset
-        let mut utxos = self.list_unspent(Some(asset_id)).await?;
+        // Get all UTXOs for this asset from the specified wallet
+        let mut utxos = self.list_unspent_for_wallet(wallet_name, Some(asset_id)).await?;
 
         // Filter for spendable UTXOs only
         utxos.retain(|utxo| utxo.spendable && utxo.asset == asset_id);
@@ -1871,6 +2172,7 @@ impl ElementsRpc {
     /// address_amounts.insert("address2".to_string(), 50.0);
     ///
     /// let (raw_tx, utxos, change) = rpc.build_distribution_transaction(
+    ///     "wallet_name",
     ///     "asset_id_hex",
     ///     address_amounts,
     ///     "change_address",
@@ -1883,6 +2185,7 @@ impl ElementsRpc {
     #[allow(clippy::cognitive_complexity)]
     pub async fn build_distribution_transaction(
         &self,
+        wallet_name: &str,
         asset_id: &str,
         address_amounts: std::collections::HashMap<String, f64>,
         change_address: &str,
@@ -1907,7 +2210,7 @@ impl ElementsRpc {
 
         // Select UTXOs to cover the distribution plus fees
         let (selected_utxos, total_selected) = self
-            .select_utxos_for_amount(asset_id, total_distribution, estimated_fee)
+            .select_utxos_for_amount(wallet_name, asset_id, total_distribution, estimated_fee)
             .await?;
 
         // Create transaction inputs from selected UTXOs
@@ -1952,9 +2255,21 @@ impl ElementsRpc {
             );
         }
 
-        // Build the raw transaction
+        // For confidential addresses, we need to import them into the wallet first
+        // so Elements knows about the blinding keys
+        for address in address_amounts.keys() {
+            if address.starts_with('v') { // Confidential address
+                tracing::debug!("Importing confidential address into wallet: {}", address);
+                if let Err(e) = self.import_address_to_wallet(wallet_name, address, None, false).await {
+                    tracing::warn!("Failed to import confidential address {}: {}", address, e);
+                    // Continue anyway - the address might already be imported
+                }
+            }
+        }
+
+        // Build the raw transaction using wallet-specific endpoint for confidential transactions
         let raw_transaction = self
-            .create_raw_transaction(inputs, outputs, assets)
+            .create_raw_transaction_with_wallet(wallet_name, inputs, outputs, assets)
             .await
             .map_err(|e| e.with_context("Failed to build distribution transaction"))?;
 
@@ -2194,7 +2509,9 @@ impl ElementsRpc {
     /// let rpc = ElementsRpc::from_env()?;
     /// let change_data = rpc.collect_change_data(
     ///     "asset_id_hex",
-    ///     "transaction_id_hex"
+    ///     "transaction_id_hex",
+    ///     &node_rpc,
+    ///     "wallet_name"
     /// ).await?;
     ///
     /// if change_data.is_empty() {
@@ -2210,6 +2527,8 @@ impl ElementsRpc {
         &self,
         asset_id: &str,
         txid: &str,
+        node_rpc: &ElementsRpc,
+        wallet_name: &str,
     ) -> Result<Vec<Unspent>, AmpError> {
         tracing::debug!(
             "Collecting change data for asset {} from transaction {}",
@@ -2217,8 +2536,8 @@ impl ElementsRpc {
             txid
         );
 
-        // Query all unspent outputs for the specified asset
-        let all_utxos = self.list_unspent(Some(asset_id)).await.map_err(|e| {
+        // Query all unspent outputs for the specified asset from the specified wallet
+        let all_utxos = node_rpc.list_unspent_for_wallet(wallet_name, Some(asset_id)).await.map_err(|e| {
             e.with_context("Failed to query unspent outputs for change data collection")
         })?;
 
@@ -2263,6 +2582,302 @@ impl ElementsRpc {
         }
 
         Ok(change_utxos)
+    }
+
+    /// Creates a standard wallet in Elements (Elements-first approach)
+    ///
+    /// This method creates a new standard wallet in the Elements node that can generate
+    /// addresses and private keys. This is part of the Elements-first approach where
+    /// we create the wallet in Elements first, then export keys to LWK.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name for the new wallet
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.create_elements_wallet("test_wallet").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn create_elements_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
+        let params = serde_json::json!([wallet_name]);
+        
+        let _result: serde_json::Value = self.rpc_call("createwallet", params).await?;
+        
+        tracing::info!("Successfully created Elements wallet: {}", wallet_name);
+        Ok(())
+    }
+
+    /// Get a new address from an Elements wallet
+    ///
+    /// This method requests a new address from the specified Elements wallet.
+    /// The address will be generated by Elements and can be used for receiving funds.
+    /// Defaults to native segwit (bech32) addresses for optimal compatibility.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to get address from
+    /// * `address_type` - Optional address type ("bech32", "legacy", "p2sh-segwit"). Defaults to "bech32"
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// 
+    /// // Generate native segwit address (default)
+    /// let address = rpc.get_new_address("test_wallet", None).await?;
+    /// 
+    /// // Or explicitly request native segwit
+    /// let bech32_address = rpc.get_new_address("test_wallet", Some("bech32")).await?;
+    /// 
+    /// println!("Native segwit address: {}", address);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_new_address(&self, wallet_name: &str, address_type: Option<&str>) -> Result<String, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+        
+        // Set default to native segwit (bech32) for Elements
+        let addr_type = address_type.unwrap_or("bech32");
+        
+        // For Elements, we need to use the correct parameters for getnewaddress
+        // getnewaddress [label] [address_type]
+        let params = serde_json::json!(["", addr_type]);
+        
+        // Create RPC request for getnewaddress
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getnewaddress".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting new address: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            if let Some(address) = result.as_str() {
+                tracing::info!("Generated new {} address: {}", addr_type, address);
+                return Ok(address.to_string());
+            }
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to get new address from wallet '{}': unexpected response format",
+            wallet_name
+        )))
+    }
+
+    /// Get the confidential version of an address from Elements wallet
+    ///
+    /// This method takes a regular (unconfidential) address and returns its confidential
+    /// counterpart, which includes blinding keys for confidential transactions.
+    ///
+    /// # Arguments
+    ///
+    /// * `wallet_name` - Name of the Elements wallet
+    /// * `address` - The unconfidential address to get info for
+    ///
+    /// # Returns
+    ///
+    /// Returns the confidential address string
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let unconfidential_address = "tex1q...";
+    /// let confidential_address = rpc.get_confidential_address("test_wallet", unconfidential_address).await?;
+    /// println!("Confidential address: {}", confidential_address);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_confidential_address(&self, wallet_name: &str, address: &str) -> Result<String, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+        
+        let params = serde_json::json!([address]);
+        
+        // Create RPC request for getaddressinfo
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getaddressinfo".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting address info: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            if let Some(confidential_address) = result.get("confidential").and_then(|v| v.as_str()) {
+                tracing::info!("Retrieved confidential address for: {}", address);
+                return Ok(confidential_address.to_string());
+            }
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to get confidential address for '{}': unexpected response format",
+            address
+        )))
+    }
+
+    /// Get the private key for an address from Elements wallet
+    ///
+    /// This method exports the private key for a specific address from the Elements wallet.
+    /// The private key can then be imported into LWK for signing.
+    ///
+    /// Note: This is a simplified implementation that returns a placeholder private key.
+    /// For production use, implement proper wallet-specific RPC calls.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet containing the address
+    /// * `address` - The address to get the private key for
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let address = rpc.get_new_address("test_wallet", None).await?;
+    /// let private_key = rpc.dump_private_key("test_wallet", &address).await?;
+    /// println!("Private key: {}", private_key);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn dump_private_key(&self, wallet_name: &str, address: &str) -> Result<String, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+        
+        let params = serde_json::json!([address]);
+        
+        // Create RPC request for dumpprivkey
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "dumpprivkey".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error dumping private key: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            if let Some(private_key) = result.as_str() {
+                tracing::info!("Successfully exported private key for address: {}", address);
+                return Ok(private_key.to_string());
+            }
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to dump private key for address '{}': unexpected response format",
+            address
+        )))
     }
 
     /// Creates a descriptor wallet in Elements
@@ -3507,7 +4122,7 @@ mod elements_rpc_tests {
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
         // Test selecting UTXOs for 120.0 + 1.0 fee = 121.0 total
-        let result = rpc.select_utxos_for_amount(asset_id, 120.0, 1.0).await;
+        let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 120.0, 1.0).await;
 
         assert!(result.is_ok());
         let (selected_utxos, total_amount) = result.unwrap();
@@ -3563,7 +4178,7 @@ mod elements_rpc_tests {
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
         // Try to select UTXOs for 100.0 + 1.0 fee = 101.0 total, but only have 10.0
-        let result = rpc.select_utxos_for_amount(asset_id, 100.0, 1.0).await;
+        let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -3607,7 +4222,7 @@ mod elements_rpc_tests {
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-        let result = rpc.select_utxos_for_amount(asset_id, 50.0, 1.0).await;
+        let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 50.0, 1.0).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -3685,6 +4300,7 @@ mod elements_rpc_tests {
 
         let result = rpc
             .build_distribution_transaction(
+                "test_wallet",
                 asset_id,
                 address_amounts,
                 "change_address",
@@ -3718,7 +4334,7 @@ mod elements_rpc_tests {
         let address_amounts = HashMap::new(); // Empty distribution
 
         let result = rpc
-            .build_distribution_transaction("asset_id", address_amounts, "change_address", 1.0)
+            .build_distribution_transaction("test_wallet", "asset_id", address_amounts, "change_address", 1.0)
             .await;
 
         assert!(result.is_err());
@@ -3793,6 +4409,7 @@ mod elements_rpc_tests {
 
         let result = rpc
             .build_distribution_transaction(
+                "test_wallet",
                 asset_id,
                 address_amounts,
                 "change_address",
@@ -4419,7 +5036,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.collect_change_data(asset_id, txid).await;
+        let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
 
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
@@ -4493,7 +5110,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.collect_change_data(asset_id, txid).await;
+        let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
 
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
@@ -4553,7 +5170,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.collect_change_data(asset_id, txid).await;
+        let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
 
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
@@ -4609,7 +5226,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.collect_change_data(asset_id, txid).await;
+        let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
 
         assert!(result.is_ok());
         let change_utxos = result.unwrap();
@@ -4656,7 +5273,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.collect_change_data(asset_id, txid).await;
+        let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -9301,6 +9918,7 @@ impl ApiClient {
         asset_uuid: &str,
         assignments: Vec<AssetDistributionAssignment>,
         node_rpc: &ElementsRpc,
+        wallet_name: &str,
         signer: &dyn Signer,
     ) -> Result<(), AmpError> {
         let distribution_span = tracing::info_span!(
@@ -9418,25 +10036,24 @@ impl ApiClient {
         let estimated_fee = 0.001; // Conservative fee estimate for Liquid
         tracing::debug!("Using estimated fee: {} for transaction", estimated_fee);
 
-        // Get a change address from the signer (we'll use the first address from assignments as fallback)
-        let change_address = distribution_response
-            .map_address_amount
-            .keys()
-            .next()
-            .ok_or_else(|| {
-                let error = AmpError::validation("No addresses found in distribution response");
-                tracing::error!(
-                    "No addresses found in distribution response - this should not happen"
-                );
+        // Get a change address from Elements wallet - generate a new address for change
+        // We can't use the recipient GAID address because Elements doesn't know about it
+        let change_address = node_rpc
+            .get_new_address(wallet_name, Some("bech32"))
+            .await
+            .map_err(|e| {
+                let error = AmpError::rpc(format!("Failed to get change address from Elements: {}", e));
+                tracing::error!("Failed to get change address from Elements wallet: {}", e);
                 error
             })?;
-        tracing::debug!("Using change address: {}", change_address);
+        tracing::debug!("Using Elements-generated change address: {}", change_address);
 
         let (raw_transaction, selected_utxos, change_amount) = node_rpc
             .build_distribution_transaction(
+                wallet_name,
                 &distribution_response.asset_id,
                 distribution_response.map_address_amount.clone(),
-                change_address,
+                &change_address,
                 estimated_fee,
             )
             .await
@@ -9527,7 +10144,7 @@ impl ApiClient {
         // Step 11: Collect change data for confirmation
         tracing::debug!("Step 11: Collecting change data for distribution confirmation");
         let change_data = node_rpc
-            .collect_change_data(&distribution_response.asset_id, &txid)
+            .collect_change_data(&distribution_response.asset_id, &txid, node_rpc, wallet_name)
             .await
             .map_err(|e| {
                 tracing::error!("Change data collection failed: {}", e);
@@ -10578,7 +11195,7 @@ mod tests {
 
         // Test with invalid UUID format
         let result = client
-            .distribute_asset("invalid-uuid", assignments.clone(), &elements_rpc, &signer)
+            .distribute_asset("invalid-uuid", assignments.clone(), &elements_rpc, "test_wallet", &signer)
             .await;
 
         assert!(result.is_err());
@@ -10594,6 +11211,7 @@ mod tests {
                 "550e8400-e29b-41d4-a716-446655440000",
                 vec![],
                 &elements_rpc,
+                "test_wallet",
                 &signer,
             )
             .await;
