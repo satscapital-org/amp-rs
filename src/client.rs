@@ -14,6 +14,8 @@ use tokio::time::sleep;
 
 use secrecy::ExposeSecret;
 use secrecy::Secret;
+use elements::encode::Decodable;
+use std::str::FromStr;
 
 use crate::model::{
     Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary, Assignment,
@@ -1229,7 +1231,58 @@ impl ElementsRpc {
             )));
         }
 
-        let utxos = rpc_response.result.unwrap_or_default();
+        let mut utxos = rpc_response.result.unwrap_or_default();
+        
+        // Enrich UTXOs with scriptpubkey information if missing
+        for utxo in &mut utxos {
+            if utxo.scriptpubkey.is_none() {
+                tracing::debug!("UTXO {}:{} missing scriptpubkey, attempting to derive from address", utxo.txid, utxo.vout);
+                
+                // Try to derive scriptpubkey from the address
+                if let Ok(address) = elements::Address::from_str(&utxo.address) {
+                    let script_pubkey = address.script_pubkey();
+                    utxo.scriptpubkey = Some(hex::encode(script_pubkey.as_bytes()));
+                    tracing::info!("Derived scriptpubkey for UTXO {}:{} from address {}: {}", 
+                        utxo.txid, utxo.vout, utxo.address, utxo.scriptpubkey.as_ref().unwrap());
+                } else {
+                    tracing::error!("Failed to parse address {} for UTXO {}:{}", utxo.address, utxo.txid, utxo.vout);
+                    
+                    // Fallback: try to get transaction details
+                    match self.get_transaction(&utxo.txid).await {
+                        Ok(tx_detail) => {
+                            tracing::debug!("Retrieved transaction details for {} as fallback", utxo.txid);
+                            // Parse the transaction hex to extract the scriptpubkey for this output
+                            match hex::decode(&tx_detail.hex) {
+                                Ok(tx_bytes) => {
+                                    match elements::Transaction::consensus_decode(&tx_bytes[..]) {
+                                        Ok(tx) => {
+                                            if let Some(output) = tx.output.get(utxo.vout as usize) {
+                                                utxo.scriptpubkey = Some(hex::encode(output.script_pubkey.as_bytes()));
+                                                tracing::info!("Enriched UTXO {}:{} with scriptpubkey from transaction: {}", 
+                                                    utxo.txid, utxo.vout, utxo.scriptpubkey.as_ref().unwrap());
+                                            } else {
+                                                tracing::error!("Output {} not found in transaction {}", utxo.vout, utxo.txid);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to decode transaction {}: {}", utxo.txid, e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to decode hex for transaction {}: {}", utxo.txid, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to get transaction details for {}: {}", utxo.txid, e);
+                        }
+                    }
+                }
+            } else {
+                tracing::debug!("UTXO {}:{} already has scriptpubkey", utxo.txid, utxo.vout);
+            }
+        }
         
         tracing::debug!("Found {} unspent outputs for wallet {}", utxos.len(), wallet_name);
         
@@ -1856,7 +1909,11 @@ impl ElementsRpc {
         let txid: String = self
             .rpc_call("sendrawtransaction", params)
             .await
-            .map_err(|e| e.with_context("Failed to broadcast raw transaction"))?;
+            .map_err(|e| {
+                tracing::error!("Raw transaction broadcast failed: {}", e);
+                tracing::error!("Transaction hex (first 200 chars): {}", &hex[..std::cmp::min(hex.len(), 200)]);
+                e.with_context("Failed to broadcast raw transaction")
+            })?;
 
         tracing::info!("Successfully broadcast transaction with ID: {}", txid);
         Ok(txid)
@@ -2473,6 +2530,56 @@ impl ElementsRpc {
             .sign_transaction(unsigned_tx_hex, signer)
             .await
             .map_err(|e| e.with_context("Failed during transaction signing phase"))?;
+
+        // Broadcast the signed transaction
+        let txid = self
+            .send_raw_transaction(&signed_tx_hex)
+            .await
+            .map_err(|e| e.with_context("Failed during transaction broadcast phase"))?;
+
+        tracing::info!("Successfully signed and broadcast transaction: {}", txid);
+        Ok(txid)
+    }
+
+    /// Signs and broadcasts a transaction with UTXO information for proper PSBT construction
+    ///
+    /// This method provides UTXO information to the signer for proper PSBT construction,
+    /// which is required for confidential transactions where the signer needs to know
+    /// the previous transaction outputs being spent.
+    ///
+    /// # Arguments
+    /// * `unsigned_tx_hex` - The unsigned transaction in hexadecimal format
+    /// * `utxos` - Vector of UTXOs being spent in the transaction
+    /// * `signer` - Implementation of the Signer trait for transaction signing
+    ///
+    /// # Returns
+    /// Returns the transaction ID of the broadcast transaction
+    ///
+    /// # Errors
+    /// Returns an error if signing or broadcasting fails
+    pub async fn sign_and_broadcast_transaction_with_utxos(
+        &self,
+        unsigned_tx_hex: &str,
+        utxos: &[Unspent],
+        signer: &dyn crate::signer::Signer,
+    ) -> Result<String, AmpError> {
+        tracing::info!("Signing and broadcasting transaction with {} UTXOs", utxos.len());
+
+        // Try to use the enhanced signing method if the signer supports it
+        let signed_tx_hex = if let Some(lwk_signer) = signer.as_any().downcast_ref::<crate::signer::LwkSoftwareSigner>() {
+            // Use the enhanced signing method with UTXO information
+            tracing::debug!("Using LWK signer with UTXO information");
+            lwk_signer
+                .sign_transaction_with_utxos(unsigned_tx_hex, utxos)
+                .await
+                .map_err(|e| AmpError::Signer(e).with_context("Failed during enhanced transaction signing phase"))?
+        } else {
+            // Fall back to standard signing method
+            tracing::debug!("Using standard signing method (no UTXO information)");
+            self.sign_transaction(unsigned_tx_hex, signer)
+                .await
+                .map_err(|e| e.with_context("Failed during transaction signing phase"))?
+        };
 
         // Broadcast the signed transaction
         let txid = self
@@ -4466,6 +4573,10 @@ mod elements_rpc_tests {
                     ))
                 }
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
 
         // Test empty transaction hex
@@ -4549,6 +4660,10 @@ mod elements_rpc_tests {
                     Ok(format!("{}deadbeef", unsigned_tx))
                 }
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
 
         // Test signer returning empty string
@@ -4621,6 +4736,10 @@ mod elements_rpc_tests {
             ) -> Result<String, crate::signer::SignerError> {
                 Ok("abcd".to_string()) // Only 2 bytes when decoded
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
 
         let tiny_signer = TinyMockSigner;
@@ -4650,6 +4769,10 @@ mod elements_rpc_tests {
             ) -> Result<String, crate::signer::SignerError> {
                 // Return a longer valid hex string (20+ bytes when decoded)
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
 
@@ -4700,6 +4823,10 @@ mod elements_rpc_tests {
             ) -> Result<String, crate::signer::SignerError> {
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
 
         let signer = TestMockSigner;
@@ -4736,6 +4863,10 @@ mod elements_rpc_tests {
                 Err(crate::signer::SignerError::Lwk(
                     "Signing failed".to_string(),
                 ))
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
 
@@ -4781,6 +4912,10 @@ mod elements_rpc_tests {
                 unsigned_tx: &str,
             ) -> Result<String, crate::signer::SignerError> {
                 Ok(format!("{}deadbeefcafebabe1234567890abcdef", unsigned_tx))
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
 
@@ -10077,7 +10212,7 @@ impl ApiClient {
         // Step 9: Sign and broadcast transaction
         tracing::debug!("Step 9: Signing and broadcasting transaction");
         let txid = node_rpc
-            .sign_and_broadcast_transaction(&raw_transaction, signer)
+            .sign_and_broadcast_transaction_with_utxos(&raw_transaction, &selected_utxos, signer)
             .await
             .map_err(|e| {
                 tracing::error!("Transaction signing and broadcasting failed: {}", e);

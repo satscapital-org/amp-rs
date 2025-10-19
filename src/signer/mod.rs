@@ -202,4 +202,13 @@ pub trait Signer: Send + Sync {
     /// # }
     /// ```
     async fn sign_transaction(&self, unsigned_tx: &str) -> Result<String, SignerError>;
+
+    /// Returns self as Any for downcasting to concrete types
+    ///
+    /// This method enables downcasting from the trait object to concrete implementations,
+    /// allowing access to implementation-specific methods when needed.
+    ///
+    /// # Returns
+    /// Returns a reference to self as `&dyn std::any::Any`
+    fn as_any(&self) -> &dyn std::any::Any;
 }

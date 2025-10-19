@@ -8,10 +8,11 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use elements::secp256k1_zkp::Secp256k1;
-use elements::{Address, AddressParams};
+use elements::{Address, AddressParams, TxOut};
 use bip39::{Mnemonic, Language};
 use elements::bitcoin::bip32::{Xpriv, DerivationPath, ChildNumber};
 use elements::bitcoin::PublicKey;
+use crate::model::Unspent;
 
 /// JSON structure for persistent mnemonic storage
 ///
@@ -1212,6 +1213,249 @@ impl LwkSoftwareSigner {
         tracing::info!("Address verification successful: {}", expected_address);
         Ok(expected_address.to_string())
     }
+    /// Sign a transaction with UTXO information for proper PSBT construction
+    ///
+    /// This method provides the UTXO information needed for LWK to properly construct
+    /// and sign a PSBT. This is required for confidential transactions where the
+    /// signer needs to know the previous transaction outputs being spent.
+    ///
+    /// # Arguments
+    /// * `unsigned_tx` - The unsigned transaction in hexadecimal format
+    /// * `utxos` - Vector of UTXOs being spent in the transaction
+    ///
+    /// # Returns
+    /// Returns the signed transaction in hexadecimal format
+    ///
+    /// # Errors
+    /// Returns SignerError if signing fails or UTXO information is invalid
+    pub async fn sign_transaction_with_utxos(
+        &self,
+        unsigned_tx: &str,
+        utxos: &[Unspent],
+    ) -> Result<String, SignerError> {
+        tracing::debug!(
+            "Starting transaction signing with {} UTXOs for hex: {}",
+            utxos.len(),
+            &unsigned_tx[..std::cmp::min(unsigned_tx.len(), 64)]
+        );
+
+        // Input validation - check for empty or whitespace-only input
+        if unsigned_tx.trim().is_empty() {
+            tracing::error!("Empty transaction hex provided");
+            return Err(SignerError::InvalidTransaction(
+                "Transaction hex cannot be empty".to_string(),
+            ));
+        }
+
+        // Input validation - check for reasonable hex length (minimum transaction size)
+        if unsigned_tx.len() < 20 {
+            tracing::error!(
+                "Transaction hex too short: {} characters",
+                unsigned_tx.len()
+            );
+            return Err(SignerError::InvalidTransaction(format!(
+                "Transaction hex too short: {} characters (minimum ~20 expected)",
+                unsigned_tx.len()
+            )));
+        }
+
+        // Parse unsigned transaction hex to elements::Transaction
+        let tx_bytes = hex::decode(unsigned_tx).map_err(|e| {
+            let preview = if unsigned_tx.len() > 40 {
+                format!(
+                    "{}...{}",
+                    &unsigned_tx[..20],
+                    &unsigned_tx[unsigned_tx.len() - 20..]
+                )
+            } else {
+                unsigned_tx.to_string()
+            };
+            tracing::error!(
+                "Failed to decode transaction hex (length: {}, preview: '{}'): {}",
+                unsigned_tx.len(),
+                preview,
+                e
+            );
+            SignerError::HexParse(e)
+        })?;
+
+        tracing::debug!("Successfully decoded hex to {} bytes", tx_bytes.len());
+
+        let unsigned_transaction =
+            elements::Transaction::consensus_decode(&tx_bytes[..]).map_err(|e| {
+                tracing::error!(
+                    "Failed to deserialize transaction from {} bytes: {}",
+                    tx_bytes.len(),
+                    e
+                );
+                SignerError::InvalidTransaction(format!(
+                    "Transaction deserialization failed from {} bytes: {}",
+                    tx_bytes.len(),
+                    e
+                ))
+            })?;
+
+        tracing::debug!(
+            "Successfully parsed transaction with {} inputs and {} outputs",
+            unsigned_transaction.input.len(),
+            unsigned_transaction.output.len()
+        );
+
+        // Validate transaction structure
+        if unsigned_transaction.input.is_empty() {
+            tracing::error!("Transaction has no inputs");
+            return Err(SignerError::InvalidTransaction(
+                "Transaction must have at least one input".to_string(),
+            ));
+        }
+
+        if unsigned_transaction.output.is_empty() {
+            tracing::error!("Transaction has no outputs");
+            return Err(SignerError::InvalidTransaction(
+                "Transaction must have at least one output".to_string(),
+            ));
+        }
+
+        // Validate UTXO count matches transaction inputs
+        if utxos.len() != unsigned_transaction.input.len() {
+            tracing::error!(
+                "UTXO count ({}) does not match transaction input count ({})",
+                utxos.len(),
+                unsigned_transaction.input.len()
+            );
+            return Err(SignerError::InvalidTransaction(format!(
+                "UTXO count ({}) must match transaction input count ({})",
+                utxos.len(),
+                unsigned_transaction.input.len()
+            )));
+        }
+
+        // Convert to PartiallySignedTransaction for LWK signing
+        let mut pset = PartiallySignedTransaction::from_tx(unsigned_transaction.clone());
+
+        tracing::debug!(
+            "Created PSET for signing with {} inputs",
+            pset.inputs().len()
+        );
+
+        // Add UTXO information to PSBT inputs
+        for (i, utxo) in utxos.iter().enumerate() {
+            // Verify the UTXO matches the transaction input
+            let tx_input = &unsigned_transaction.input[i];
+            if tx_input.previous_output.txid.to_string() != utxo.txid {
+                return Err(SignerError::InvalidTransaction(format!(
+                    "UTXO {} txid mismatch: expected {}, got {}",
+                    i, tx_input.previous_output.txid, utxo.txid
+                )));
+            }
+            if tx_input.previous_output.vout != utxo.vout {
+                return Err(SignerError::InvalidTransaction(format!(
+                    "UTXO {} vout mismatch: expected {}, got {}",
+                    i, tx_input.previous_output.vout, utxo.vout
+                )));
+            }
+
+            // Create TxOut from UTXO information
+            let value = elements::confidential::Value::Explicit((utxo.amount * 100_000_000.0) as u64);
+            let asset = hex::decode(&utxo.asset).map_err(|e| {
+                SignerError::InvalidTransaction(format!("Invalid asset hex in UTXO {}: {}", i, e))
+            })?;
+            let asset_commitment = if asset.len() == 32 {
+                let mut asset_bytes = [0u8; 32];
+                asset_bytes.copy_from_slice(&asset);
+                // Create AssetId from the raw bytes
+                let asset_id = elements::issuance::AssetId::from_slice(&asset_bytes)
+                    .map_err(|e| SignerError::InvalidTransaction(format!("Invalid asset ID in UTXO {}: {}", i, e)))?;
+                elements::confidential::Asset::Explicit(asset_id)
+            } else {
+                return Err(SignerError::InvalidTransaction(format!(
+                    "Invalid asset length in UTXO {}: expected 32 bytes, got {}",
+                    i, asset.len()
+                )));
+            };
+
+            // Parse script pubkey if available
+            let script_pubkey = if let Some(ref spk) = utxo.scriptpubkey {
+                hex::decode(spk).map_err(|e| {
+                    SignerError::InvalidTransaction(format!("Invalid scriptpubkey hex in UTXO {}: {}", i, e))
+                })?
+            } else {
+                // If no scriptpubkey provided, we can't properly construct the UTXO
+                return Err(SignerError::InvalidTransaction(format!(
+                    "Missing scriptpubkey for UTXO {}", i
+                )));
+            };
+
+            let tx_out = TxOut {
+                asset: asset_commitment,
+                value,
+                nonce: elements::confidential::Nonce::Null,
+                script_pubkey: elements::Script::from(script_pubkey),
+                witness: elements::TxOutWitness::default(),
+            };
+
+            // Add the UTXO to the PSBT input
+            if let Some(input) = pset.inputs_mut().get_mut(i) {
+                input.witness_utxo = Some(tx_out);
+                tracing::debug!("Added UTXO {} to PSBT input {}", utxo.txid, i);
+            } else {
+                return Err(SignerError::InvalidTransaction(format!(
+                    "Failed to get PSBT input {} for UTXO addition", i
+                )));
+            }
+        }
+
+        tracing::debug!("Added {} UTXOs to PSBT inputs", utxos.len());
+
+        // Use SwSigner to sign the transaction
+        let signed_inputs = self.signer.sign(&mut pset).map_err(|e| {
+            tracing::error!(
+                "LWK signing operation failed for transaction with {} inputs: {}",
+                pset.inputs().len(),
+                e
+            );
+            SignerError::Lwk(format!(
+                "Transaction signing failed for {} inputs: {}",
+                pset.inputs().len(),
+                e
+            ))
+        })?;
+
+        tracing::debug!("Successfully signed {} inputs", signed_inputs);
+
+        // Extract the signed transaction from PSET
+        let signed_transaction = pset.extract_tx().map_err(|e| {
+            tracing::error!("Failed to extract signed transaction from PSET: {}", e);
+            SignerError::Lwk(format!(
+                "Transaction extraction failed after signing {signed_inputs} inputs: {e}"
+            ))
+        })?;
+
+        // Serialize signed transaction back to hex string
+        let signed_bytes = elements::encode::serialize(&signed_transaction);
+        let signed_hex = hex::encode(signed_bytes);
+
+        // Validate the serialization result
+        if signed_hex.is_empty() {
+            tracing::error!("Serialization produced empty hex string");
+            return Err(SignerError::InvalidTransaction(
+                "Transaction serialization produced empty result".to_string(),
+            ));
+        }
+
+        // Add logging for successful signing operations
+        tracing::info!(
+            "Successfully signed transaction with UTXOs. TXID: {}",
+            signed_transaction.txid()
+        );
+        tracing::debug!(
+            "Signed transaction hex length: {} bytes (original: {} bytes)",
+            signed_hex.len() / 2,
+            tx_bytes.len()
+        );
+
+        Ok(signed_hex)
+    }
 }
 
 #[async_trait]
@@ -1365,6 +1609,10 @@ impl Signer for LwkSoftwareSigner {
         );
 
         Ok(signed_hex)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

@@ -96,6 +96,10 @@ impl Signer for MockSigner {
             }
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 // Helper function to create mock UTXO data for testing
 fn create_mock_utxos(asset_id: &str, amounts: Vec<f64>) -> Vec<Unspent> {

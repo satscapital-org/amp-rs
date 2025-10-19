@@ -2041,6 +2041,10 @@ async fn test_signing_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
                 "Mock signing failure for testing".to_string(),
             ))
         }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
     }
 
     let failing_signer = FailingSigner;
