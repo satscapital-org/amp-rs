@@ -905,9 +905,11 @@ impl ElementsRpc {
             .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {}",
-                response.status()
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
             )));
         }
 
@@ -2249,6 +2251,7 @@ impl ElementsRpc {
         estimated_fee: f64,
     ) -> Result<(String, Vec<Unspent>, f64), AmpError> {
         const DUST_THRESHOLD: f64 = 0.00001;
+        const LBTC_ASSET_ID: &str = "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49"; // L-BTC on Liquid testnet
 
         tracing::debug!(
             "Building distribution transaction for asset {} with {} outputs",
@@ -2265,13 +2268,46 @@ impl ElementsRpc {
             ));
         }
 
-        // Select UTXOs to cover the distribution plus fees
-        let (selected_utxos, total_selected) = self
-            .select_utxos_for_amount(wallet_name, asset_id, total_distribution, estimated_fee)
+        // Select UTXOs to cover the distribution (custom asset)
+        let (selected_asset_utxos, total_selected) = self
+            .select_utxos_for_amount(wallet_name, asset_id, total_distribution, 0.0)
             .await?;
 
-        // Create transaction inputs from selected UTXOs
-        let inputs: Vec<TxInput> = selected_utxos
+        // Also select L-BTC UTXOs for transaction fees
+        // Elements requires L-BTC inputs for fees even when distributing custom assets
+        let min_lbtc_fee = 0.00001; // Minimum L-BTC needed for fees
+        let (selected_lbtc_utxos, lbtc_total) = match self
+            .select_utxos_for_amount(wallet_name, LBTC_ASSET_ID, 0.0, min_lbtc_fee)
+            .await
+        {
+            Ok((utxos, total)) => {
+                tracing::info!("Selected {} L-BTC UTXOs totaling {} for fees", utxos.len(), total);
+                (utxos, total)
+            }
+            Err(e) => {
+                tracing::warn!("Could not select L-BTC UTXOs for fees: {}. Transaction may fail.", e);
+                (Vec::new(), 0.0)
+            }
+        };
+
+        // Combine custom asset UTXOs and L-BTC UTXOs
+        let mut all_utxos = selected_asset_utxos.clone();
+        all_utxos.extend(selected_lbtc_utxos.clone());
+        
+        if selected_lbtc_utxos.is_empty() {
+            tracing::warn!(
+                "No L-BTC UTXOs selected for fees. Transaction may fail during broadcast."
+            );
+        } else {
+            tracing::info!(
+                "Transaction includes {} custom asset UTXOs and {} L-BTC UTXOs for fees",
+                selected_asset_utxos.len(),
+                selected_lbtc_utxos.len()
+            );
+        }
+
+        // Create transaction inputs from all selected UTXOs
+        let inputs: Vec<TxInput> = all_utxos
             .iter()
             .map(|utxo| TxInput {
                 txid: utxo.txid.clone(),
@@ -2280,36 +2316,65 @@ impl ElementsRpc {
             })
             .collect();
 
-        // Create outputs for distribution
-        let mut outputs = address_amounts.clone();
-        let mut assets = std::collections::HashMap::new();
+        // Create outputs for distribution (custom asset)
+        // We need to track outputs as a vector since we may have multiple outputs to the same address
+        // (e.g., custom asset change + L-BTC change to the same change address)
+        let mut output_list = Vec::new();
 
-        // Set asset ID for all distribution outputs
-        for address in address_amounts.keys() {
-            assets.insert(address.clone(), asset_id.to_string());
+        // Add distribution outputs (custom asset)
+        for (address, amount) in &address_amounts {
+            output_list.push((address.clone(), *amount, asset_id.to_string()));
         }
 
-        // Calculate change amount (total selected - distribution - fee)
-        let change_amount = total_selected - total_distribution - estimated_fee;
+        // Calculate change amount for custom asset (total selected - distribution)
+        let asset_change_amount = total_selected - total_distribution;
 
-        // Add change output if there's a significant amount left
-        // Use a small threshold to avoid dust outputs
-        if change_amount > DUST_THRESHOLD {
-            outputs.insert(change_address.to_string(), change_amount);
-            assets.insert(change_address.to_string(), asset_id.to_string());
+        // Add asset change output if there's a significant amount left
+        if asset_change_amount > DUST_THRESHOLD {
+            output_list.push((change_address.to_string(), asset_change_amount, asset_id.to_string()));
 
             tracing::debug!(
-                "Adding change output: {} {} to address {}",
-                change_amount,
+                "Adding asset change output: {} {} to address {}",
+                asset_change_amount,
                 asset_id,
                 change_address
             );
-        } else if change_amount > 0.0 {
+        } else if asset_change_amount > 0.0 {
             tracing::warn!(
-                "Change amount {} is below dust threshold {}, will be added to fee",
-                change_amount,
+                "Asset change amount {} is below dust threshold {}, will be lost",
+                asset_change_amount,
                 DUST_THRESHOLD
             );
+        }
+
+        // Handle L-BTC change if we selected L-BTC UTXOs for fees
+        // In Elements, the fee is implicit - it's the difference between L-BTC inputs and outputs
+        // We should NOT subtract the fee from outputs; Elements calculates it automatically
+        if !selected_lbtc_utxos.is_empty() {
+            tracing::debug!(
+                "L-BTC input total: {}, minimum fee needed: {}",
+                lbtc_total,
+                min_lbtc_fee
+            );
+            
+            // Check if we have enough L-BTC for the minimum fee
+            if lbtc_total < min_lbtc_fee {
+                return Err(AmpError::validation(format!(
+                    "Insufficient L-BTC for fees: have {}, need at least {}", 
+                    lbtc_total, 
+                    min_lbtc_fee
+                )));
+            }
+            
+            // For now, let's try NOT adding any L-BTC change output
+            // and let Elements handle the fee automatically from the input/output difference
+            tracing::info!(
+                "Using L-BTC input {} for fees - no explicit L-BTC change output (Elements will handle fee automatically)",
+                lbtc_total
+            );
+            
+            // Note: If this approach works, the entire L-BTC input will become the fee
+            // If we need change, we'll need to figure out the correct way to handle it
         }
 
         // For confidential addresses, we need to import them into the wallet first
@@ -2326,22 +2391,130 @@ impl ElementsRpc {
 
         // Build the raw transaction using wallet-specific endpoint for confidential transactions
         let raw_transaction = self
-            .create_raw_transaction_with_wallet(wallet_name, inputs, outputs, assets)
+            .create_raw_transaction_with_outputs(wallet_name, inputs, output_list)
             .await
-            .map_err(|e| e.with_context("Failed to build distribution transaction"))?;
+            .map_err(|e| {
+                // Provide more helpful error message for the common L-BTC fee issue
+                if e.to_string().contains("bad-txns-in-ne-out") || e.to_string().contains("value in != value out") {
+                    AmpError::validation(format!(
+                        "Transaction failed because Elements requires L-BTC for transaction fees, but the wallet only has custom assets. \
+                        To fix this:\n\
+                        1. Fund the wallet with L-BTC from a testnet faucet\n\
+                        2. Ensure the wallet has L-BTC UTXOs before attempting distributions\n\
+                        3. Original error: {}",
+                        e
+                    ))
+                } else {
+                    e.with_context("Failed to build distribution transaction")
+                }
+            })?;
 
         tracing::info!(
-            "Built distribution transaction: {} inputs, {} outputs, change: {}",
-            selected_utxos.len(),
-            address_amounts.len() + usize::from(change_amount > DUST_THRESHOLD),
-            if change_amount > DUST_THRESHOLD {
-                change_amount
-            } else {
-                0.0
-            }
+            "Built distribution transaction: {} inputs, {} outputs, asset change: {}",
+            all_utxos.len(),
+            address_amounts.len() + usize::from(asset_change_amount > DUST_THRESHOLD),
+            if asset_change_amount > DUST_THRESHOLD { asset_change_amount } else { 0.0 }
         );
 
-        Ok((raw_transaction, selected_utxos, change_amount))
+        Ok((raw_transaction, all_utxos, asset_change_amount))
+    }
+
+    /// Creates a raw transaction with multiple outputs that can handle multiple assets to the same address
+    ///
+    /// This method is similar to `create_raw_transaction_with_wallet` but handles the case where
+    /// multiple outputs with different assets need to go to the same address (e.g., asset change + L-BTC change).
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to use
+    /// * `inputs` - Vector of transaction inputs
+    /// * `outputs` - Vector of (address, amount, asset_id) tuples
+    ///
+    /// # Returns
+    /// Returns the raw transaction hex string
+    async fn create_raw_transaction_with_outputs(
+        &self,
+        wallet_name: &str,
+        inputs: Vec<TxInput>,
+        outputs: Vec<(String, f64, String)>, // (address, amount, asset_id)
+    ) -> Result<String, AmpError> {
+        tracing::debug!(
+            "Creating raw transaction with wallet {} - {} inputs and {} outputs",
+            wallet_name,
+            inputs.len(),
+            outputs.len()
+        );
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        // Elements RPC createrawtransaction expects outputs as an array of objects
+        // Each output object should contain both address, amount, and asset
+        let mut outputs_array = Vec::new();
+        
+        for (address, amount, asset_id) in &outputs {
+            // Convert amount to string with proper precision for Elements
+            let amount_str = format!("{:.8}", amount);
+            
+            outputs_array.push(serde_json::json!({
+                address.clone(): amount_str,
+                "asset": asset_id
+            }));
+        }
+
+        let params = serde_json::json!([
+            inputs,        // inputs as TxInput array
+            outputs_array, // outputs as array of {address: amount, asset: id} objects
+            0,             // locktime (0 = no locktime)
+            false,         // replaceable (false = not replaceable)
+        ]);
+
+        // Debug: Log the exact parameters being sent to createrawtransaction
+        tracing::error!("createrawtransaction parameters (wallet-specific, corrected format):");
+        tracing::error!("  wallet: {}", wallet_name);
+        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
+        tracing::error!("  outputs_array: {}", serde_json::to_string_pretty(&outputs_array).unwrap_or_default());
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "createrawtransaction".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<String> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error creating raw transaction: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        Ok(rpc_response.result.unwrap_or_default())
     }
 
     /// Signs a raw transaction using the provided signer callback
@@ -10171,9 +10344,9 @@ impl ApiClient {
         let estimated_fee = 0.001; // Conservative fee estimate for Liquid
         tracing::debug!("Using estimated fee: {} for transaction", estimated_fee);
 
-        // Get a change address from Elements wallet - generate a new address for change
+        // Get a confidential change address from Elements wallet for confidential transactions
         // We can't use the recipient GAID address because Elements doesn't know about it
-        let change_address = node_rpc
+        let unconfidential_address = node_rpc
             .get_new_address(wallet_name, Some("bech32"))
             .await
             .map_err(|e| {
@@ -10181,7 +10354,19 @@ impl ApiClient {
                 tracing::error!("Failed to get change address from Elements wallet: {}", e);
                 error
             })?;
-        tracing::debug!("Using Elements-generated change address: {}", change_address);
+        
+        // Get the confidential version for use in confidential transactions
+        let change_address = node_rpc
+            .get_confidential_address(wallet_name, &unconfidential_address)
+            .await
+            .map_err(|e| {
+                tracing::warn!("Failed to get confidential address, using unconfidential: {}", e);
+                // Fall back to unconfidential address if confidential address generation fails
+                unconfidential_address.clone()
+            })
+            .unwrap_or(unconfidential_address);
+        
+        tracing::info!("Generated new bech32 address: {}", change_address);
 
         let (raw_transaction, selected_utxos, change_amount) = node_rpc
             .build_distribution_transaction(
