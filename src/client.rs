@@ -1914,7 +1914,22 @@ impl ElementsRpc {
             .map_err(|e| {
                 tracing::error!("Raw transaction broadcast failed: {}", e);
                 tracing::error!("Transaction hex (first 200 chars): {}", &hex[..std::cmp::min(hex.len(), 200)]);
-                e.with_context("Failed to broadcast raw transaction")
+                
+                // Provide specific guidance for blinding-related errors
+                if e.to_string().contains("bad-txns-in-ne-out") || e.to_string().contains("value in != value out") {
+                    AmpError::rpc(format!(
+                        "Transaction broadcast failed due to confidential transaction blinding error. \
+                        This indicates that the blinding factors don't balance properly. \
+                        Possible solutions:\n\
+                        1. Ensure all addresses have proper blinding keys in the wallet\n\
+                        2. Verify that blindrawtransaction was called before signing\n\
+                        3. Check that UTXO blinding factors match between Elements and LWK\n\
+                        4. Try using unconfidential addresses for testing\n\
+                        Original error: {}", e
+                    ))
+                } else {
+                    e.with_context("Failed to broadcast raw transaction")
+                }
             })?;
 
         tracing::info!("Successfully broadcast transaction with ID: {}", txid);
@@ -2248,7 +2263,7 @@ impl ElementsRpc {
         asset_id: &str,
         address_amounts: std::collections::HashMap<String, f64>,
         change_address: &str,
-        estimated_fee: f64,
+        _estimated_fee: f64,
     ) -> Result<(String, Vec<Unspent>, f64), AmpError> {
         const DUST_THRESHOLD: f64 = 0.00001;
         const LBTC_ASSET_ID: &str = "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49"; // L-BTC on Liquid testnet
@@ -2390,6 +2405,7 @@ impl ElementsRpc {
         }
 
         // Build the raw transaction using wallet-specific endpoint for confidential transactions
+        // For confidential transactions, we need to use blindrawtransaction to properly handle blinding
         let raw_transaction = self
             .create_raw_transaction_with_outputs(wallet_name, inputs, output_list)
             .await
@@ -2397,17 +2413,36 @@ impl ElementsRpc {
                 // Provide more helpful error message for the common L-BTC fee issue
                 if e.to_string().contains("bad-txns-in-ne-out") || e.to_string().contains("value in != value out") {
                     AmpError::validation(format!(
-                        "Transaction failed because Elements requires L-BTC for transaction fees, but the wallet only has custom assets. \
+                        "Transaction failed due to confidential transaction blinding mismatch. \
+                        This occurs when Elements creates blinding factors that don't match LWK's expectations. \
                         To fix this:\n\
-                        1. Fund the wallet with L-BTC from a testnet faucet\n\
-                        2. Ensure the wallet has L-BTC UTXOs before attempting distributions\n\
-                        3. Original error: {}",
+                        1. Ensure the wallet has proper blinding keys for all addresses\n\
+                        2. Use blindrawtransaction before signing\n\
+                        3. Verify UTXO blinding factors match between Elements and LWK\n\
+                        4. Original error: {}",
                         e
                     ))
                 } else {
                     e.with_context("Failed to build distribution transaction")
                 }
             })?;
+
+        // For confidential transactions, we need to blind the transaction properly
+        // This ensures the blinding factors are compatible with LWK signing
+        tracing::debug!("Blinding raw transaction for confidential asset distribution");
+        let blinded_transaction = self
+            .blind_raw_transaction(wallet_name, &raw_transaction)
+            .await
+            .map_err(|e| {
+                tracing::warn!("Failed to blind transaction, proceeding with unblinded: {}", e);
+                // If blinding fails, we'll try to proceed with the unblinded transaction
+                // This might work for some cases but could fail during broadcast
+                e.with_context("Transaction blinding failed")
+            })
+            .unwrap_or_else(|_| {
+                tracing::warn!("Using unblinded transaction - this may cause broadcast failures");
+                raw_transaction.clone()
+            });
 
         tracing::info!(
             "Built distribution transaction: {} inputs, {} outputs, asset change: {}",
@@ -2416,7 +2451,7 @@ impl ElementsRpc {
             if asset_change_amount > DUST_THRESHOLD { asset_change_amount } else { 0.0 }
         );
 
-        Ok((raw_transaction, all_utxos, asset_change_amount))
+        Ok((blinded_transaction, all_utxos, asset_change_amount))
     }
 
     /// Creates a raw transaction with multiple outputs that can handle multiple assets to the same address
@@ -2515,6 +2550,102 @@ impl ElementsRpc {
         }
 
         Ok(rpc_response.result.unwrap_or_default())
+    }
+
+    /// Blinds a raw transaction for confidential transactions
+    ///
+    /// This method uses Elements' blindrawtransaction RPC to properly blind a transaction
+    /// for confidential asset transfers. This is crucial for Liquid transactions to ensure
+    /// the blinding factors are properly balanced.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to use for blinding
+    /// * `raw_transaction` - The raw transaction hex to blind
+    ///
+    /// # Returns
+    /// Returns the blinded transaction hex string
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or blinding is not possible
+    pub async fn blind_raw_transaction(
+        &self,
+        wallet_name: &str,
+        raw_transaction: &str,
+    ) -> Result<String, AmpError> {
+        tracing::debug!(
+            "Blinding raw transaction for wallet {} - tx length: {} chars",
+            wallet_name,
+            raw_transaction.len()
+        );
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        // Elements blindrawtransaction parameters:
+        // 1. Raw transaction hex
+        // 2. Input blinding data (can be empty array for auto-detection)
+        // 3. Input amounts (can be empty array for auto-detection from UTXOs)
+        // 4. Input assets (can be empty array for auto-detection from UTXOs)
+        // 5. Input asset blinders (can be empty array for auto-detection)
+        // 6. Input amount blinders (can be empty array for auto-detection)
+        let params = serde_json::json!([
+            raw_transaction,  // Raw transaction hex
+            [],              // Input blinding data (empty for auto-detection)
+            [],              // Input amounts (empty for auto-detection)
+            [],              // Input assets (empty for auto-detection)
+            [],              // Input asset blinders (empty for auto-detection)
+            []               // Input amount blinders (empty for auto-detection)
+        ]);
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "blindrawtransaction".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send blindrawtransaction request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "blindrawtransaction failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<String> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse blindrawtransaction response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error blinding transaction: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let blinded_tx = rpc_response.result.unwrap_or_default();
+        
+        tracing::info!(
+            "Successfully blinded transaction - original: {} chars, blinded: {} chars",
+            raw_transaction.len(),
+            blinded_tx.len()
+        );
+
+        Ok(blinded_tx)
     }
 
     /// Signs a raw transaction using the provided signer callback
@@ -9717,6 +9848,177 @@ impl ApiClient {
         );
 
         Ok(())
+    }
+
+    /// Cancels an in-progress distribution for an asset.
+    ///
+    /// This method cancels a distribution that is currently in progress (unconfirmed status).
+    /// Once a distribution is cancelled, it cannot be confirmed and the assigned amounts
+    /// become available for new distributions.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `distribution_uuid` - The UUID of the distribution to cancel
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the distribution was successfully cancelled.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The distribution is not found
+    /// - The distribution is already confirmed and cannot be cancelled
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use amp_rs::ApiClient;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = ApiClient::new().await?;
+    ///     
+    ///     client.cancel_distribution(
+    ///         "asset-uuid-123",
+    ///         "distribution-uuid-456"
+    ///     ).await?;
+    ///     
+    ///     println!("Distribution cancelled successfully");
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn cancel_distribution(
+        &self,
+        asset_uuid: &str,
+        distribution_uuid: &str,
+    ) -> Result<(), AmpError> {
+        let cancel_span = tracing::debug_span!(
+            "cancel_distribution",
+            asset_uuid = %asset_uuid,
+            distribution_uuid = %distribution_uuid
+        );
+        let _enter = cancel_span.enter();
+
+        tracing::debug!(
+            "Cancelling distribution {} for asset {}",
+            distribution_uuid,
+            asset_uuid
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Distribution cancellation failed: empty asset UUID");
+            return Err(AmpError::validation("Asset UUID cannot be empty"));
+        }
+
+        if distribution_uuid.is_empty() {
+            tracing::error!("Distribution cancellation failed: empty distribution UUID");
+            return Err(AmpError::validation("Distribution UUID cannot be empty"));
+        }
+
+        let api_call_start = std::time::Instant::now();
+
+        self.request_empty(
+            Method::DELETE,
+            &["assets", asset_uuid, "distributions", distribution_uuid, "cancel"],
+            None::<&()>,
+        )
+        .await
+        .map_err(|e| {
+            let api_call_duration = api_call_start.elapsed();
+            let error_msg = format!(
+                "Failed to cancel distribution {} for asset {} after {:?}: {}",
+                distribution_uuid, asset_uuid, api_call_duration, e
+            );
+            tracing::error!("{}", error_msg);
+
+            // Check for specific API error patterns
+            let error_str = e.to_string();
+            if error_str.contains("404") || error_str.contains("not found") {
+                tracing::error!("Distribution {} not found - verify distribution UUID is correct", distribution_uuid);
+            } else if error_str.contains("400") || error_str.contains("bad request") {
+                tracing::error!("Bad request - distribution may already be confirmed or invalid");
+            } else if error_str.contains("409") || error_str.contains("conflict") {
+                tracing::error!("Conflict - distribution may already be confirmed and cannot be cancelled");
+            } else if error_str.contains("422") || error_str.contains("unprocessable") {
+                tracing::error!("Unprocessable entity - distribution is in a state that cannot be cancelled");
+            }
+
+            AmpError::api(error_msg)
+        })?;
+
+        let api_call_duration = api_call_start.elapsed();
+        tracing::info!(
+            "Successfully cancelled distribution: {} for asset: {} (took {:?})",
+            distribution_uuid,
+            asset_uuid,
+            api_call_duration
+        );
+
+        Ok(())
+    }
+
+    /// Gets all distributions for a specific asset.
+    ///
+    /// This method retrieves all distributions (both confirmed and unconfirmed) for the specified asset.
+    /// This is useful for checking if there are any in-progress distributions before deleting an asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to get distributions for
+    ///
+    /// # Returns
+    /// Returns a vector of `Distribution` objects for the asset.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use amp_rs::ApiClient;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = ApiClient::new().await?;
+    ///     
+    ///     let distributions = client.get_asset_distributions("asset-uuid-123").await?;
+    ///     
+    ///     for distribution in distributions {
+    ///         println!("Distribution: {} - Status: {:?}", 
+    ///                  distribution.distribution_uuid, 
+    ///                  distribution.distribution_status);
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn get_asset_distributions(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<Vec<crate::model::Distribution>, Error> {
+        let distributions_span = tracing::debug_span!(
+            "get_asset_distributions",
+            asset_uuid = %asset_uuid
+        );
+        let _enter = distributions_span.enter();
+
+        tracing::debug!("Getting distributions for asset {}", asset_uuid);
+
+        // Validate input
+        if asset_uuid.is_empty() {
+            tracing::error!("Get distributions failed: empty asset UUID");
+            return Err(Error::RequestFailed("Asset UUID cannot be empty".to_string()));
+        }
+
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "distributions"],
+            None::<&()>,
+        )
+        .await
     }
 
     /// Gets a specific manager by ID.

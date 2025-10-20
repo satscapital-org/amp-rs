@@ -65,6 +65,7 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
             if !assets.is_empty() {
                 let mut total_assignments = 0;
                 let mut total_category_removals = 0;
+                let mut total_distributions_to_cancel = 0;
                 for asset in assets.iter().take(3) {
                     let assignment_count =
                         match client.get_asset_assignments(&asset.asset_uuid).await {
@@ -78,14 +79,32 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
                         .filter(|&&cat_id| cat_id != PROTECTED_CATEGORY_ID)
                         .count();
                     total_category_removals += category_count;
+                    
+                    let distribution_count = match client.get_asset_distributions(&asset.asset_uuid).await {
+                        Ok(distributions) => {
+                            let unconfirmed_count = distributions
+                                .iter()
+                                .filter(|d| matches!(d.distribution_status, amp_rs::model::Status::Unconfirmed))
+                                .count();
+                            total_distributions_to_cancel += unconfirmed_count;
+                            unconfirmed_count
+                        }
+                        Err(_) => 0,
+                    };
+                    
                     let lock_status = if asset.is_locked { " 🔒" } else { "" };
+                    let distribution_status = if distribution_count > 0 { 
+                        format!(" 📤{}", distribution_count) 
+                    } else { 
+                        "".to_string() 
+                    };
                     println!(
-                        "   • {} ({:?}) - {} assignments, {} categories{}",
-                        asset.name, asset.ticker, assignment_count, category_count, lock_status
+                        "   • {} ({:?}) - {} assignments, {} categories{}{}",
+                        asset.name, asset.ticker, assignment_count, category_count, lock_status, distribution_status
                     );
                 }
                 if assets.len() > 3 {
-                    // Count assignments and categories for remaining assets
+                    // Count assignments, categories, and distributions for remaining assets
                     for asset in assets.iter().skip(3) {
                         if let Ok(assignments) =
                             client.get_asset_assignments(&asset.asset_uuid).await
@@ -96,11 +115,22 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
                             .filter(|&&cat_id| cat_id != PROTECTED_CATEGORY_ID)
                             .count();
                         total_category_removals += category_count;
+                        
+                        if let Ok(distributions) = client.get_asset_distributions(&asset.asset_uuid).await {
+                            let unconfirmed_count = distributions
+                                .iter()
+                                .filter(|d| matches!(d.distribution_status, amp_rs::model::Status::Unconfirmed))
+                                .count();
+                            total_distributions_to_cancel += unconfirmed_count;
+                        }
                     }
                     println!("   ... and {} more assets", assets.len() - 3);
                 }
                 println!("   📋 Total assignments to delete: {}", total_assignments);
                 println!("   📁 Total category removals: {}", total_category_removals);
+                if total_distributions_to_cancel > 0 {
+                    println!("   📤 Total in-progress distributions to cancel: {}", total_distributions_to_cancel);
+                }
                 if locked_count > 0 {
                     println!(
                         "   🔓 {} locked assets will be unlocked before deletion",
@@ -228,6 +258,8 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     let mut protected_assets = 0;
     let mut total_categories_removed = 0;
     let mut total_category_removal_errors = 0;
+    let mut total_distributions_cancelled = 0;
+    let mut total_distribution_cancel_errors = 0;
 
     for asset in assets {
         // Skip test environment asset
@@ -262,6 +294,12 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
             println!("     Asset is not locked");
         }
 
+        // Check for and cancel any in-progress distributions first
+        let (distributions_cancelled, distribution_cancel_errors) =
+            cancel_asset_distributions(client, &asset.asset_uuid).await;
+        total_distributions_cancelled += distributions_cancelled;
+        total_distribution_cancel_errors += distribution_cancel_errors;
+        
         // Remove asset from all categories first to avoid "Cannot delete an asset which has some requirements" error
         // The requirements field contains category IDs that the asset belongs to
         let (categories_removed, category_errors) = 
@@ -304,6 +342,10 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     println!(
         "   📊 Unlocked: {} assets, {} unlock errors",
         unlocked_count, unlock_error_count
+    );
+    println!(
+        "   📊 Distributions: {} cancelled, {} errors",
+        total_distributions_cancelled, total_distribution_cancel_errors
     );
     Ok(())
 }
@@ -511,4 +553,57 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
         success_count, error_count, protected_count
     );
     Ok(())
+}
+async fn cancel_asset_distributions(client: &ApiClient, asset_uuid: &str) -> (usize, usize) {
+    let distributions = match client.get_asset_distributions(asset_uuid).await {
+        Ok(distributions) => distributions,
+        Err(e) => {
+            println!("     ❌ Failed to list distributions: {}", e);
+            return (0, 1);
+        }
+    };
+
+    if distributions.is_empty() {
+        println!("     ✅ No distributions to cancel");
+        return (0, 0);
+    }
+
+    // Filter for unconfirmed (in-progress) distributions
+    let unconfirmed_distributions: Vec<_> = distributions
+        .iter()
+        .filter(|d| matches!(d.distribution_status, amp_rs::model::Status::Unconfirmed))
+        .collect();
+
+    if unconfirmed_distributions.is_empty() {
+        println!("     ✅ No in-progress distributions to cancel");
+        return (0, 0);
+    }
+
+    println!("     Found {} in-progress distributions to cancel", unconfirmed_distributions.len());
+
+    let mut success_count = 0;
+    let mut error_count = 0;
+
+    for distribution in unconfirmed_distributions {
+        print!(
+            "       Cancelling distribution {}... ",
+            distribution.distribution_uuid
+        );
+
+        match client
+            .cancel_distribution(asset_uuid, &distribution.distribution_uuid)
+            .await
+        {
+            Ok(_) => {
+                println!("✅");
+                success_count += 1;
+            }
+            Err(e) => {
+                println!("❌ {}", e);
+                error_count += 1;
+            }
+        }
+    }
+
+    (success_count, error_count)
 }

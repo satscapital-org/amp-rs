@@ -34,6 +34,10 @@ path = "examples/signer_usage.rs"
 name = "descriptor_wallet_setup"
 path = "examples/descriptor_wallet_setup.rs"
 
+[[example]]
+name = "cancel_test_asset_distribution"
+path = "examples/cancel_test_asset_distribution.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
