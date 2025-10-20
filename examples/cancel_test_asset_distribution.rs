@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected to AMP API with {} strategy", client.get_strategy_type());
 
     // Target the asset with UTXOs that we found
-    let asset_uuid = "15a6d28f-b6c2-47bc-91d2-9ab4500839d4";
+    let asset_uuid = "aa527a95-4616-4394-adb6-12efbf23cb12";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset
@@ -278,13 +278,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Analyze UTXOs and outputs for a specific asset to diagnose distribution issues
-async fn analyze_asset_utxos(client: &ApiClient, asset_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n🔍 UTXO Analysis for Asset: {}", asset_id);
+async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n🔍 UTXO Analysis for Asset: {}", asset_uuid);
     println!("{}", "=".repeat(80));
     
-    // First, get the asset details
+    // First, get the asset details to get the actual asset_id (hex string)
     println!("📋 Getting asset information...");
-    match client.get_asset(asset_id).await {
+    let asset_id = match client.get_asset(asset_uuid).await {
         Ok(asset) => {
             println!("✅ Asset found:");
             println!("   Name: {}", asset.name);
@@ -295,17 +295,19 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_id: &str) -> Result<(), B
             println!("   Ticker: {:?}", asset.ticker);
             println!("   Domain: {:?}", asset.domain);
             println!("   Is Registered: {}", asset.is_registered);
+            asset.asset_id // Use the actual asset_id (hex string) for Elements RPC
         }
         Err(e) => {
             println!("❌ Failed to get asset details: {}", e);
-            println!("   This asset may not be registered in AMP or the asset ID may be incorrect.");
-            println!("   Continuing with Elements RPC analysis...");
+            println!("   This asset may not be registered in AMP or the asset UUID may be incorrect.");
+            println!("   Cannot proceed with Elements RPC analysis without asset_id.");
+            return Ok(());
         }
-    }
+    };
 
     // Get asset assignments to understand distribution state (only if asset exists in AMP)
     println!("\n📋 Getting asset assignments...");
-    match client.get_asset_assignments(asset_id).await {
+    match client.get_asset_assignments(asset_uuid).await {
         Ok(assignments) => {
             println!("✅ Found {} assignments", assignments.len());
             for (i, assignment) in assignments.iter().enumerate() {
@@ -330,7 +332,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_id: &str) -> Result<(), B
 
     // Get asset distributions
     println!("\n📋 Getting asset distributions...");
-    match client.get_asset_distributions(asset_id).await {
+    match client.get_asset_distributions(asset_uuid).await {
         Ok(distributions) => {
             println!("✅ Found {} distributions", distributions.len());
             for (i, distribution) in distributions.iter().enumerate() {
@@ -359,7 +361,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_id: &str) -> Result<(), B
 
     // Try to get asset balance information
     println!("\n💰 Checking asset balance...");
-    match client.get_asset_balance(asset_id).await {
+    match client.get_asset_balance(asset_uuid).await {
         Ok(balance_entries) => {
             println!("✅ Asset balance information:");
             if balance_entries.is_empty() {
@@ -391,7 +393,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_id: &str) -> Result<(), B
         println!("   User: {}", rpc_user);
         
         // Try to create Elements RPC client and analyze UTXOs
-        match analyze_elements_utxos(asset_id).await {
+        match analyze_elements_utxos(&asset_id).await {
             Ok(()) => println!("✅ Elements UTXO analysis completed"),
             Err(e) => println!("❌ Elements UTXO analysis failed: {}", e),
         }

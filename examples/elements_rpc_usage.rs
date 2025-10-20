@@ -68,6 +68,7 @@ async fn main() -> Result<(), AmpError> {
         blocktime: Some(1640995200),
         time: Some(1640995200),
         timereceived: Some(1640995180),
+        details: Some(vec![]),
     };
     println!(
         "✓ TransactionDetail struct created: txid={}, confirmations={}",

@@ -610,7 +610,7 @@ pub struct Unspent {
     pub assetblinder: Option<String>,
 }
 
-/// Transaction details from Elements node
+/// Transaction details from Elements node (full gettransaction response)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionDetail {
     pub txid: String,
@@ -626,6 +626,41 @@ pub struct TransactionDetail {
     pub time: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timereceived: Option<i64>,
+    /// The details field from gettransaction (array of transaction outputs)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Vec<serde_json::Value>>,
+}
+
+/// Transaction output detail from Elements gettransaction details array
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionOutputDetail {
+    pub account: String,
+    pub address: String,
+    pub category: String,
+    pub amount: f64,
+    pub vout: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmations: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blockhash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blockindex: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocktime: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub txid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timereceived: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assetblinder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amountblinder: Option<String>,
 }
 
 /// Transaction input for raw transaction creation
@@ -653,10 +688,18 @@ pub struct DistributionTxData {
     pub txid: String,
 }
 
+/// Transaction data for AMP API confirmation (matches Python implementation)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AmpTxData {
+    /// The details field from gettransaction (array of transaction outputs)
+    pub details: serde_json::Value,
+    pub txid: String,
+}
+
 /// Request payload for distribution confirmation API
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfirmDistributionRequest {
-    pub tx_data: DistributionTxData,
+    pub tx_data: AmpTxData,
     pub change_data: Vec<Unspent>,
 }
 
@@ -755,6 +798,7 @@ mod tests {
             blockheight: Some(12345),
             hex: "020000000001...".to_string(),
             blockhash: Some("block_hash_hex".to_string()),
+            details: Some(vec![]),
             blocktime: Some(1640995200),
             time: Some(1640995200),
             timereceived: Some(1640995180),
@@ -923,6 +967,7 @@ mod tests {
             blocktime: Some(1640995200),
             time: Some(1640995200),
             timereceived: Some(1640995180),
+            details: Some(vec![]),
         };
 
         let tx_data = DistributionTxData {
@@ -959,10 +1004,11 @@ mod tests {
             blocktime: Some(1640995300),
             time: Some(1640995300),
             timereceived: Some(1640995280),
+            details: Some(vec![]),
         };
 
-        let tx_data = DistributionTxData {
-            details: tx_detail,
+        let tx_data = AmpTxData {
+            details: serde_json::json!([]),
             txid: "confirm_test_txid".to_string(),
         };
 
@@ -1015,10 +1061,11 @@ mod tests {
             blocktime: None,
             time: None,
             timereceived: None,
+            details: Some(vec![]),
         };
 
-        let tx_data = DistributionTxData {
-            details: tx_detail,
+        let tx_data = AmpTxData {
+            details: serde_json::json!([]),
             txid: "format_test_txid".to_string(),
         };
 

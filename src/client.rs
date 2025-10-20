@@ -9933,7 +9933,7 @@ impl ApiClient {
         &self,
         asset_uuid: &str,
         distribution_uuid: &str,
-        tx_data: crate::model::DistributionTxData,
+        tx_data: crate::model::AmpTxData,
         change_data: Vec<crate::model::Unspent>,
     ) -> Result<(), AmpError> {
         use crate::model::ConfirmDistributionRequest;
@@ -9943,17 +9943,15 @@ impl ApiClient {
             asset_uuid = %asset_uuid,
             distribution_uuid = %distribution_uuid,
             txid = %tx_data.txid,
-            confirmations = tx_data.details.confirmations,
             change_count = change_data.len()
         );
         let _enter = confirm_span.enter();
 
         tracing::debug!(
-            "Confirming distribution {} for asset {} with txid {} ({} confirmations, {} change UTXOs)",
+            "Confirming distribution {} for asset {} with txid {} ({} change UTXOs)",
             distribution_uuid,
             asset_uuid,
             tx_data.txid,
-            tx_data.details.confirmations,
             change_data.len()
         );
 
@@ -9973,38 +9971,10 @@ impl ApiClient {
             return Err(AmpError::validation("Transaction ID cannot be empty"));
         }
 
-        // Ensure txid consistency between tx_data.txid and tx_data.details.txid
-        if tx_data.txid != tx_data.details.txid {
-            tracing::error!(
-                "Transaction ID mismatch: tx_data.txid '{}' != tx_data.details.txid '{}'",
-                tx_data.txid,
-                tx_data.details.txid
-            );
-            return Err(AmpError::validation(format!(
-                "Transaction ID mismatch: tx_data.txid '{}' != tx_data.details.txid '{}'",
-                tx_data.txid, tx_data.details.txid
-            )));
-        }
-
-        // Validate that transaction has sufficient confirmations
-        if tx_data.details.confirmations < 1 {
-            tracing::error!(
-                "Transaction {} has insufficient confirmations: {} (minimum 1 required)",
-                tx_data.txid,
-                tx_data.details.confirmations
-            );
-            return Err(AmpError::validation(format!(
-                "Transaction {} has insufficient confirmations: {} (minimum 1 required)",
-                tx_data.txid, tx_data.details.confirmations
-            )));
-        }
-
         // Log transaction details for debugging
         tracing::debug!(
-            "Transaction details - confirmations: {}, block_height: {:?}, hex_size: {} bytes",
-            tx_data.details.confirmations,
-            tx_data.details.blockheight,
-            tx_data.details.hex.len() / 2
+            "Transaction details array: {:?}",
+            tx_data.details
         );
 
         // Log change data details
@@ -10976,15 +10946,36 @@ impl ApiClient {
 
         // Step 11: Submit final confirmation to AMP API
         tracing::debug!("Step 11: Submitting final confirmation to AMP API");
-        let tx_data = crate::model::DistributionTxData {
-            details: tx_detail,
+        
+        // Extract the details field from the transaction (matching Python implementation)
+        // Python: details = rpc.call('gettransaction', txid).get('details')
+        let transaction_details = tx_detail.details.unwrap_or_else(|| vec![]);
+        tracing::debug!("Transaction details for confirmation: {:?}", transaction_details);
+        
+        let amp_tx_data = crate::model::AmpTxData {
+            details: serde_json::Value::Array(transaction_details),
             txid: txid.clone(),
         };
+        
+        // Log the exact payload being sent to AMP for debugging
+        tracing::info!("Sending confirmation payload to AMP:");
+        tracing::info!("  tx_data.txid: {}", amp_tx_data.txid);
+        tracing::info!("  tx_data.details: {:?}", amp_tx_data.details);
+        tracing::info!("  change_data: {} UTXOs", change_data.len());
+        
+        let confirmation_request = crate::model::ConfirmDistributionRequest {
+            tx_data: amp_tx_data.clone(),
+            change_data: change_data.clone(),
+        };
+        
+        if let Ok(payload_json) = serde_json::to_string_pretty(&confirmation_request) {
+            tracing::debug!("Full confirmation payload: {}", payload_json);
+        }
 
         self.confirm_distribution(
             asset_uuid,
             &distribution_response.distribution_uuid,
-            tx_data,
+            amp_tx_data,
             change_data,
         )
         .await
