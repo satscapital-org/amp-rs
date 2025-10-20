@@ -1205,7 +1205,7 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
 
     // Use the specific cleaned test asset with UTXOs available
     println!("🎯 Using specific cleaned test asset with UTXOs");
-    let asset_uuid = "b9fc7bfc-b58f-4e1c-8299-e1d5d353f12d".to_string();
+    let asset_uuid = "15a6d28f-b6c2-47bc-91d2-9ab4500839d4".to_string();
     let asset_name = "Test Distribution Asset 1760873029".to_string();
     let asset_ticker = "TDA3029".to_string();
     
@@ -3071,7 +3071,7 @@ async fn test_fee_fix_with_existing_asset() -> Result<(), Box<dyn std::error::Er
     println!("🧪 Testing fee fix with existing asset");
 
     // Use existing asset that's already authorized and cleaned
-    let asset_uuid = "b9fc7bfc-b58f-4e1c-8299-e1d5d353f12d"; // TDA3029 - cleaned asset with UTXOs
+    let asset_uuid = "15a6d28f-b6c2-47bc-91d2-9ab4500839d4"; // TDA3029 - cleaned asset with UTXOs
     let asset_id = "38ef7db917c59bdcbcf50fb5c65cf903e04fbcc5ec684a4914d612c86c7116aa";
 
     // Setup clients
@@ -3149,7 +3149,7 @@ async fn test_distribution_with_existing_asset() -> Result<(), Box<dyn std::erro
     println!("🧪 Testing distribution with existing asset (fee fix validation)");
 
     // Use existing asset that's already authorized and has treasury addresses
-    let asset_uuid = "b9fc7bfc-b58f-4e1c-8299-e1d5d353f12d"; // TDA3029 - cleaned asset with UTXOs
+    let asset_uuid = "15a6d28f-b6c2-47bc-91d2-9ab4500839d4"; // TDA3029 - cleaned asset with UTXOs
     let asset_id = "38ef7db917c59bdcbcf50fb5c65cf903e04fbcc5ec684a4914d612c86c7116aa";
 
     // Setup clients

@@ -1974,6 +1974,143 @@ impl ElementsRpc {
         Ok(tx_detail)
     }
 
+    /// Sends multiple outputs to multiple addresses using Elements' sendmany RPC
+    ///
+    /// This method uses Elements' built-in sendmany command which properly handles
+    /// confidential transactions and blinding. This is the recommended approach for
+    /// asset distribution as it avoids manual transaction construction issues.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to use
+    /// * `address_amounts` - Map of addresses to amounts to send
+    /// * `asset_amounts` - Map of addresses to asset IDs for each output
+    /// * `min_conf` - Minimum confirmations for inputs (default: 1)
+    /// * `comment` - Optional transaction comment
+    /// * `subtract_fee_from` - Optional addresses to subtract fees from
+    /// * `replaceable` - Whether transaction is replaceable (default: false)
+    /// * `conf_target` - Confirmation target for fee estimation (default: 1)
+    /// * `estimate_mode` - Fee estimation mode (default: "UNSET")
+    ///
+    /// # Returns
+    /// Returns the transaction ID of the sent transaction
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or transaction creation fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # use std::collections::HashMap;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// 
+    /// let mut address_amounts = HashMap::new();
+    /// address_amounts.insert("address1".to_string(), 100.0);
+    /// address_amounts.insert("address2".to_string(), 50.0);
+    /// 
+    /// let mut asset_amounts = HashMap::new();
+    /// asset_amounts.insert("address1".to_string(), "asset_id_hex".to_string());
+    /// asset_amounts.insert("address2".to_string(), "asset_id_hex".to_string());
+    /// 
+    /// let txid = rpc.sendmany("wallet_name", address_amounts, asset_amounts, None, None, None, None, None, None).await?;
+    /// println!("Transaction sent with ID: {}", txid);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn sendmany(
+        &self,
+        wallet_name: &str,
+        address_amounts: std::collections::HashMap<String, f64>,
+        asset_amounts: std::collections::HashMap<String, String>,
+        min_conf: Option<u32>,
+        comment: Option<&str>,
+        subtract_fee_from: Option<Vec<String>>,
+        replaceable: Option<bool>,
+        conf_target: Option<u32>,
+        estimate_mode: Option<&str>,
+    ) -> Result<String, AmpError> {
+        tracing::debug!(
+            "Sending to {} addresses using sendmany for wallet {}",
+            address_amounts.len(),
+            wallet_name
+        );
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        // Elements sendmany parameters:
+        // 1. dummy (empty string for compatibility)
+        // 2. amounts (map of address -> amount)
+        // 3. minconf (minimum confirmations, default 1)
+        // 4. comment (optional comment)
+        // 5. subtractfeefrom (array of addresses to subtract fee from)
+        // 6. replaceable (boolean, default false)
+        // 7. conf_target (confirmation target for fee estimation)
+        // 8. estimate_mode (fee estimation mode)
+        // 9. assetlabel (map of address -> asset_id for multi-asset sends)
+        let params = serde_json::json!([
+            "",                                                    // dummy (required for compatibility)
+            address_amounts,                                       // amounts map
+            min_conf.unwrap_or(1),                                // minconf
+            comment.unwrap_or(""),                                // comment
+            subtract_fee_from.unwrap_or_default(),                // subtractfeefrom
+            replaceable.unwrap_or(false),                         // replaceable
+            conf_target.unwrap_or(1),                             // conf_target
+            estimate_mode.unwrap_or("UNSET"),                     // estimate_mode
+            asset_amounts                                          // assetlabel (asset map)
+        ]);
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "sendmany".to_string(),
+            params,
+        };
+
+        tracing::debug!("Sendmany request parameters:");
+        tracing::debug!("  wallet: {}", wallet_name);
+        tracing::debug!("  address_amounts: {:?}", address_amounts);
+        tracing::debug!("  asset_amounts: {:?}", asset_amounts);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send sendmany RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Sendmany RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<String> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse sendmany RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "Sendmany RPC error: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let txid = rpc_response.result.unwrap_or_default();
+        tracing::info!("Successfully sent transaction with sendmany: {}", txid);
+        Ok(txid)
+    }
+
     /// Waits for blockchain confirmations with configurable timeout
     ///
     /// This method polls the blockchain every 15 seconds to check for transaction confirmations.
@@ -2947,9 +3084,11 @@ impl ElementsRpc {
             txid
         );
 
-        // Query all unspent outputs for the specified asset from the specified wallet
-        let all_utxos = node_rpc.list_unspent_for_wallet(wallet_name, Some(asset_id)).await.map_err(|e| {
-            e.with_context("Failed to query unspent outputs for change data collection")
+        // Use the raw listunspent RPC call to get full blinding information
+        // This is essential for confidential transactions as the AMP API requires
+        // both amountblinder and assetblinder fields
+        let all_utxos = node_rpc.list_unspent_with_blinding_data(wallet_name).await.map_err(|e| {
+            e.with_context("Failed to query unspent outputs with blinding data for change data collection")
         })?;
 
         // Filter UTXOs to only include those from the specified transaction
@@ -2974,12 +3113,14 @@ impl ElementsRpc {
         // Log details of found change UTXOs for debugging
         for (index, utxo) in change_utxos.iter().enumerate() {
             tracing::debug!(
-                "Change UTXO {}: txid={}, vout={}, amount={}, asset={}",
+                "Change UTXO {}: txid={}, vout={}, amount={}, asset={}, amountblinder={:?}, assetblinder={:?}",
                 index + 1,
                 utxo.txid,
                 utxo.vout,
                 utxo.amount,
-                utxo.asset
+                utxo.asset,
+                utxo.amountblinder,
+                utxo.assetblinder
             );
         }
 
@@ -2993,6 +3134,97 @@ impl ElementsRpc {
         }
 
         Ok(change_utxos)
+    }
+
+    /// Lists unspent outputs with full blinding data for confidential transactions
+    ///
+    /// This method calls the raw `listunspent` RPC to get complete UTXO information
+    /// including blinding data (amountblinder and assetblinder) which is required
+    /// for confidential transaction confirmation with the AMP API.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to query
+    ///
+    /// # Returns
+    /// Returns a vector of `Unspent` structs with complete blinding information
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let utxos = rpc.list_unspent_with_blinding_data("wallet_name").await?;
+    /// for utxo in utxos {
+    ///     println!("UTXO: {} with blinders: {:?}, {:?}", 
+    ///              utxo.txid, utxo.amountblinder, utxo.assetblinder);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_unspent_with_blinding_data(&self, wallet_name: &str) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!("Listing unspent outputs with blinding data for wallet: {}", wallet_name);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        // Call listunspent with parameters to get all UTXOs
+        // Parameters: minconf, maxconf, addresses, include_unsafe, query_options
+        let params = serde_json::json!([
+            0,      // minconf: include unconfirmed
+            9999999, // maxconf: include all confirmed
+            [],     // addresses: empty array means all addresses
+            true,   // include_unsafe: include unconfirmed transactions
+            {}      // query_options: empty object for default options
+        ]);
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "listunspent".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send listunspent RPC request: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Listunspent RPC request failed with status: {} - Body: {}",
+                status, error_body
+            )));
+        }
+
+        let rpc_response: RpcResponse<Vec<Unspent>> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse listunspent RPC response: {}", e)))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "Listunspent RPC error: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let utxos = rpc_response.result.unwrap_or_default();
+        tracing::info!("Retrieved {} UTXOs with blinding data from wallet {}", utxos.len(), wallet_name);
+
+        Ok(utxos)
     }
 
     /// Creates a standard wallet in Elements (Elements-first approach)
@@ -10641,90 +10873,49 @@ impl ApiClient {
             network_info.connections
         );
 
-        // Step 8: Build distribution transaction
-        tracing::debug!("Step 8: Building distribution transaction");
-        let estimated_fee = 0.001; // Conservative fee estimate for Liquid
-        tracing::debug!("Using estimated fee: {} for transaction", estimated_fee);
-
-        // Get a confidential change address from Elements wallet for confidential transactions
-        // We can't use the recipient GAID address because Elements doesn't know about it
-        let unconfidential_address = node_rpc
-            .get_new_address(wallet_name, Some("bech32"))
-            .await
-            .map_err(|e| {
-                let error = AmpError::rpc(format!("Failed to get change address from Elements: {}", e));
-                tracing::error!("Failed to get change address from Elements wallet: {}", e);
-                error
-            })?;
+        // Step 8: Send distribution transaction using Elements' sendmany
+        tracing::debug!("Step 8: Sending distribution transaction using Elements sendmany");
         
-        // Get the confidential version for use in confidential transactions
-        let change_address = node_rpc
-            .get_confidential_address(wallet_name, &unconfidential_address)
-            .await
-            .map_err(|e| {
-                tracing::warn!("Failed to get confidential address, using unconfidential: {}", e);
-                // Fall back to unconfidential address if confidential address generation fails
-                unconfidential_address.clone()
-            })
-            .unwrap_or(unconfidential_address);
-        
-        tracing::info!("Generated new bech32 address: {}", change_address);
+        // Create asset amounts map for sendmany (all outputs use the same asset)
+        let mut asset_amounts = std::collections::HashMap::new();
+        for address in distribution_response.map_address_amount.keys() {
+            asset_amounts.insert(address.clone(), distribution_response.asset_id.clone());
+        }
 
-        let (raw_transaction, selected_utxos, change_amount) = node_rpc
-            .build_distribution_transaction(
+        tracing::info!(
+            "Using sendmany for {} outputs with asset {}",
+            distribution_response.map_address_amount.len(),
+            distribution_response.asset_id
+        );
+
+        // Use Elements' sendmany which properly handles confidential transactions
+        let txid = node_rpc
+            .sendmany(
                 wallet_name,
-                &distribution_response.asset_id,
                 distribution_response.map_address_amount.clone(),
-                &change_address,
-                estimated_fee,
+                asset_amounts,
+                Some(0),        // min_conf: 0 to include unconfirmed UTXOs (matches Python implementation)
+                Some("AMP asset distribution"), // comment
+                None,           // subtract_fee_from: let Elements handle fees automatically
+                Some(false),    // replaceable: false for final transactions
+                Some(1),        // conf_target: 1 block for faster confirmation
+                Some("UNSET"),  // estimate_mode: let Elements choose
             )
             .await
             .map_err(|e| {
-                tracing::error!("Transaction building failed: {}", e);
+                tracing::error!("Sendmany transaction failed: {}", e);
                 if e.is_retryable() {
                     if let Some(instructions) = e.retry_instructions() {
                         tracing::warn!("Retry instructions: {}", instructions);
                     }
                 }
-                e.with_context("Step 8: Transaction building")
+                e.with_context("Step 8: Sendmany transaction")
             })?;
 
-        tracing::info!(
-            "✓ Transaction built successfully - {} inputs, change: {}, tx_size: {} bytes",
-            selected_utxos.len(),
-            change_amount,
-            raw_transaction.len() / 2 // Hex string length / 2 = byte count
-        );
+        tracing::info!("✓ Transaction sent successfully with ID: {}", txid);
 
-        // Step 9: Sign and broadcast transaction
-        tracing::debug!("Step 9: Signing and broadcasting transaction");
-        let txid = node_rpc
-            .sign_and_broadcast_transaction_with_utxos(&raw_transaction, &selected_utxos, signer)
-            .await
-            .map_err(|e| {
-                tracing::error!("Transaction signing and broadcasting failed: {}", e);
-                match &e {
-                    AmpError::Signer(_) => {
-                        tracing::error!(
-                            "Signing failed - check signer configuration and credentials"
-                        );
-                    }
-                    AmpError::Rpc(_) => {
-                        if e.is_retryable() {
-                            if let Some(instructions) = e.retry_instructions() {
-                                tracing::warn!("Retry instructions: {}", instructions);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-                e.with_context("Step 9: Transaction signing and broadcasting")
-            })?;
-
-        tracing::info!("✓ Transaction broadcast successfully with ID: {}", txid);
-
-        // Step 10: Wait for confirmations
-        tracing::debug!("Step 10: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
+        // Step 9: Wait for confirmations
+        tracing::debug!("Step 9: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
         let confirmation_start = std::time::Instant::now();
         let tx_detail = node_rpc.wait_for_confirmations(&txid, Some(2), Some(10)).await
             .map_err(|e| {
@@ -10744,14 +10935,14 @@ impl ApiClient {
                     let timeout_error = AmpError::timeout(format!(
                         "Confirmation timeout for txid: {txid}. Use this txid to manually confirm the distribution."
                     ));
-                    timeout_error.with_context("Step 10: Confirmation waiting")
+                    timeout_error.with_context("Step 9: Confirmation waiting")
                 } else {
                     if e.is_retryable() {
                         if let Some(instructions) = e.retry_instructions() {
                             tracing::warn!("Retry instructions: {}", instructions);
                         }
                     }
-                    e.with_context(format!("Step 10: Confirmation waiting for txid: {txid}"))
+                    e.with_context(format!("Step 9: Confirmation waiting for txid: {txid}"))
                 }
             })?;
 
@@ -10763,8 +10954,8 @@ impl ApiClient {
             confirmation_duration
         );
 
-        // Step 11: Collect change data for confirmation
-        tracing::debug!("Step 11: Collecting change data for distribution confirmation");
+        // Step 10: Collect change data for confirmation
+        tracing::debug!("Step 10: Collecting change data for distribution confirmation");
         let change_data = node_rpc
             .collect_change_data(&distribution_response.asset_id, &txid, node_rpc, wallet_name)
             .await
@@ -10775,7 +10966,7 @@ impl ApiClient {
                         tracing::warn!("Retry instructions: {}", instructions);
                     }
                 }
-                e.with_context("Step 11: Change data collection")
+                e.with_context("Step 10: Change data collection")
             })?;
 
         tracing::info!("✓ Collected {} change UTXOs", change_data.len());
@@ -10783,8 +10974,8 @@ impl ApiClient {
             tracing::debug!("Change UTXOs: {:?}", change_data);
         }
 
-        // Step 12: Submit final confirmation to AMP API
-        tracing::debug!("Step 12: Submitting final confirmation to AMP API");
+        // Step 11: Submit final confirmation to AMP API
+        tracing::debug!("Step 11: Submitting final confirmation to AMP API");
         let tx_data = crate::model::DistributionTxData {
             details: tx_detail,
             txid: txid.clone(),
@@ -10814,7 +11005,7 @@ impl ApiClient {
                 }
             }
 
-            confirmation_error.with_context("Step 12: Distribution confirmation")
+            confirmation_error.with_context("Step 11: Distribution confirmation")
         })?;
 
         tracing::info!(

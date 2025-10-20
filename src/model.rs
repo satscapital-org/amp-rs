@@ -602,6 +602,12 @@ pub struct Unspent {
     pub redeemscript: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub witnessscript: Option<String>,
+    /// Amount blinder for confidential transactions (Elements specific)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amountblinder: Option<String>,
+    /// Asset blinder for confidential transactions (Elements specific)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assetblinder: Option<String>,
 }
 
 /// Transaction details from Elements node
@@ -722,6 +728,8 @@ mod tests {
             scriptpubkey: Some("76a914...88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()),
+            assetblinder: Some("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210".to_string()),
         };
 
         // Test serialization
@@ -969,6 +977,8 @@ mod tests {
             scriptpubkey: Some("76a914...88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("1111111111111111111111111111111111111111111111111111111111111111".to_string()),
+            assetblinder: Some("2222222222222222222222222222222222222222222222222222222222222222".to_string()),
         };
 
         let confirm_request = ConfirmDistributionRequest {

@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected to AMP API with {} strategy", client.get_strategy_type());
 
     // Target the asset with UTXOs that we found
-    let asset_uuid = "b9fc7bfc-b58f-4e1c-8299-e1d5d353f12d";
+    let asset_uuid = "15a6d28f-b6c2-47bc-91d2-9ab4500839d4";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset

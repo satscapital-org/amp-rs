@@ -117,6 +117,8 @@ fn create_mock_utxos(asset_id: &str, amounts: Vec<f64>) -> Vec<Unspent> {
             scriptpubkey: Some(format!("76a914{}88ac", "0".repeat(40))),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some(format!("{:064}", i)),
+            assetblinder: Some(format!("{:064}", i + 1000)),
         })
         .collect()
 }
@@ -1426,6 +1428,8 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914abc123def456789abc123def456789abc123de88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
+        amountblinder: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+        assetblinder: Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
     });
 
     // Add change outputs from the distribution transaction
@@ -1440,6 +1444,8 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914def456abc123789def456abc123789def456ab88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
+        amountblinder: Some("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string()),
+        assetblinder: Some("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string()),
     });
 
     all_utxos.push(Unspent {
@@ -1453,6 +1459,8 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914ghi789jkl012345ghi789jkl012345ghi789jk88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
+        amountblinder: Some("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string()),
+        assetblinder: Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string()),
     });
 
     // Add another UTXO from a different transaction
@@ -1467,6 +1475,8 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914mno012pqr345678mno012pqr345678mno012pq88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
+        amountblinder: Some("1010101010101010101010101010101010101010101010101010101010101010".to_string()),
+        assetblinder: Some("2020202020202020202020202020202020202020202020202020202020202020".to_string()),
     });
 
     // Create mock for listunspent RPC call
@@ -1525,6 +1535,8 @@ async fn test_collect_change_data_no_change_scenario() {
             scriptpubkey: Some("76a914abc123def456789abc123def456789abc123de88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("3030303030303030303030303030303030303030303030303030303030303030".to_string()),
+            assetblinder: Some("4040404040404040404040404040404040404040404040404040404040404040".to_string()),
         },
         Unspent {
             txid: "different_txid_456".to_string(),
@@ -1537,6 +1549,8 @@ async fn test_collect_change_data_no_change_scenario() {
             scriptpubkey: Some("76a914mno012pqr345678mno012pqr345678mno012pq88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("5050505050505050505050505050505050505050505050505050505050505050".to_string()),
+            assetblinder: Some("6060606060606060606060606060606060606060606060606060606060606060".to_string()),
         },
     ];
 
@@ -1575,6 +1589,8 @@ async fn test_collect_change_data_workflow_integration() {
             scriptpubkey: Some("76a914change_address_script_hash88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("7070707070707070707070707070707070707070707070707070707070707070".to_string()),
+            assetblinder: Some("8080808080808080808080808080808080808080808080808080808080808080".to_string()),
         },
         // Some other unrelated UTXOs
         Unspent {
@@ -1588,6 +1604,8 @@ async fn test_collect_change_data_workflow_integration() {
             scriptpubkey: Some("76a914other_address_script_hash88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
+            amountblinder: Some("9090909090909090909090909090909090909090909090909090909090909090".to_string()),
+            assetblinder: Some("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0".to_string()),
         },
     ];
 
