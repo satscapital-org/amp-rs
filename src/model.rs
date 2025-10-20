@@ -995,7 +995,7 @@ mod tests {
 
     #[test]
     fn test_confirm_distribution_request_creation() {
-        let tx_detail = TransactionDetail {
+        let _tx_detail = TransactionDetail {
             txid: "confirm_test_txid".to_string(),
             confirmations: 3,
             blockheight: Some(54321),
@@ -1052,7 +1052,7 @@ mod tests {
 
     #[test]
     fn test_confirm_distribution_request_serialization_format() {
-        let tx_detail = TransactionDetail {
+        let _tx_detail = TransactionDetail {
             txid: "format_test_txid".to_string(),
             confirmations: 2,
             blockheight: Some(98765),

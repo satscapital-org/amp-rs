@@ -3,7 +3,7 @@
 //! This example creates a test distribution from existing assignments
 //! to demonstrate the cancellation functionality.
 
-use amp_rs::{ApiClient, model::CreateDistributionRequest};
+use amp_rs::ApiClient;
 use dotenvy;
 use std::env;
 
@@ -58,18 +58,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             assignment.id, assignment.registered_user, assignment.amount);
     }
 
-    // Create a distribution request
+    // Create a distribution using the ready assignments
     println!("\n🚀 Creating distribution...");
-    let distribution_request = CreateDistributionRequest {
-        estimated_fee: 1000.0, // 1000 sats fee estimate
-    };
 
-    match client.create_distribution(asset_uuid, &distribution_request).await {
+    // Convert assignments to AssetDistributionAssignment format
+    let distribution_assignments: Vec<amp_rs::model::AssetDistributionAssignment> = ready_assignments
+        .iter()
+        .filter_map(|assignment| {
+            if let Some(address) = &assignment.receiving_address {
+                Some(amp_rs::model::AssetDistributionAssignment {
+                    user_id: assignment.registered_user.to_string(),
+                    address: address.clone(),
+                    amount: assignment.amount as f64,
+                })
+            } else {
+                println!("⚠️  Skipping assignment {} - no receiving address", assignment.id);
+                None
+            }
+        })
+        .collect();
+
+    if distribution_assignments.is_empty() {
+        println!("❌ No assignments with receiving addresses found");
+        return Ok(());
+    }
+
+    match client.create_distribution(asset_uuid, distribution_assignments).await {
         Ok(distribution) => {
             println!("✅ Created distribution:");
             println!("   UUID: {}", distribution.distribution_uuid);
-            println!("   Status: {:?}", distribution.distribution_status);
-            println!("   Transactions: {}", distribution.transactions.len());
+            println!("   Asset ID: {}", distribution.asset_id);
+            println!("   Addresses: {}", distribution.map_address_amount.len());
             
             // Check assignments again to see if they're now linked
             println!("\n🔍 Checking updated assignments...");

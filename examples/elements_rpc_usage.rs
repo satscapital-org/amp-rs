@@ -43,6 +43,8 @@ async fn main() -> Result<(), AmpError> {
         scriptpubkey: Some("76a914...88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
+        amountblinder: None,
+        assetblinder: None,
     };
     println!(
         "✓ Unspent struct created: txid={}, amount={}",

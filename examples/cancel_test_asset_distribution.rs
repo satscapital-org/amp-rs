@@ -383,7 +383,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
     println!("\n🔧 Elements RPC Analysis...");
     
     // Check if Elements RPC is configured
-    if let (Ok(rpc_url), Ok(rpc_user), Ok(rpc_password)) = (
+    if let (Ok(rpc_url), Ok(rpc_user), Ok(_rpc_password)) = (
         std::env::var("ELEMENTS_RPC_URL"),
         std::env::var("ELEMENTS_RPC_USER"), 
         std::env::var("ELEMENTS_RPC_PASSWORD")

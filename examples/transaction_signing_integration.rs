@@ -2,6 +2,7 @@
 use amp_rs::signer::{Signer, SignerError};
 use amp_rs::{AmpError, ElementsRpc};
 use async_trait::async_trait;
+use std::any::Any;
 
 // Mock signer for demonstration purposes
 struct MockSigner {
@@ -19,6 +20,10 @@ impl Signer for MockSigner {
                 "Mock signing failure for demonstration".to_string(),
             ))
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
