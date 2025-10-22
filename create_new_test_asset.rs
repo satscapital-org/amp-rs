@@ -74,8 +74,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     println!("❌ Cannot connect to Elements node: {}", e);
-                    println!("   Falling back to API-based confirmation checking...");
                     return Err(format!("Elements RPC not available for blockchain confirmation: {}", e).into());
+                }
+            }
+
+            // Verify that the treasury address is in the wallet we're using
+            let wallet_name = "amp_elements_wallet_static_for_funding";
+            println!("🔍 Verifying treasury address is in wallet: {}", wallet_name);
+            
+            // Check if we can see the treasury address in the wallet
+            match elements_rpc.list_unspent_for_wallet(wallet_name, None).await {
+                Ok(existing_utxos) => {
+                    let treasury_utxos: Vec<_> = existing_utxos.iter()
+                        .filter(|utxo| utxo.address == treasury_unconfidential_address)
+                        .collect();
+                    
+                    if treasury_utxos.is_empty() {
+                        println!("⚠️  Treasury address {} not found in wallet {}", treasury_unconfidential_address, wallet_name);
+                        println!("   This means the wallet cannot see transactions to this address");
+                        println!("   Available addresses in wallet:");
+                        
+                        let mut unique_addresses: std::collections::HashSet<String> = std::collections::HashSet::new();
+                        for utxo in &existing_utxos {
+                            unique_addresses.insert(utxo.address.clone());
+                        }
+                        
+                        for (i, addr) in unique_addresses.iter().take(5).enumerate() {
+                            println!("     - {}", addr);
+                        }
+                        if unique_addresses.len() > 5 {
+                            println!("     ... and {} more addresses", unique_addresses.len() - 5);
+                        }
+                        
+                        println!("   ⚠️  WARNING: We won't be able to detect confirmations for this asset");
+                        println!("   The asset was issued to: {}", treasury_confidential_address);
+                        println!("   But wallet can only see: {}", treasury_unconfidential_address);
+                        println!("   Proceeding anyway, but confirmation detection may fail...");
+                    } else {
+                        println!("✅ Treasury address found in wallet with {} existing UTXOs", treasury_utxos.len());
+                        for (i, utxo) in treasury_utxos.iter().take(3).enumerate() {
+                            println!("   Existing UTXO {}: {} {} (confirmations: {})", 
+                                i + 1, utxo.amount, &utxo.asset[..8], utxo.confirmations.unwrap_or(0));
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Cannot check wallet contents: {}", e);
+                    println!("   This may indicate wallet connectivity issues");
+                    println!("   Proceeding anyway, but confirmation detection will likely fail...");
                 }
             }
 
@@ -92,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("   Checking blockchain confirmation (attempt {}/{})...", confirmation_attempts, max_confirmation_attempts);
 
                 // Try to get the transaction from the blockchain to check confirmations
-                // We'll use a wallet-based approach since we know the wallet should see this transaction
+                // First try wallet-based approach, then fall back to other methods
                 match elements_rpc.list_unspent_for_wallet("amp_elements_wallet_static_for_funding", None).await {
                     Ok(utxos) => {
                         // Look for UTXOs that match our asset issuance
