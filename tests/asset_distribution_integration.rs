@@ -1157,10 +1157,9 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     println!("🏦 Using existing fixed wallet for funding management");
     let wallet_name = "amp_elements_wallet_static_for_funding".to_string();
 
-    // Use the confidential address for asset issuance (AMP API requirement)
-    let treasury_address = "tlq1qq0tdadpf5ua3hfufu9qglaegcl29f57f07qpa9a5zu8j2g0hz99lssjn9qpzz6k5vdu5970fjhpj5v239seaw09ws4adr39um".to_string();
-    // Keep the unconfidential address for UTXO lookups
-    let unconfidential_address = "tex1qgffjsq3pdt2xx72zl85etse2x9gjcv7h9gh74t".to_string();
+    // Use wallet-derived unconfidential address uniformly
+    let treasury_address = "tex1q7j33kkeyusva7mchqctglh0dxp9rzg73x07uxt".to_string();
+    let unconfidential_address = "tex1q7j33kkeyusva7mchqctglh0dxp9rzg73x07uxt".to_string();
 
     println!("✅ Using fixed wallet for funding management");
     println!("   - Wallet name: {}", wallet_name);
@@ -1203,89 +1202,188 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
         }
     }
 
-    // Use the specific cleaned test asset with UTXOs available
-    println!("🎯 Using specific cleaned test asset with UTXOs");
-    let asset_uuid = "aa527a95-4616-4394-adb6-12efbf23cb12".to_string();
-    let asset_name = "Test Distribution Asset 1760873029".to_string();
-    let asset_ticker = "TDA3029".to_string();
+    // Step 1: Verify the asset exists before doing anything
+    println!("🔍 Step 1: Verifying asset exists");
+    let asset_uuid = "c5bc3ba3-0941-4af9-9bd1-43dac28ada8b".to_string(); // TDA9688 - newly created asset
+    
+    let asset_info = match api_client.get_asset(&asset_uuid).await {
+        Ok(asset) => {
+            println!("✅ Asset found:");
+            println!("   - Asset UUID: {}", asset.asset_uuid);
+            println!("   - Name: {}", asset.name);
+            println!("   - Ticker: {:?}", asset.ticker);
+            asset
+        }
+        Err(e) => {
+            println!("❌ Asset not found: {}", e);
+            return Err(format!("Asset {} does not exist: {}", asset_uuid, e).into());
+        }
+    };
 
-    println!("✅ Found existing test asset");
-    println!("   - Asset UUID: {}", asset_uuid);
-    println!("   - Name: {}", asset_name);
-    println!("   - Ticker: {}", asset_ticker);
+    let asset_name = asset_info.name.clone();
+    let asset_ticker = asset_info.ticker.clone().unwrap_or_else(|| "UNKNOWN".to_string());
 
-    // Ensure the treasury address is added to the existing asset
+    // Step 2: Check asset balance on ElementsRpc
+    println!("\n� Strep 2: Checking asset balance on ElementsRpc");
+    
+    // First ensure treasury address is configured (use unconfidential for registration)
     println!("🔧 Ensuring treasury address is configured for asset");
-    match api_client.add_asset_treasury_addresses(&asset_uuid, &vec![treasury_address.clone()]).await {
+    match api_client.add_asset_treasury_addresses(&asset_uuid, &vec![unconfidential_address.clone()]).await {
         Ok(_) => {
             println!("✅ Treasury address added to asset (or was already present)");
         }
         Err(e) => {
-            // This might fail if the address is already added, which is fine
             println!("⚠️  Treasury address addition result: {} (may already exist)", e);
         }
     }
 
-    // Check treasury addresses for the existing asset
-    println!("🔍 Verifying treasury addresses for existing asset");
-    match api_client.get_asset_treasury_addresses(&asset_uuid).await {
-        Ok(addresses) => {
-            println!("   - Treasury addresses: {:?}", addresses);
-            if !addresses.contains(&treasury_address) {
-                println!("   ⚠️  Treasury address {} not found in asset, but proceeding anyway", treasury_address);
+    // Get the asset ID from the AMP API to verify we have the correct asset UTXOs
+    println!("🔍 Getting asset ID for UTXO verification");
+    let asset_id = match api_client.get_asset(&asset_uuid).await {
+        Ok(asset_info) => {
+            if !asset_info.asset_id.is_empty() {
+                println!("   ✅ Asset ID: {}", asset_info.asset_id);
+                asset_info.asset_id
             } else {
-                println!("✅ Treasury address verified in asset");
+                println!("❌ Asset ID not available in asset info");
+                return Err("Asset ID not available for UTXO verification".into());
             }
         }
         Err(e) => {
-            println!("   - Warning: Could not get treasury addresses: {}", e);
+            println!("❌ Failed to get asset info: {}", e);
+            return Err(format!("Cannot get asset ID: {}", e).into());
         }
-    }
-    println!("   - Ticker: {}", asset_ticker);
+    };
 
-    // Verify UTXOs are available in the existing funded wallet
-    println!("🔍 Verifying UTXOs are available in existing funded wallet");
+    // Check balance using Elements RPC - verify both asset UTXOs and fee UTXOs
+    let required_amount = 1; // 1 satoshi for testing
+    println!("🔍 Verifying UTXOs for asset distribution and transaction fees");
+    
     match elements_rpc.list_unspent_for_wallet(&wallet_name, None).await {
         Ok(wallet_utxos) => {
             println!("   ✅ Successfully queried {} UTXOs from Elements wallet: {}", wallet_utxos.len(), wallet_name);
 
-            // Show all UTXOs to understand what we have available
-            println!("   🔍 Available UTXOs in wallet:");
-            for (i, utxo) in wallet_utxos.iter().enumerate() {
-                println!("     UTXO {}: address={}, amount={}, asset={}, spendable={}",
-                    i + 1, utxo.address, utxo.amount, utxo.asset, utxo.spendable);
+            // Step 2a: Check for specific asset UTXOs (the asset we want to distribute)
+            let asset_utxos: Vec<_> = wallet_utxos.iter()
+                .filter(|utxo| utxo.asset == asset_id && utxo.spendable)
+                .collect();
+
+            println!("   🎯 Asset UTXOs for distribution (asset: {}):", &asset_id[..8]);
+            if asset_utxos.is_empty() {
+                println!("   ❌ No UTXOs found for the specific asset being distributed");
+                println!("   Available asset IDs in wallet:");
+                let mut unique_assets: std::collections::HashSet<String> = std::collections::HashSet::new();
+                for utxo in &wallet_utxos {
+                    unique_assets.insert(utxo.asset.clone());
+                }
+                for asset in unique_assets {
+                    println!("     - {}", asset);
+                }
+                return Err(format!("No UTXOs available for asset {}", asset_id).into());
+            } else {
+                let total_asset_amount: f64 = asset_utxos.iter().map(|utxo| utxo.amount).sum();
+                println!("   ✅ Found {} UTXOs for asset distribution (total: {} tokens)", asset_utxos.len(), total_asset_amount);
+                
+                // Check if we have enough of the asset for the distribution
+                let required_asset_amount = required_amount as f64 / 100_000_000.0; // Convert satoshis to BTC
+                if total_asset_amount < required_asset_amount {
+                    println!("   ❌ Insufficient asset balance: have {}, need {}", total_asset_amount, required_asset_amount);
+                    return Err(format!("Insufficient asset balance for distribution: have {}, need {}", total_asset_amount, required_asset_amount).into());
+                }
+                
+                for (i, utxo) in asset_utxos.iter().take(3).enumerate() {
+                    println!("     Asset UTXO {}: {} tokens (spendable: {})", i + 1, utxo.amount, utxo.spendable);
+                }
+                if asset_utxos.len() > 3 {
+                    println!("     ... and {} more asset UTXOs", asset_utxos.len() - 3);
+                }
             }
 
-            // Check for L-BTC UTXOs (needed for fees)
+            // Step 2b: Check for tL-BTC UTXOs (needed for transaction fees)
             let lbtc_utxos: Vec<_> = wallet_utxos.iter()
-                .filter(|utxo| utxo.asset == "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d" || utxo.asset.starts_with("5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"))
+                .filter(|utxo| {
+                    utxo.spendable && (
+                        // Standard tL-BTC asset ID for testnet
+                        utxo.asset == "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49" ||
+                        // Alternative tL-BTC patterns
+                        utxo.asset == "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d" ||
+                        utxo.asset.starts_with("5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225")
+                    )
+                })
                 .collect();
 
-            if !lbtc_utxos.is_empty() {
-                println!("   ✅ Found {} L-BTC UTXOs for transaction fees", lbtc_utxos.len());
+            println!("   💰 tL-BTC UTXOs for transaction fees:");
+            if lbtc_utxos.is_empty() {
+                println!("   ❌ No tL-BTC UTXOs found for transaction fees");
+                println!("   This will cause the distribution to fail due to insufficient fees");
+                return Err("No tL-BTC UTXOs available for transaction fees".into());
             } else {
-                println!("   ⚠️  No L-BTC UTXOs found - may need funding for transaction fees");
+                let total_lbtc_amount: f64 = lbtc_utxos.iter().map(|utxo| utxo.amount).sum();
+                println!("   ✅ Found {} tL-BTC UTXOs for fees (total: {} tL-BTC)", lbtc_utxos.len(), total_lbtc_amount);
+                
+                // Check if we have enough tL-BTC for fees (estimate ~0.001 tL-BTC needed)
+                let estimated_fee = 0.001;
+                if total_lbtc_amount < estimated_fee {
+                    println!("   ❌ Insufficient tL-BTC for fees: have {}, estimated need {}", total_lbtc_amount, estimated_fee);
+                    return Err(format!("Insufficient tL-BTC for transaction fees: have {}, need ~{}", total_lbtc_amount, estimated_fee).into());
+                }
+                
+                for (i, utxo) in lbtc_utxos.iter().take(3).enumerate() {
+                    println!("     Fee UTXO {}: {} tL-BTC (asset: {}, spendable: {})", 
+                        i + 1, utxo.amount, &utxo.asset[..8], utxo.spendable);
+                }
+                if lbtc_utxos.len() > 3 {
+                    println!("     ... and {} more tL-BTC UTXOs", lbtc_utxos.len() - 3);
+                }
             }
 
-            // Check for existing asset UTXOs
-            let treasury_utxos: Vec<_> = wallet_utxos.iter()
+            // Step 2c: Verify signing capability by checking if UTXOs are from addresses we can sign for
+            println!("   🔐 Verifying signing capability for UTXOs:");
+            
+            // Check asset UTXOs
+            let signable_asset_utxos = asset_utxos.iter()
                 .filter(|utxo| utxo.address == unconfidential_address)
-                .collect();
-
-            if !treasury_utxos.is_empty() {
-                println!("   ✅ Found {} UTXOs for treasury address", treasury_utxos.len());
+                .count();
+            
+            if signable_asset_utxos == 0 {
+                println!("   ❌ No asset UTXOs are from addresses we can sign for");
+                println!("   Asset UTXOs are from addresses:");
+                for utxo in &asset_utxos {
+                    println!("     - {}", utxo.address);
+                }
+                println!("   But we can only sign for: {}", unconfidential_address);
+                return Err("Cannot sign for any asset UTXOs - address mismatch".into());
             } else {
-                println!("   ⚠️  No UTXOs found for treasury address - may need funding");
+                println!("   ✅ Can sign for {} out of {} asset UTXOs", signable_asset_utxos, asset_utxos.len());
             }
+
+            // Check fee UTXOs
+            let signable_fee_utxos = lbtc_utxos.iter()
+                .filter(|utxo| utxo.address == unconfidential_address)
+                .count();
+            
+            if signable_fee_utxos == 0 {
+                println!("   ❌ No tL-BTC UTXOs are from addresses we can sign for");
+                return Err("Cannot sign for any tL-BTC UTXOs - address mismatch".into());
+            } else {
+                println!("   ✅ Can sign for {} out of {} tL-BTC UTXOs", signable_fee_utxos, lbtc_utxos.len());
+            }
+
+            println!("   ✅ UTXO verification completed successfully");
+            println!("     - Asset UTXOs: {} available, {} signable", asset_utxos.len(), signable_asset_utxos);
+            println!("     - Fee UTXOs: {} available, {} signable", lbtc_utxos.len(), signable_fee_utxos);
+            println!("     - Ready for distribution");
         }
         Err(e) => {
-            println!("   ❌ Failed to query UTXOs from wallet {}: {}", wallet_name, e);
+            println!("❌ Failed to query UTXOs from wallet {}: {}", wallet_name, e);
             return Err(format!("Cannot verify UTXO availability: {}", e).into());
         }
     }
 
-    // Register asset as authorized for distribution (or verify it's already authorized)
-    println!("🔐 Ensuring asset is authorized for distribution");
+    // Step 3: Register asset as authorized and setup user
+    println!("\n� Step 3:  Ensuring asset authorization and user setup");
+
+    // Register asset as authorized for distribution
     match api_client.register_asset_authorized(&asset_uuid).await {
         Ok(authorized_asset) => {
             println!("✅ Asset registered as authorized");
@@ -1296,7 +1394,6 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
             let error_msg = e.to_string();
             if error_msg.contains("already authorized") {
                 println!("✅ Asset is already authorized for distribution");
-                println!("   - Asset UUID: {}", asset_uuid);
             } else {
                 println!("❌ Failed to register asset as authorized: {}", e);
                 return Err(format!("Asset authorization failed: {}", e).into());
@@ -1336,38 +1433,37 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     println!("   - Category ID: {}", category_id);
     println!("   - Name: {}", category_name);
 
-    // Set up asset assignments with retry logic
+    // Step 4: Create assignments and prepare distribution request
+    println!("\n📋 Step 4: Creating assignments and preparing distribution request");
     let assignment_amount = 1; // Minimal amount for testing - 1 satoshi
-    println!("💰 Setting up initial asset assignments for distribution funding");
     println!("   - Assignment amount: {} satoshis", assignment_amount);
 
-    let assignment_ids = setup_asset_assignments_with_retry(&api_client, &asset_uuid, user_id, assignment_amount)
-        .await
-        .map_err(|e| format!("Failed to setup asset assignments: {}", e))?;
+    let assignment_ids = match setup_asset_assignments_with_retry(&api_client, &asset_uuid, user_id, assignment_amount).await {
+        Ok(ids) => {
+            println!("✅ Asset assignments created successfully");
+            println!("   - Assignment IDs: {:?}", ids);
+            ids
+        }
+        Err(e) => {
+            println!("❌ Failed to create asset assignments: {}", e);
+            return Err(format!("Assignment creation failed: {}", e).into());
+        }
+    };
 
-    println!("✅ Asset assignments created");
-    println!("   - Assignment IDs: {:?}", assignment_ids);
-    println!("   - Amount: {} satoshis", assignment_amount);
-
-    // Task requirement: Create assignment vector with test user and address
-    println!("\n📋 Creating assignment vector for distribution");
-
+    // Create distribution assignments vector
     let distribution_assignments = vec![amp_rs::model::AssetDistributionAssignment {
         user_id: user_id.to_string(),
         address: user_address.clone(),
         amount: assignment_amount as f64 / 100_000_000.0, // Convert satoshis to BTC
     }];
 
-    println!("✅ Assignment vector created");
-    println!("   - Assignments: {}", distribution_assignments.len());
+    println!("✅ Distribution request prepared");
     println!("   - User ID: {}", distribution_assignments[0].user_id);
     println!("   - Address: {}", distribution_assignments[0].address);
-    println!("   - Amount: {} BTC", distribution_assignments[0].amount);
+    println!("   - Amount: {} BTC ({} satoshis)", distribution_assignments[0].amount, assignment_amount);
 
-    // Task requirement: Call distribute_asset with LwkSoftwareSigner as signing callback
-    println!("\n🎯 Executing distribute_asset with LwkSoftwareSigner");
-    println!("   This is the core functionality being tested...");
-
+    // Step 5: Execute distribution with proper error handling
+    println!("\n🚀 Step 5: Executing asset distribution");
     let distribution_start = std::time::Instant::now();
 
     match api_client
@@ -1382,33 +1478,35 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     {
         Ok(()) => {
             let distribution_duration = distribution_start.elapsed();
-            println!("🎉 distribute_asset completed successfully!");
+            println!("✅ Asset distribution completed successfully!");
             println!("   - Duration: {:?}", distribution_duration);
+            println!("   - Transaction signed and broadcast successfully");
         }
         Err(e) => {
             let distribution_duration = distribution_start.elapsed();
-            println!(
-                "❌ distribute_asset failed after {:?}: {}",
-                distribution_duration, e
-            );
-
-            // Log detailed error information for debugging
-            println!("   Error details: {:?}", e);
-
-            // If it's a timeout or network error, we might still want to check if the transaction went through
-            if let amp_rs::AmpError::Timeout(msg) = &e {
-                println!("   Timeout occurred: {}", msg);
-                println!("   The transaction may still be pending on the blockchain");
+            println!("❌ Asset distribution failed after {:?}", distribution_duration);
+            println!("   Error: {}", e);
+            
+            // Provide specific error context
+            let error_msg = e.to_string();
+            if error_msg.contains("insufficient funds") {
+                return Err("Distribution failed: Insufficient funds for transaction fees".into());
+            } else if error_msg.contains("UTXO") {
+                return Err("Distribution failed: UTXO availability issues".into());
+            } else if error_msg.contains("signing") {
+                return Err("Distribution failed: Transaction signing error".into());
+            } else if error_msg.contains("broadcast") {
+                return Err("Distribution failed: Transaction broadcast error".into());
+            } else {
+                return Err(format!("Distribution failed: {}", e).into());
             }
-
-            return Err(format!("Distribution failed: {}", e).into());
         }
     }
 
-    // Task requirement: Verify distribution completion through AMP API queries
-    println!("\n🔍 Verifying distribution completion through AMP API");
+    // Step 6: Verify distribution completion
+    println!("\n🔍 Step 6: Verifying distribution completion");
 
-    // Get updated asset assignments to verify they were processed
+    // Verify through AMP API queries
     match api_client.get_asset_assignments(&asset_uuid).await {
         Ok(assignments) => {
             println!("✅ Retrieved updated asset assignments");
@@ -1419,29 +1517,25 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
                 .filter(|a| !a.ready_for_distribution)
                 .collect();
 
-            println!(
-                "   - Distributed assignments: {}",
-                distributed_assignments.len()
-            );
+            println!("   - Distributed assignments: {}", distributed_assignments.len());
 
-            if !distributed_assignments.is_empty() {
-                println!("✅ Assignments were processed and marked as distributed");
+            if distributed_assignments.is_empty() {
+                println!("❌ No assignments marked as distributed");
+                return Err("Distribution confirmation failed: No assignments processed".into());
+            } else {
+                println!("✅ Assignments successfully processed and marked as distributed");
             }
         }
         Err(e) => {
-            println!("⚠️  Failed to retrieve asset assignments: {}", e);
+            println!("❌ Failed to retrieve asset assignments for verification: {}", e);
+            return Err(format!("Distribution confirmation failed: Cannot verify assignments: {}", e).into());
         }
     }
 
-    // Task requirement: Validate blockchain transaction confirmation and asset transfer
-    println!("\n⛓️  Validating blockchain transaction confirmation");
-
-    // Note: The distribute_asset function already waits for confirmations,
-    // so if we reach this point, the transaction should be confirmed.
-    // We can do additional validation by checking the blockchain directly.
-
+    // Validate blockchain transaction confirmation
+    println!("⛓️  Validating blockchain transaction confirmation");
     println!("✅ Blockchain validation completed");
-    println!("   - The distribute_asset function already waited for 2 confirmations");
+    println!("   - The distribute_asset function already waited for confirmations");
     println!("   - Transaction was successfully broadcast and confirmed");
     println!("   - Asset transfer was validated during the distribution process");
 

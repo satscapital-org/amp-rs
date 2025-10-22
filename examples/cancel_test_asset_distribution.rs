@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from .env file
     println!("📁 Loading environment variables from .env file");
     dotenvy::dotenv().ok();
-    
+
     // Set environment for live testing
     env::set_var("AMP_TESTS", "live");
 
@@ -42,25 +42,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected to AMP API with {} strategy", client.get_strategy_type());
 
     // Target the asset with UTXOs that we found
-    let asset_uuid = "aa527a95-4616-4394-adb6-12efbf23cb12";
+    let asset_uuid = "00b03b33-46f7-45c4-811a-59dd0c1d9e32";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset
     println!("📋 Getting distributions for asset...");
     let distributions = client.get_asset_distributions(asset_uuid).await?;
-    
+
     println!("✅ Found {} distributions for asset", distributions.len());
 
     // Also check assignments to understand the full picture
     println!("📋 Getting assignments for asset...");
     let assignments = client.get_asset_assignments(asset_uuid).await?;
-    
+
     println!("✅ Found {} assignments for asset", assignments.len());
 
     if distributions.is_empty() && assignments.is_empty() {
         println!("ℹ️  No distributions or assignments found for this asset");
         println!("   This means the asset is completely clean and available for new distributions.");
-        
+
         // Still run UTXO analysis for the test asset
         analyze_asset_utxos(&client, asset_uuid).await?;
         return Ok(());
@@ -73,8 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(uuid) => format!("🔗 Linked to distribution: {}", uuid),
                 None => "🆓 Not linked to any distribution".to_string(),
             };
-            println!("  {}. Assignment ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}", 
-                i + 1, 
+            println!("  {}. Assignment ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
+                i + 1,
                 assignment.id,
                 assignment.registered_user,
                 assignment.amount,
@@ -92,9 +92,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Status::Unconfirmed => "🟡 UNCONFIRMED",
             Status::Confirmed => "🟢 CONFIRMED",
         };
-        println!("  {}. {} - {} (Transactions: {})", 
-            i + 1, 
-            distribution.distribution_uuid, 
+        println!("  {}. {} - {} (Transactions: {})",
+            i + 1,
+            distribution.distribution_uuid,
             status_str,
             distribution.transactions.len()
         );
@@ -114,17 +114,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if unconfirmed_distributions.is_empty() && assignment_distribution_uuids.is_empty() {
         println!("\n✅ No unconfirmed distributions found");
-        
+
         // But we might still have assignments to clean up
         let assignments_to_delete: Vec<_> = assignments.iter()
             .filter(|a| {
-                let should_delete = a.distribution_uuid.is_some() || 
+                let should_delete = a.distribution_uuid.is_some() ||
                                    (a.ready_for_distribution && !a.is_distributed) ||
                                    !a.is_distributed;
                 should_delete
             })
             .collect();
-            
+
         if assignments_to_delete.is_empty() {
             println!("   All distributions are either confirmed or the asset is clean.");
             return Ok(());
@@ -149,12 +149,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Collect all distribution UUIDs to cancel (from both sources)
     let mut all_distribution_uuids = Vec::new();
-    
+
     // Add unconfirmed distributions
     for distribution in unconfirmed_distributions {
         all_distribution_uuids.push(distribution.distribution_uuid.clone());
     }
-    
+
     // Add distributions from assignments (if not already included)
     for uuid in assignment_distribution_uuids {
         if !all_distribution_uuids.contains(&uuid) {
@@ -169,7 +169,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for distribution_uuid in all_distribution_uuids {
         print!("  Cancelling {}... ", distribution_uuid);
-        
+
         match client.cancel_distribution(asset_uuid, &distribution_uuid).await {
             Ok(()) => {
                 println!("✅ Success");
@@ -192,13 +192,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 1. Linked to distributions (distribution_uuid is Some)
         // 2. Ready for distribution but not yet distributed
         // 3. Not distributed (covers test assignments)
-        let should_delete = assignment.distribution_uuid.is_some() || 
+        let should_delete = assignment.distribution_uuid.is_some() ||
                            (assignment.ready_for_distribution && !assignment.is_distributed) ||
                            !assignment.is_distributed;
-        
+
         if should_delete {
             print!("  Deleting assignment {}... ", assignment.id);
-            
+
             match client.delete_asset_assignment(asset_uuid, &assignment.id.to_string()).await {
                 Ok(()) => {
                     println!("✅ Success");
@@ -229,15 +229,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Verify the cleanup worked by checking again
     if cancelled_count > 0 || assignments_deleted > 0 {
         println!("\n🔍 Verifying cleanup...");
-        
+
         // Check distributions again
         let final_distributions = client.get_asset_distributions(asset_uuid).await?;
         println!("📋 Distributions remaining: {}", final_distributions.len());
-        
-        // Check assignments again  
+
+        // Check assignments again
         let final_assignments = client.get_asset_assignments(asset_uuid).await?;
         println!("📋 Assignments remaining: {}", final_assignments.len());
-        
+
         if final_distributions.is_empty() && final_assignments.is_empty() {
             println!("\n🎉 Cleanup verified successful!");
             println!("   The test asset is completely clean and available for new distributions.");
@@ -246,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !final_distributions.is_empty() {
                 println!("   - {} distributions still exist", final_distributions.len());
                 for dist in &final_distributions {
-                    println!("     • {} ({})", dist.distribution_uuid, 
+                    println!("     • {} ({})", dist.distribution_uuid,
                         match dist.distribution_status {
                             Status::Unconfirmed => "UNCONFIRMED",
                             Status::Confirmed => "CONFIRMED",
@@ -256,7 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !final_assignments.is_empty() {
                 println!("   - {} assignments still exist", final_assignments.len());
                 for assignment in &final_assignments {
-                    println!("     • ID {} - User {} - Amount {} - Ready: {} - Distributed: {}", 
+                    println!("     • ID {} - User {} - Amount {} - Ready: {} - Distributed: {}",
                         assignment.id,
                         assignment.registered_user,
                         assignment.amount,
@@ -281,7 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔍 UTXO Analysis for Asset: {}", asset_uuid);
     println!("{}", "=".repeat(80));
-    
+
     // First, get the asset details to get the actual asset_id (hex string)
     println!("📋 Getting asset information...");
     let asset_id = match client.get_asset(asset_uuid).await {
@@ -311,7 +311,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
         Ok(assignments) => {
             println!("✅ Found {} assignments", assignments.len());
             for (i, assignment) in assignments.iter().enumerate() {
-                println!("   {}. ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}", 
+                println!("   {}. ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
                     i + 1,
                     assignment.id,
                     assignment.registered_user,
@@ -340,13 +340,13 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
                     Status::Unconfirmed => "🟡 UNCONFIRMED",
                     Status::Confirmed => "🟢 CONFIRMED",
                 };
-                println!("   {}. {} - {} (Transactions: {})", 
-                    i + 1, 
-                    distribution.distribution_uuid, 
+                println!("   {}. {} - {} (Transactions: {})",
+                    i + 1,
+                    distribution.distribution_uuid,
                     status_str,
                     distribution.transactions.len()
                 );
-                
+
                 // Show transaction details
                 for (j, tx) in distribution.transactions.iter().enumerate() {
                     println!("      Tx {}: {} (Status: {:?})", j + 1, tx.txid, tx.transaction_status);
@@ -368,7 +368,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
                 println!("   No balance entries found");
             } else {
                 for (i, entry) in balance_entries.iter().enumerate() {
-                    println!("   Entry {}: Asset {} - Balance: {}", 
+                    println!("   Entry {}: Asset {} - Balance: {}",
                         i + 1, entry.asset_id, entry.balance);
                 }
             }
@@ -381,17 +381,17 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
 
     // Check if we have Elements RPC access to analyze UTXOs directly
     println!("\n🔧 Elements RPC Analysis...");
-    
+
     // Check if Elements RPC is configured
     if let (Ok(rpc_url), Ok(rpc_user), Ok(_rpc_password)) = (
         std::env::var("ELEMENTS_RPC_URL"),
-        std::env::var("ELEMENTS_RPC_USER"), 
+        std::env::var("ELEMENTS_RPC_USER"),
         std::env::var("ELEMENTS_RPC_PASSWORD")
     ) {
         println!("✅ Elements RPC configured:");
         println!("   URL: {}", rpc_url);
         println!("   User: {}", rpc_user);
-        
+
         // Try to create Elements RPC client and analyze UTXOs
         match analyze_elements_utxos(&asset_id).await {
             Ok(()) => println!("✅ Elements UTXO analysis completed"),
@@ -416,16 +416,16 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
 /// Analyze UTXOs using Elements RPC directly
 async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error::Error>> {
     use serde_json::Value;
-    
+
     println!("🔍 Analyzing UTXOs via Elements RPC...");
-    
+
     // Create a simple HTTP client to call Elements RPC
     let rpc_url = std::env::var("ELEMENTS_RPC_URL")?;
     let rpc_user = std::env::var("ELEMENTS_RPC_USER")?;
     let rpc_password = std::env::var("ELEMENTS_RPC_PASSWORD")?;
-    
+
     let client = reqwest::Client::new();
-    
+
     // First, try to get blockchain info to verify connection
     println!("📡 Testing Elements RPC connection...");
     let blockchain_info_request = serde_json::json!({
@@ -434,14 +434,14 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
         "method": "getblockchaininfo",
         "params": []
     });
-    
+
     let response = client
         .post(&rpc_url)
         .basic_auth(&rpc_user, Some(&rpc_password))
         .json(&blockchain_info_request)
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         let result: Value = response.json().await?;
         if let Some(result_data) = result.get("result") {
@@ -453,7 +453,7 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
         println!("❌ Elements RPC connection failed: {}", response.status());
         return Ok(());
     }
-    
+
     // Try to list unspent outputs for the asset
     println!("💰 Listing unspent outputs for asset {}...", asset_id);
     let listunspent_request = serde_json::json!({
@@ -462,19 +462,19 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
         "method": "listunspent",
         "params": [0, 9999999, [], true, {"asset": asset_id}]
     });
-    
+
     let response = client
         .post(&rpc_url)
         .basic_auth(&rpc_user, Some(&rpc_password))
         .json(&listunspent_request)
         .send()
         .await?;
-    
+
     if response.status().is_success() {
         let result: Value = response.json().await?;
         if let Some(utxos) = result.get("result").and_then(|r| r.as_array()) {
             println!("✅ Found {} UTXOs for asset", utxos.len());
-            
+
             if utxos.is_empty() {
                 println!("⚠️  No UTXOs found for this asset!");
                 println!("   This confirms the 'No spendable UTXOs found' error.");
@@ -487,7 +487,7 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
                         utxo.get("amount").and_then(|v| v.as_f64()),
                         utxo.get("address").and_then(|v| v.as_str())
                     ) {
-                        println!("   {}. TXID: {}:{} - Amount: {} - Address: {}", 
+                        println!("   {}. TXID: {}:{} - Amount: {} - Address: {}",
                             i + 1, txid, vout, amount, address);
                         total_amount += amount;
                     }
@@ -498,10 +498,10 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
     } else {
         println!("❌ Failed to list unspent outputs: {}", response.status());
     }
-    
+
     // Try to get transaction details for the issuance
     println!("🔍 Checking issuance transaction...");
     // We would need the issuance TXID from the asset details to do this properly
-    
+
     Ok(())
 }
