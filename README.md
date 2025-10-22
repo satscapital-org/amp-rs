@@ -27,6 +27,9 @@ cargo run --example asset_summary
 
 # View the API changelog
 cargo run --example changelog
+
+# Create, issue, and authorize a new asset for distribution tests (requires live API)
+AMP_TESTS=live cargo run --example create_issue_authorize_asset
 ```
 
 Make sure to set up your `.env` file with the required credentials first.
