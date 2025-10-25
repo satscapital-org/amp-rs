@@ -6,8 +6,6 @@ use httpmock::prelude::*;
 use serde_json::json;
 use std::collections::HashMap;
 
-
-
 /// Mock signer for testing transaction signing integration
 #[derive(Debug, Clone)]
 struct MockSigner {
@@ -126,9 +124,14 @@ fn create_mock_utxos(asset_id: &str, amounts: Vec<f64>) -> Vec<Unspent> {
 }
 
 /// Helper function to create mock RPC response for listunspent
-fn create_listunspent_mock(server: &MockServer, _wallet_name: &str, _asset_id: &str, utxos: Vec<Unspent>) {
+fn create_listunspent_mock(
+    server: &MockServer,
+    _wallet_name: &str,
+    _asset_id: &str,
+    utxos: Vec<Unspent>,
+) {
     use httpmock::Method::POST;
-    
+
     // Specific mock for createrawtransaction - return transaction hex (must come first)
     server.mock(|when, then| {
         when.method(POST)
@@ -142,7 +145,7 @@ fn create_listunspent_mock(server: &MockServer, _wallet_name: &str, _asset_id: &
                 "error": null
             }));
     });
-    
+
     // Catch-all mock for all other RPC calls (listunspent, loadwallet, etc.)
     server.mock(|when, then| {
         when.method(POST);
@@ -186,7 +189,6 @@ fn create_gettransaction_mock(
 }
 
 /// Helper function to create mock RPC response for createrawtransaction
-
 
 #[tokio::test]
 async fn test_utxo_selection_sufficient_funds_single_utxo() {
@@ -371,7 +373,6 @@ async fn test_transaction_construction_with_mock_signer_success() {
         vout: 0,
         sequence: None,
     }];
-
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
@@ -568,7 +569,6 @@ async fn test_liquid_specific_transaction_format() {
         sequence: None,
     }];
 
-
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     let result = rpc
@@ -622,7 +622,6 @@ async fn test_transaction_construction_with_multiple_outputs() {
         sequence: None,
     }];
 
-
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     let result = rpc
@@ -669,7 +668,6 @@ async fn test_transaction_construction_no_change_needed() {
         vout: 0,
         sequence: None,
     }];
-
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
@@ -718,7 +716,6 @@ async fn test_transaction_construction_dust_change_handling() {
         vout: 0,
         sequence: None,
     }];
-
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
@@ -1048,12 +1045,14 @@ async fn test_change_data_collection_success_with_multiple_outputs() {
 
     // Mock listunspent on wallet-specific endpoint with correct parameters
     server.mock(|when, then| {
-        when.method(POST).path("/wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "listunspent",
-            "params": [0, 9999999, [], true, {}]
-        }));
+        when.method(POST)
+            .path("/wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "listunspent",
+                "params": [0, 9999999, [], true, {}]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -1090,7 +1089,11 @@ async fn test_change_data_collection_success_with_multiple_outputs() {
         }));
     });
 
-    let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+    let rpc = ElementsRpc::new(
+        server.url("/").trim_end_matches('/').to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
 
     let result = rpc
         .collect_change_data(asset_id, txid, &rpc, "test_wallet")
@@ -1139,12 +1142,14 @@ async fn test_change_data_collection_no_change_outputs() {
 
     // Mock listunspent on wallet-specific endpoint with correct parameters
     server.mock(|when, then| {
-        when.method(POST).path("/wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "listunspent",
-            "params": [0, 9999999, [], true, {}]
-        }));
+        when.method(POST)
+            .path("/wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "listunspent",
+                "params": [0, 9999999, [], true, {}]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -1172,7 +1177,11 @@ async fn test_change_data_collection_no_change_outputs() {
         }));
     });
 
-    let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+    let rpc = ElementsRpc::new(
+        server.url("/").trim_end_matches('/').to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
 
     let result = rpc
         .collect_change_data(asset_id, txid, &rpc, "test_wallet")
@@ -1209,12 +1218,14 @@ async fn test_change_data_collection_filters_unspendable() {
 
     // Mock listunspent on wallet-specific endpoint with correct parameters
     server.mock(|when, then| {
-        when.method(POST).path("/wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "listunspent",
-            "params": [0, 9999999, [], true, {}]
-        }));
+        when.method(POST)
+            .path("/wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "listunspent",
+                "params": [0, 9999999, [], true, {}]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -1242,7 +1253,11 @@ async fn test_change_data_collection_filters_unspendable() {
         }));
     });
 
-    let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+    let rpc = ElementsRpc::new(
+        server.url("/").trim_end_matches('/').to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
 
     let result = rpc
         .collect_change_data(asset_id, txid, &rpc, "test_wallet")
@@ -1286,12 +1301,14 @@ async fn test_change_data_collection_filters_wrong_asset() {
 
     // Mock listunspent on wallet-specific endpoint with correct parameters
     server.mock(|when, then| {
-        when.method(POST).path("/wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "listunspent",
-            "params": [0, 9999999, [], true, {}]
-        }));
+        when.method(POST)
+            .path("/wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "listunspent",
+                "params": [0, 9999999, [], true, {}]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -1319,7 +1336,11 @@ async fn test_change_data_collection_filters_wrong_asset() {
         }));
     });
 
-    let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+    let rpc = ElementsRpc::new(
+        server.url("/").trim_end_matches('/').to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
 
     let result = rpc
         .collect_change_data(asset_id, txid, &rpc, "test_wallet")
@@ -1397,12 +1418,14 @@ async fn test_change_data_formatting_for_api() {
 
     // Mock listunspent on wallet-specific endpoint with correct parameters
     server.mock(|when, then| {
-        when.method(POST).path("/wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "listunspent",
-            "params": [0, 9999999, [], true, {}]
-        }));
+        when.method(POST)
+            .path("/wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "listunspent",
+                "params": [0, 9999999, [], true, {}]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -1424,7 +1447,11 @@ async fn test_change_data_formatting_for_api() {
         }));
     });
 
-    let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+    let rpc = ElementsRpc::new(
+        server.url("/").trim_end_matches('/').to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
 
     let result = rpc
         .collect_change_data(asset_id, txid, &rpc, "test_wallet")

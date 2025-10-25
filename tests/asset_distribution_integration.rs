@@ -128,8 +128,6 @@ async fn setup_test_asset(
     Ok((asset_uuid, asset_name, asset_ticker))
 }
 
-
-
 /// Helper function to setup test user with GAID validation
 /// This function reuses existing users to avoid conflicts on subsequent test runs
 async fn setup_test_user(
@@ -338,8 +336,6 @@ async fn setup_asset_assignments_with_retry(
     }
 }
 
-
-
 /// Helper function to setup Elements wallet with descriptors from mnemonic (legacy approach)
 ///
 /// This function demonstrates the complete workflow for setting up an Elements wallet
@@ -441,7 +437,10 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
         .map_err(|e| format!("Failed to create ApiClient: {}", e))?;
 
     print_if_nocapture("✅ ApiClient created successfully");
-    print_if_nocapture(&format!("   - Strategy type: {}", api_client.get_strategy_type()));
+    print_if_nocapture(&format!(
+        "   - Strategy type: {}",
+        api_client.get_strategy_type()
+    ));
     print_if_nocapture(&format!(
         "   - Token persistence: {}",
         api_client.should_persist_tokens()
@@ -491,7 +490,10 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
     match signer.sign_transaction("invalid_hex").await {
         Ok(_) => return Err("Expected signer to reject invalid hex".into()),
         Err(e) => {
-            print_if_nocapture(&format!("✅ Signer correctly rejected invalid transaction: {}", e));
+            print_if_nocapture(&format!(
+                "✅ Signer correctly rejected invalid transaction: {}",
+                e
+            ));
         }
     }
 
@@ -499,7 +501,10 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
     match signer.sign_transaction("").await {
         Ok(_) => return Err("Expected signer to reject empty transaction".into()),
         Err(e) => {
-            print_if_nocapture(&format!("✅ Signer correctly rejected empty transaction: {}", e));
+            print_if_nocapture(&format!(
+                "✅ Signer correctly rejected empty transaction: {}",
+                e
+            ));
         }
     }
 
@@ -566,7 +571,9 @@ async fn test_environment_variable_loading() -> Result<(), Box<dyn std::error::E
             // Test basic functionality
             match rpc.get_network_info().await {
                 Ok(_) => print_if_nocapture("✅ Network info retrieval successful"),
-                Err(e) => print_if_nocapture(&format!("⚠️  Network info failed (may be expected): {}", e)),
+                Err(e) => {
+                    print_if_nocapture(&format!("⚠️  Network info failed (may be expected): {}", e))
+                }
             }
         }
         Err(e) => {
@@ -593,7 +600,10 @@ async fn test_api_client_testnet_configuration() -> Result<(), Box<dyn std::erro
     // Verify configuration
     print_if_nocapture("✅ ApiClient configuration:");
     print_if_nocapture(&format!("   - Strategy: {}", client.get_strategy_type()));
-    print_if_nocapture(&format!("   - Persistence: {}", client.should_persist_tokens()));
+    print_if_nocapture(&format!(
+        "   - Persistence: {}",
+        client.should_persist_tokens()
+    ));
 
     // Verify it's configured for live testing
     assert_eq!(client.get_strategy_type(), "live");
@@ -1959,7 +1969,10 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
             if e.is_retryable() {
                 print_if_nocapture("   ✅ Error correctly marked as retryable");
                 if let Some(instructions) = e.retry_instructions() {
-                    print_if_nocapture(&format!("   ✅ Retry instructions provided: {}", instructions));
+                    print_if_nocapture(&format!(
+                        "   ✅ Retry instructions provided: {}",
+                        instructions
+                    ));
                 }
             }
         }
@@ -2009,11 +2022,14 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
 
             match result {
                 Err(e) => {
-                    print_if_nocapture(&format!("   ✅ Authentication failure correctly detected: {}", e));
+                    print_if_nocapture(&format!(
+                        "   ✅ Authentication failure correctly detected: {}",
+                        e
+                    ));
                 }
                 Ok(_) => {
                     print_if_nocapture(
-                        "   ⚠️  Authentication failure not detected (may be using cached token)"
+                        "   ⚠️  Authentication failure not detected (may be using cached token)",
                     );
                 }
             }

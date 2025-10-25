@@ -21,7 +21,7 @@ fn should_log_in_tests() -> bool {
     if !cfg!(test) {
         return true;
     }
-    
+
     // In test builds, only log if --nocapture is passed
     std::env::args().any(|arg| arg == "--nocapture")
 }
@@ -3751,29 +3751,29 @@ mod tests {
         let _ = fs::remove_file(extra_path);
     }
 }
-    #[test]
-    fn test_conditional_logging_behavior() {
-        // This test verifies that our conditional logging works correctly
-        // It should not produce output unless --nocapture is passed
-        
-        // Initialize tracing subscriber conditionally
-        if should_log_in_tests() {
-            let _ = tracing_subscriber::fmt::try_init();
-        }
-        
-        // Test reading from a non-existent file (should trigger debug logging)
-        let result = MnemonicStorage::read_from_file_path("non_existent_test_file.json");
-        assert!(result.is_ok());
-        let storage = result.unwrap();
-        assert!(storage.is_empty());
-        
-        // Test creating a signer (should trigger debug and info logging)
-        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        let result = LwkSoftwareSigner::new(mnemonic);
-        assert!(result.is_ok());
-        let signer = result.unwrap();
-        assert!(signer.is_testnet());
-        
-        // If you run this test with --nocapture, you should see logging output
-        // If you run without --nocapture, you should see no logging output
+#[test]
+fn test_conditional_logging_behavior() {
+    // This test verifies that our conditional logging works correctly
+    // It should not produce output unless --nocapture is passed
+
+    // Initialize tracing subscriber conditionally
+    if should_log_in_tests() {
+        let _ = tracing_subscriber::fmt::try_init();
     }
+
+    // Test reading from a non-existent file (should trigger debug logging)
+    let result = MnemonicStorage::read_from_file_path("non_existent_test_file.json");
+    assert!(result.is_ok());
+    let storage = result.unwrap();
+    assert!(storage.is_empty());
+
+    // Test creating a signer (should trigger debug and info logging)
+    let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    let result = LwkSoftwareSigner::new(mnemonic);
+    assert!(result.is_ok());
+    let signer = result.unwrap();
+    assert!(signer.is_testnet());
+
+    // If you run this test with --nocapture, you should see logging output
+    // If you run without --nocapture, you should see no logging output
+}
