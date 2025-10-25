@@ -128,41 +128,7 @@ async fn setup_test_asset(
     Ok((asset_uuid, asset_name, asset_ticker))
 }
 
-/// Helper function to setup test asset with treasury address and return transaction ID for confirmation
-async fn setup_test_asset_with_confirmation(
-    client: &ApiClient,
-    treasury_address: &str,
-) -> Result<(String, String, String, String), Box<dyn std::error::Error>> {
-    let asset_name = format!("Test Distribution Asset {}", chrono::Utc::now().timestamp());
-    let asset_ticker = format!("TDA{}", chrono::Utc::now().timestamp() % 10000);
 
-    let issuance_request = amp_rs::model::IssuanceRequest {
-        name: asset_name.clone(),
-        amount: 1000000, // 0.01 BTC in satoshis for testing
-        destination_address: treasury_address.to_string(),
-        domain: "test-distribution.example.com".to_string(),
-        ticker: asset_ticker.clone(),
-        pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
-        precision: Some(8),
-        is_confidential: Some(true),
-        is_reissuable: Some(false),
-        reissuance_amount: None,
-        reissuance_address: None,
-        transfer_restricted: Some(false),
-    };
-
-    let issuance_response = client.issue_asset(&issuance_request).await?;
-    let asset_uuid = issuance_response.asset_uuid.clone();
-    let txid = issuance_response.txid.clone();
-
-    // Add treasury address to the asset
-    let treasury_addresses = vec![treasury_address.to_string()];
-    client
-        .add_asset_treasury_addresses(&asset_uuid, &treasury_addresses)
-        .await?;
-
-    Ok((asset_uuid, asset_name, asset_ticker, txid))
-}
 
 /// Helper function to setup test user with GAID validation
 /// This function reuses existing users to avoid conflicts on subsequent test runs
@@ -372,113 +338,7 @@ async fn setup_asset_assignments_with_retry(
     }
 }
 
-/// Helper function to setup Elements-first wallet (Elements generates address, LWK imports private key)
-///
-/// This function implements the Elements-first approach for maximum compatibility:
-/// 1. Create a standard Elements wallet
-/// 2. Generate a new address in Elements (guaranteed visibility)
-/// 3. Export the private key from Elements
-/// 4. Create LWK signer from the Elements private key
-/// 5. Verify address compatibility between Elements and LWK
-async fn setup_elements_first_wallet(
-    elements_rpc: &ElementsRpc,
-    wallet_name: &str,
-) -> Result<(String, String, LwkSoftwareSigner), Box<dyn std::error::Error>> {
-    println!("🔧 Setting up Elements-first wallet");
 
-    // Step 1: Create standard Elements wallet
-    println!("   📝 Creating Elements wallet: {}", wallet_name);
-    match elements_rpc.create_elements_wallet(wallet_name).await {
-        Ok(()) => {
-            println!("   ✅ Created Elements wallet: {}", wallet_name);
-        }
-        Err(e) => {
-            let error_msg = e.to_string();
-            if error_msg.contains("already exists") || error_msg.contains("Database already exists")
-            {
-                println!("   ✅ Wallet '{}' already exists, proceeding", wallet_name);
-            } else {
-                return Err(format!("Failed to create Elements wallet: {}", e).into());
-            }
-        }
-    }
-
-    // Step 2: Generate new address in Elements (use bech32 for native segwit)
-    println!("   🏠 Generating new address in Elements");
-    let unconfidential_address = elements_rpc
-        .get_new_address(wallet_name, Some("bech32"))
-        .await
-        .map_err(|e| format!("Failed to generate address in Elements: {}", e))?;
-
-    println!(
-        "   ✅ Elements generated unconfidential address: {}",
-        unconfidential_address
-    );
-
-    // Step 2b: Get the confidential version of the address for asset issuance
-    println!("   🔐 Getting confidential version of address");
-    let confidential_address = elements_rpc
-        .get_confidential_address(wallet_name, &unconfidential_address)
-        .await
-        .map_err(|e| format!("Failed to get confidential address: {}", e))?;
-
-    println!(
-        "   ✅ Elements generated confidential address: {}",
-        confidential_address
-    );
-
-    // Step 3: Export private key from Elements (use unconfidential address)
-    println!("   🔑 Exporting private key from Elements");
-    let private_key_wif = elements_rpc
-        .dump_private_key(wallet_name, &unconfidential_address)
-        .await
-        .map_err(|e| format!("Failed to export private key from Elements: {}", e))?;
-
-    println!("   ✅ Private key exported from Elements");
-
-    // Step 4: Create LWK signer from Elements private key
-    println!("   🔐 Creating LWK signer from Elements private key");
-    let lwk_signer =
-        LwkSoftwareSigner::from_elements_private_key(&private_key_wif).map_err(|e| {
-            format!(
-                "Failed to create LWK signer from Elements private key: {}",
-                e
-            )
-        })?;
-
-    println!("   ✅ LWK signer created from Elements private key");
-
-    // Step 5: Verify address compatibility (use unconfidential address for LWK verification)
-    println!("   🔍 Verifying address compatibility between Elements and LWK");
-    let lwk_address = lwk_signer
-        .verify_elements_address(&unconfidential_address)
-        .map_err(|e| format!("Address verification failed: {}", e))?;
-
-    if lwk_address == unconfidential_address {
-        println!(
-            "   ✅ Address compatibility verified: {}",
-            unconfidential_address
-        );
-    } else {
-        return Err(format!(
-            "Address mismatch: Elements={}, LWK={}",
-            unconfidential_address, lwk_address
-        )
-        .into());
-    }
-
-    println!("   🎯 Elements-first wallet setup complete!");
-    println!(
-        "      - Elements can see all transactions to: {}",
-        confidential_address
-    );
-    println!("      - LWK can sign transactions using the imported private key");
-    println!("      - Confidential address will be used for asset issuance");
-    println!("      - No descriptor import or blinding key compatibility issues");
-
-    // Return both addresses - confidential for asset issuance, unconfidential for UTXO lookup
-    Ok((confidential_address, unconfidential_address, lwk_signer))
-}
 
 /// Helper function to setup Elements wallet with descriptors from mnemonic (legacy approach)
 ///
@@ -1197,7 +1057,7 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     println!("🚀 Executing end-to-end distribution test workflow");
 
     // Initialize tracing for detailed logging
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Task requirement: Load environment and setup infrastructure
     println!("📁 Setting up test environment and infrastructure");
@@ -2183,7 +2043,7 @@ async fn test_signing_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
     println!("🔐 Testing signing failure scenarios");
 
     // Initialize tracing
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -2318,7 +2178,7 @@ async fn test_timeout_conditions() -> Result<(), Box<dyn std::error::Error>> {
     println!("⏱️  Testing timeout conditions");
 
     // Initialize tracing
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -2434,7 +2294,7 @@ async fn test_insufficient_utxos_and_invalid_addresses() -> Result<(), Box<dyn s
     println!("💰 Testing insufficient UTXOs and invalid address scenarios");
 
     // Initialize tracing
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -2654,7 +2514,7 @@ async fn test_duplicate_distribution_and_retry_scenarios() -> Result<(), Box<dyn
     println!("🔄 Testing duplicate distribution prevention and retry scenarios");
 
     // Initialize tracing
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -2843,7 +2703,7 @@ async fn test_comprehensive_error_scenario_integration() -> Result<(), Box<dyn s
     println!("🔥 Testing comprehensive error scenario integration");
 
     // Initialize tracing for detailed logging
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -3035,7 +2895,7 @@ async fn test_comprehensive_error_scenario_integration_fixed(
     println!("🔥 Testing comprehensive error scenario integration");
 
     // Initialize tracing for detailed logging
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
     // Setup environment
     dotenvy::dotenv().ok();
