@@ -11,8 +11,12 @@ const TEST_USER_GAIDS: &[&str] = &[
     "GAbzSbgCZ6M6WU85rseKTrfehPsjt",
     "GAQzmXM7jVaKAwtHGXHENgn5KUUmL",
     "GA42D48VRVzW8MxMEuWtRdJzDq4LBF",
+    "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ",
 ];
 const TEST_ASSET_NAME: &str = "Test Environment Asset";
+const PROTECTED_ASSET_UUIDS: &[&str] = &[
+    "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,7 +59,10 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
     match client.get_assets().await {
         Ok(assets) => {
             let locked_count = assets.iter().filter(|a| a.is_locked).count();
-            let test_assets_count = assets.iter().filter(|a| a.name == TEST_ASSET_NAME).count();
+            let test_assets_count = assets.iter().filter(|a| 
+                a.name == TEST_ASSET_NAME || 
+                PROTECTED_ASSET_UUIDS.contains(&a.asset_uuid.as_str())
+            ).count();
             println!(
                 "💰 Assets to delete: {} ({} locked, {} test assets protected)",
                 assets.len() - test_assets_count,
@@ -262,11 +269,16 @@ async fn delete_all_assets(client: &ApiClient) -> Result<(), Box<dyn std::error:
     let mut total_distribution_cancel_errors = 0;
 
     for asset in assets {
-        // Skip test environment asset
-        if asset.name == TEST_ASSET_NAME {
+        // Skip test environment assets and protected UUIDs
+        if asset.name == TEST_ASSET_NAME || PROTECTED_ASSET_UUIDS.contains(&asset.asset_uuid.as_str()) {
+            let protection_reason = if asset.name == TEST_ASSET_NAME {
+                "test environment asset"
+            } else {
+                "protected UUID"
+            };
             println!(
-                "   Skipping protected test asset '{}' (UUID: {})... 🛡️",
-                asset.name, asset.asset_uuid
+                "   Skipping protected {} '{}' (UUID: {})... 🛡️",
+                protection_reason, asset.name, asset.asset_uuid
             );
             protected_assets += 1;
             continue;

@@ -31,33 +31,34 @@ use amp_rs::{ApiClient, ElementsRpc};
 use dotenvy;
 use serial_test::serial;
 use std::env;
-use std::process::Command;
+// use std::process::Command; // No longer needed - removed address.py dependency
 use tracing_subscriber;
 
-/// Helper function to get a destination address for a specific GAID using address.py
-async fn get_destination_address_for_gaid(gaid: &str) -> Result<String, String> {
-    let output = Command::new("python3")
-        .arg("gaid-scripts/address.py")
-        .arg("amp") // Using 'amp' environment
-        .arg(gaid)
-        .output()
-        .map_err(|e| format!("Failed to execute address.py: {}", e))?;
+// NOTE: This function is no longer used - we now get addresses directly from the AMP API
+// /// Helper function to get a destination address for a specific GAID using address.py
+// async fn get_destination_address_for_gaid(gaid: &str) -> Result<String, String> {
+//     let output = Command::new("python3")
+//         .arg("gaid-scripts/address.py")
+//         .arg("amp") // Using 'amp' environment
+//         .arg(gaid)
+//         .output()
+//         .map_err(|e| format!("Failed to execute address.py: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("address.py failed: {}", stderr));
-    }
+//     if !output.status.success() {
+//         let stderr = String::from_utf8_lossy(&output.stderr);
+//         return Err(format!("address.py failed: {}", stderr));
+//     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let json_response: serde_json::Value = serde_json::from_str(&stdout)
-        .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     let json_response: serde_json::Value = serde_json::from_str(&stdout)
+//         .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
 
-    json_response
-        .get("address")
-        .and_then(|addr| addr.as_str())
-        .map(|addr| addr.to_string())
-        .ok_or_else(|| "No address found in response".to_string())
-}
+//     json_response
+//         .get("address")
+//         .and_then(|addr| addr.as_str())
+//         .map(|addr| addr.to_string())
+//         .ok_or_else(|| "No address found in response".to_string())
+// }
 
 /// Test data structure for asset and user setup
 #[derive(Debug)]
@@ -1305,21 +1306,15 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     }
 
     // Register test user
-    let test_gaid = "GAbzSbgCZ6M6WU85rseKTrfehPsjt";
-    let (user_id, user_name, gaid_address) = setup_test_user(&api_client, test_gaid)
+    // let test_gaid = "GAbzSbgCZ6M6WU85rseKTrfehPsjt"; // basic testing
+    let test_gaid = "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ";   // Greg's Phone
+    let (user_id, user_name, user_address) = setup_test_user(&api_client, test_gaid)
         .await
         .map_err(|e| format!("Failed to setup test user: {}", e))?;
 
-    // The GAID address from AMP API is in GAID format, but we need a standard Liquid address for Elements
-    // For now, use the address.py script to get the proper Liquid address
-    println!("🔍 Converting GAID address to standard Liquid address");
-    println!("   - GAID address from API: {}", gaid_address);
-
-    let user_address = get_destination_address_for_gaid(test_gaid)
-        .await
-        .map_err(|e| format!("Failed to get destination address for GAID {}: {}", test_gaid, e))?;
-
-    println!("   - Standard Liquid address: {}", user_address);
+    // Use the address directly from the AMP API - no need for address.py conversion
+    println!("✅ Using address from AMP API directly");
+    println!("   - Address from API: {}", user_address);
 
     println!("✅ Test user registered");
     println!("   - User ID: {}", user_id);
