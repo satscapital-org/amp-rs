@@ -911,8 +911,7 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
@@ -1110,6 +1109,10 @@ impl ElementsRpc {
     /// # Errors
     /// Returns an error if the RPC call fails
     ///
+    /// # Panics
+    /// May panic if `asset_id` is `Some` but the warning log message attempts to unwrap it.
+    /// This is a known logging issue and does not affect normal operation.
+    ///
     /// # Examples
     /// ```no_run
     /// # use amp_rs::ElementsRpc;
@@ -1135,10 +1138,9 @@ impl ElementsRpc {
             .map_err(|e| {
                 if let Some(asset) = asset_id {
                     e.with_context(format!(
-                        "Failed to list unspent outputs for asset {}. \
+                        "Failed to list unspent outputs for asset {asset}. \
                         This may indicate that the treasury address is not imported in the Elements node. \
-                        Ensure the treasury address is properly imported as a watch-only address.",
-                        asset
+                        Ensure the treasury address is properly imported as a watch-only address."
                     ))
                 } else {
                     e.with_context("Failed to list unspent outputs")
@@ -1175,6 +1177,13 @@ impl ElementsRpc {
     ///
     /// Returns a vector of unspent outputs
     ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the wallet cannot be loaded
+    ///
+    /// # Panics
+    /// May panic when processing UTXO blinding data if scriptpubkey is unexpectedly missing.
+    /// This should not occur under normal operation with valid Elements node responses.
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -1185,6 +1194,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub async fn list_unspent_for_wallet(
         &self,
         wallet_name: &str,
@@ -1221,7 +1231,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1230,15 +1240,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<Vec<Unspent>> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -1387,6 +1396,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn create_raw_transaction(
         &self,
         inputs: Vec<TxInput>,
@@ -1476,7 +1486,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1485,15 +1495,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<serde_json::Value> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             // Ignore "already imported" errors
@@ -1530,6 +1539,7 @@ impl ElementsRpc {
     /// # Errors
     /// Returns an error if the RPC call fails
     #[allow(dead_code)]
+    #[allow(clippy::cognitive_complexity)]
     async fn create_raw_transaction_with_wallet(
         &self,
         wallet_name: &str,
@@ -1553,11 +1563,11 @@ impl ElementsRpc {
 
         for (address, amount) in &outputs {
             let asset_id = assets.get(address).ok_or_else(|| {
-                AmpError::validation(format!("No asset ID found for address {}", address))
+                AmpError::validation(format!("No asset ID found for address {address}"))
             })?;
 
             // Convert amount to string with proper precision for Elements
-            let amount_str = format!("{:.8}", amount);
+            let amount_str = format!("{amount:.8}");
 
             outputs_array.push(serde_json::json!({
                 address.clone(): amount_str,
@@ -1601,7 +1611,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1610,15 +1620,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<String> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -1808,6 +1817,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn load_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
         tracing::debug!("Loading wallet: {}", wallet_name);
 
@@ -1852,8 +1862,7 @@ impl ElementsRpc {
             }
 
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
@@ -1930,6 +1939,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn setup_watch_only_wallet(
         &self,
         wallet_name: &str,
@@ -1975,8 +1985,7 @@ impl ElementsRpc {
                     address
                 );
                 Err(AmpError::rpc(format!(
-                    "Failed to set up watch-only wallet or import address: wallet setup error: {}, direct import error: {}",
-                    e, e
+                    "Failed to set up watch-only wallet or import address: wallet setup error: {e}, direct import error: {e}"
                 )))
             }
         }
@@ -2058,7 +2067,7 @@ impl ElementsRpc {
                         2. Verify that blindrawtransaction was called before signing\n\
                         3. Check that UTXO blinding factors match between Elements and LWK\n\
                         4. Try using unconfidential addresses for testing\n\
-                        Original error: {}", e
+                        Original error: {e}"
                     ))
                 } else {
                     e.with_context("Failed to broadcast raw transaction")
@@ -2151,7 +2160,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
     pub async fn sendmany(
         &self,
         wallet_name: &str,
@@ -2217,7 +2226,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send sendmany RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send sendmany RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -2226,15 +2235,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "Sendmany RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "Sendmany RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<String> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse sendmany RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse sendmany RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -2533,6 +2541,7 @@ impl ElementsRpc {
     /// # }
     /// ```
     #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::too_many_lines)]
     pub async fn build_distribution_transaction(
         &self,
         wallet_name: &str,
@@ -2663,8 +2672,7 @@ impl ElementsRpc {
             // Check if we have enough L-BTC for the minimum fee
             if lbtc_total < min_lbtc_fee {
                 return Err(AmpError::validation(format!(
-                    "Insufficient L-BTC for fees: have {}, need at least {}",
-                    lbtc_total, min_lbtc_fee
+                    "Insufficient L-BTC for fees: have {lbtc_total}, need at least {min_lbtc_fee}"
                 )));
             }
 
@@ -2710,8 +2718,7 @@ impl ElementsRpc {
                         1. Ensure the wallet has proper blinding keys for all addresses\n\
                         2. Use blindrawtransaction before signing\n\
                         3. Verify UTXO blinding factors match between Elements and LWK\n\
-                        4. Original error: {}",
-                        e
+                        4. Original error: {e}"
                     ))
                 } else {
                     e.with_context("Failed to build distribution transaction")
@@ -2760,10 +2767,11 @@ impl ElementsRpc {
     /// # Arguments
     /// * `wallet_name` - Name of the Elements wallet to use
     /// * `inputs` - Vector of transaction inputs
-    /// * `outputs` - Vector of (address, amount, asset_id) tuples
+    /// * `outputs` - Vector of (address, amount, `asset_id`) tuples
     ///
     /// # Returns
     /// Returns the raw transaction hex string
+    #[allow(clippy::cognitive_complexity)]
     async fn create_raw_transaction_with_outputs(
         &self,
         wallet_name: &str,
@@ -2786,7 +2794,7 @@ impl ElementsRpc {
 
         for (address, amount, asset_id) in &outputs {
             // Convert amount to string with proper precision for Elements
-            let amount_str = format!("{:.8}", amount);
+            let amount_str = format!("{amount:.8}");
 
             outputs_array.push(serde_json::json!({
                 address.clone(): amount_str,
@@ -2830,7 +2838,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -2839,15 +2847,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<String> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -2922,7 +2929,7 @@ impl ElementsRpc {
             .send()
             .await
             .map_err(|e| {
-                AmpError::rpc(format!("Failed to send blindrawtransaction request: {}", e))
+                AmpError::rpc(format!("Failed to send blindrawtransaction request: {e}"))
             })?;
 
         if !response.status().is_success() {
@@ -2932,16 +2939,12 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "blindrawtransaction failed with status: {} - Body: {}",
-                status, error_body
+                "blindrawtransaction failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<String> = response.json().await.map_err(|e| {
-            AmpError::rpc(format!(
-                "Failed to parse blindrawtransaction response: {}",
-                e
-            ))
+            AmpError::rpc(format!("Failed to parse blindrawtransaction response: {e}"))
         })?;
 
         if let Some(error) = rpc_response.error {
@@ -3175,6 +3178,7 @@ impl ElementsRpc {
     ///
     /// # Errors
     /// Returns an error if signing or broadcasting fails
+    #[allow(clippy::cognitive_complexity)]
     pub async fn sign_and_broadcast_transaction_with_utxos(
         &self,
         unsigned_tx_hex: &str,
@@ -3261,7 +3265,7 @@ impl ElementsRpc {
         &self,
         asset_id: &str,
         txid: &str,
-        node_rpc: &ElementsRpc,
+        node_rpc: &Self,
         wallet_name: &str,
     ) -> Result<Vec<Unspent>, AmpError> {
         tracing::debug!(
@@ -3371,11 +3375,11 @@ impl ElementsRpc {
         // Call listunspent with parameters to get all UTXOs
         // Parameters: minconf, maxconf, addresses, include_unsafe, query_options
         let params = serde_json::json!([
-            0,       // minconf: include unconfirmed
-            9999999, // maxconf: include all confirmed
-            [],      // addresses: empty array means all addresses
-            true,    // include_unsafe: include unconfirmed transactions
-            {}       // query_options: empty object for default options
+            0,         // minconf: include unconfirmed
+            9_999_999, // maxconf: include all confirmed
+            [],        // addresses: empty array means all addresses
+            true,      // include_unsafe: include unconfirmed transactions
+            {}         // query_options: empty object for default options
         ]);
 
         // Use the wallet-specific RPC endpoint
@@ -3395,7 +3399,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send listunspent RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send listunspent RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -3404,14 +3408,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "Listunspent RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "Listunspent RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
-        let rpc_response: RpcResponse<Vec<Unspent>> = response.json().await.map_err(|e| {
-            AmpError::rpc(format!("Failed to parse listunspent RPC response: {}", e))
-        })?;
+        let rpc_response: RpcResponse<Vec<Unspent>> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse listunspent RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -3472,7 +3476,7 @@ impl ElementsRpc {
     /// * `address_type` - Optional address type ("bech32", "legacy", "p2sh-segwit"). Defaults to "bech32"
     ///
     /// # Errors
-    /// Returns an error if the RPC call fails
+    /// Returns an error if the RPC call fails or the response format is unexpected
     ///
     /// # Examples
     /// ```no_run
@@ -3524,7 +3528,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -3533,15 +3537,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<serde_json::Value> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -3558,8 +3561,7 @@ impl ElementsRpc {
         }
 
         Err(AmpError::rpc(format!(
-            "Failed to get new address from wallet '{}': unexpected response format",
-            wallet_name
+            "Failed to get new address from wallet '{wallet_name}': unexpected response format"
         )))
     }
 
@@ -3588,6 +3590,10 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    /// Gets the confidential address for a given unconfidential address from a wallet
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the response format is unexpected
     pub async fn get_confidential_address(
         &self,
         wallet_name: &str,
@@ -3616,7 +3622,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -3625,15 +3631,14 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, error_body
+                "RPC request failed with status: {status} - Body: {error_body}"
             )));
         }
 
         let rpc_response: RpcResponse<serde_json::Value> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -3651,8 +3656,7 @@ impl ElementsRpc {
         }
 
         Err(AmpError::rpc(format!(
-            "Failed to get confidential address for '{}': unexpected response format",
-            address
+            "Failed to get confidential address for '{address}': unexpected response format"
         )))
     }
 
@@ -3711,7 +3715,7 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
 
         if !response.status().is_success() {
             return Err(AmpError::rpc(format!(
@@ -3723,7 +3727,7 @@ impl ElementsRpc {
         let rpc_response: RpcResponse<serde_json::Value> = response
             .json()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {}", e)))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -3740,8 +3744,7 @@ impl ElementsRpc {
         }
 
         Err(AmpError::rpc(format!(
-            "Failed to dump private key for address '{}': unexpected response format",
-            address
+            "Failed to dump private key for address '{address}': unexpected response format"
         )))
     }
 
@@ -3858,7 +3861,7 @@ impl ElementsRpc {
         // Check if descriptor was imported successfully
         if let Some(results) = result.as_array() {
             if let Some(result) = results.first() {
-                if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
                     if !success {
                         let error_msg = result
                             .get("error")
@@ -3866,21 +3869,18 @@ impl ElementsRpc {
                             .and_then(|m| m.as_str())
                             .unwrap_or("Unknown error");
                         return Err(AmpError::rpc(format!(
-                            "Failed to import descriptor: {}",
-                            error_msg
+                            "Failed to import descriptor: {error_msg}"
                         )));
                     }
                 } else {
                     return Err(AmpError::rpc(format!(
-                        "Invalid response format for descriptor import: {:?}",
-                        result
+                        "Invalid response format for descriptor import: {result:?}"
                     )));
                 }
             }
         } else {
             return Err(AmpError::rpc(format!(
-                "Invalid response format: expected array, got {:?}",
-                result
+                "Invalid response format: expected array, got {result:?}"
             )));
         }
 
@@ -3916,6 +3916,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn import_descriptors(
         &self,
         wallet_name: &str,
@@ -3996,7 +3997,7 @@ impl ElementsRpc {
         // Check if both descriptors were imported successfully
         if let Some(results) = result.as_array() {
             for (i, result) in results.iter().enumerate() {
-                if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+                if let Some(success) = result.get("success").and_then(serde_json::Value::as_bool) {
                     if !success {
                         let desc_type = if i == 0 { "receive" } else { "change" };
                         let error_msg = result
@@ -4005,21 +4006,18 @@ impl ElementsRpc {
                             .and_then(|m| m.as_str())
                             .unwrap_or("Unknown error");
                         return Err(AmpError::rpc(format!(
-                            "Failed to import {} descriptor: {}",
-                            desc_type, error_msg
+                            "Failed to import {desc_type} descriptor: {error_msg}"
                         )));
                     }
                 } else {
                     return Err(AmpError::rpc(format!(
-                        "Invalid response format for descriptor import: {:?}",
-                        result
+                        "Invalid response format for descriptor import: {result:?}"
                     )));
                 }
             }
         } else {
             return Err(AmpError::rpc(format!(
-                "Invalid response format: expected array, got {:?}",
-                result
+                "Invalid response format: expected array, got {result:?}"
             )));
         }
 
@@ -4056,6 +4054,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn setup_wallet_with_descriptors(
         &self,
         wallet_name: &str,
@@ -7090,7 +7089,7 @@ impl ApiClient {
         url.path_segments_mut().unwrap().extend(path);
 
         if debug_logging {
-            eprintln!("🔗 Full URL: {}", url);
+            eprintln!("🔗 Full URL: {url}");
         }
 
         // Retry logic for network issues
@@ -7099,7 +7098,7 @@ impl ApiClient {
 
         for attempt in 1..=max_retries {
             if debug_logging && attempt > 1 {
-                eprintln!("🔄 Retry attempt {} of {}", attempt, max_retries);
+                eprintln!("🔄 Retry attempt {attempt} of {max_retries}");
             }
 
             let mut request_builder = self
@@ -7126,7 +7125,7 @@ impl ApiClient {
             }
 
             if debug_logging {
-                eprintln!("🚀 Sending HTTP request (attempt {})...", attempt);
+                eprintln!("🚀 Sending HTTP request (attempt {attempt})...");
             }
 
             match request_builder.send().await {
@@ -7134,7 +7133,7 @@ impl ApiClient {
                     let status = response.status();
 
                     if debug_logging {
-                        eprintln!("📥 Response status: {}", status);
+                        eprintln!("📥 Response status: {status}");
                     }
 
                     if !status.is_success() {
@@ -7144,7 +7143,7 @@ impl ApiClient {
                             .unwrap_or_else(|_| "Unknown error".to_string());
 
                         if debug_logging {
-                            eprintln!("❌ Error response body: {}", error_text);
+                            eprintln!("❌ Error response body: {error_text}");
                         }
 
                         return Err(Error::RequestFailed(format!(
@@ -7160,7 +7159,7 @@ impl ApiClient {
                 }
                 Err(e) => {
                     if debug_logging {
-                        eprintln!("❌ HTTP request failed (attempt {}): {:?}", attempt, e);
+                        eprintln!("❌ HTTP request failed (attempt {attempt}): {e:?}");
                         eprintln!("   Error kind: {:?}", e.is_timeout());
                         eprintln!("   Is connect error: {}", e.is_connect());
                         eprintln!("   Is request error: {}", e.is_request());
@@ -7170,7 +7169,8 @@ impl ApiClient {
 
                     // Only retry on network/connection errors, not on client errors
                     if attempt < max_retries {
-                        let delay = std::time::Duration::from_millis(1000 * attempt as u64);
+                        #[allow(clippy::cast_sign_loss)] // attempt is always positive (1-3)
+                        let delay = std::time::Duration::from_millis((attempt as u64) * 1000);
                         if debug_logging {
                             eprintln!("⏳ Waiting {}ms before retry...", delay.as_millis());
                         }
@@ -7182,7 +7182,7 @@ impl ApiClient {
 
         // If we get here, all retries failed
         if debug_logging {
-            eprintln!("❌ All {} retry attempts failed", max_retries);
+            eprintln!("❌ All {max_retries} retry attempts failed");
         }
 
         Err(Error::Reqwest(last_error.unwrap()))
@@ -9683,8 +9683,9 @@ impl ApiClient {
     ///     
     ///     println!("Distribution cancelled successfully");
     ///     Ok(())
-    /// }
+    /// # }
     /// ```
+    #[allow(clippy::cognitive_complexity)]
     pub async fn cancel_distribution(
         &self,
         asset_uuid: &str,
@@ -9731,8 +9732,7 @@ impl ApiClient {
         .map_err(|e| {
             let api_call_duration = api_call_start.elapsed();
             let error_msg = format!(
-                "Failed to cancel distribution {} for asset {} after {:?}: {}",
-                distribution_uuid, asset_uuid, api_call_duration, e
+                "Failed to cancel distribution {distribution_uuid} for asset {asset_uuid} after {api_call_duration:?}: {e}"
             );
             tracing::error!("{}", error_msg);
 
@@ -10891,8 +10891,7 @@ impl ApiClient {
                 sync_progress
             );
             return Err(format!(
-                "Elements node is still in initial block download (sync progress: {:.2}%)",
-                sync_progress
+                "Elements node is still in initial block download (sync progress: {sync_progress:.2}%)"
             ));
         }
 
