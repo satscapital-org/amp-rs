@@ -16,10 +16,9 @@
 //! - `AMP_USERNAME`: AMP API username
 //! - `AMP_PASSWORD`: AMP API password
 
-use amp_rs::{ApiClient, model::Status};
+use amp_rs::{model::Status, ApiClient};
 use dotenvy;
 use std::env;
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create API client
     println!("🌐 Creating AMP API client");
     let client = ApiClient::new().await?;
-    println!("✅ Connected to AMP API with {} strategy", client.get_strategy_type());
+    println!(
+        "✅ Connected to AMP API with {} strategy",
+        client.get_strategy_type()
+    );
 
     // Target the asset with UTXOs that we found
     let asset_uuid = "fff0928b-f78e-4a2c-bfa0-2c70bb72d545";
@@ -59,7 +61,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if distributions.is_empty() && assignments.is_empty() {
         println!("ℹ️  No distributions or assignments found for this asset");
-        println!("   This means the asset is completely clean and available for new distributions.");
+        println!(
+            "   This means the asset is completely clean and available for new distributions."
+        );
 
         // Still run UTXO analysis for the test asset
         analyze_asset_utxos(&client, asset_uuid).await?;
@@ -73,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(uuid) => format!("🔗 Linked to distribution: {}", uuid),
                 None => "🆓 Not linked to any distribution".to_string(),
             };
-            println!("  {}. Assignment ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
+            println!(
+                "  {}. Assignment ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
                 i + 1,
                 assignment.id,
                 assignment.registered_user,
@@ -92,7 +97,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Status::Unconfirmed => "🟡 UNCONFIRMED",
             Status::Confirmed => "🟢 CONFIRMED",
         };
-        println!("  {}. {} - {} (Transactions: {})",
+        println!(
+            "  {}. {} - {} (Transactions: {})",
             i + 1,
             distribution.distribution_uuid,
             status_str,
@@ -101,12 +107,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Find unconfirmed distributions to cancel
-    let unconfirmed_distributions: Vec<_> = distributions.iter()
+    let unconfirmed_distributions: Vec<_> = distributions
+        .iter()
         .filter(|d| matches!(d.distribution_status, Status::Unconfirmed))
         .collect();
 
     // Also find distribution UUIDs from assignments that are linked to distributions
-    let assignment_distribution_uuids: Vec<String> = assignments.iter()
+    let assignment_distribution_uuids: Vec<String> = assignments
+        .iter()
         .filter_map(|a| a.distribution_uuid.clone())
         .collect::<std::collections::HashSet<_>>() // Remove duplicates
         .into_iter()
@@ -116,11 +124,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n✅ No unconfirmed distributions found");
 
         // But we might still have assignments to clean up
-        let assignments_to_delete: Vec<_> = assignments.iter()
+        let assignments_to_delete: Vec<_> = assignments
+            .iter()
             .filter(|a| {
-                let should_delete = a.distribution_uuid.is_some() ||
-                                   (a.ready_for_distribution && !a.is_distributed) ||
-                                   !a.is_distributed;
+                let should_delete = a.distribution_uuid.is_some()
+                    || (a.ready_for_distribution && !a.is_distributed)
+                    || !a.is_distributed;
                 should_delete
             })
             .collect();
@@ -129,19 +138,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   All distributions are either confirmed or the asset is clean.");
             return Ok(());
         } else {
-            println!("   But found {} assignments that need cleanup", assignments_to_delete.len());
+            println!(
+                "   But found {} assignments that need cleanup",
+                assignments_to_delete.len()
+            );
         }
     }
 
     if !unconfirmed_distributions.is_empty() {
-        println!("\n🔍 Found {} unconfirmed distribution(s) from distribution list:", unconfirmed_distributions.len());
+        println!(
+            "\n🔍 Found {} unconfirmed distribution(s) from distribution list:",
+            unconfirmed_distributions.len()
+        );
         for distribution in &unconfirmed_distributions {
             println!("  - {}", distribution.distribution_uuid);
         }
     }
 
     if !assignment_distribution_uuids.is_empty() {
-        println!("\n🔍 Found {} distribution(s) linked to assignments:", assignment_distribution_uuids.len());
+        println!(
+            "\n🔍 Found {} distribution(s) linked to assignments:",
+            assignment_distribution_uuids.len()
+        );
         for uuid in &assignment_distribution_uuids {
             println!("  - {}", uuid);
         }
@@ -170,7 +188,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for distribution_uuid in all_distribution_uuids {
         print!("  Cancelling {}... ", distribution_uuid);
 
-        match client.cancel_distribution(asset_uuid, &distribution_uuid).await {
+        match client
+            .cancel_distribution(asset_uuid, &distribution_uuid)
+            .await
+        {
             Ok(()) => {
                 println!("✅ Success");
                 cancelled_count += 1;
@@ -192,14 +213,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 1. Linked to distributions (distribution_uuid is Some)
         // 2. Ready for distribution but not yet distributed
         // 3. Not distributed (covers test assignments)
-        let should_delete = assignment.distribution_uuid.is_some() ||
-                           (assignment.ready_for_distribution && !assignment.is_distributed) ||
-                           !assignment.is_distributed;
+        let should_delete = assignment.distribution_uuid.is_some()
+            || (assignment.ready_for_distribution && !assignment.is_distributed)
+            || !assignment.is_distributed;
 
         if should_delete {
             print!("  Deleting assignment {}... ", assignment.id);
 
-            match client.delete_asset_assignment(asset_uuid, &assignment.id.to_string()).await {
+            match client
+                .delete_asset_assignment(asset_uuid, &assignment.id.to_string())
+                .await
+            {
                 Ok(()) => {
                     println!("✅ Success");
                     assignments_deleted += 1;
@@ -210,7 +234,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         } else {
-            println!("  Skipping assignment {} (already distributed and not linked)", assignment.id);
+            println!(
+                "  Skipping assignment {} (already distributed and not linked)",
+                assignment.id
+            );
         }
     }
 
@@ -222,9 +249,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("  ✅ Assignments deleted: {}", assignments_deleted);
     if assignment_delete_failed > 0 {
-        println!("  ❌ Assignment deletions failed: {}", assignment_delete_failed);
+        println!(
+            "  ❌ Assignment deletions failed: {}",
+            assignment_delete_failed
+        );
     }
-    println!("  📊 Total operations: {}", cancelled_count + failed_count + assignments_deleted + assignment_delete_failed);
+    println!(
+        "  📊 Total operations: {}",
+        cancelled_count + failed_count + assignments_deleted + assignment_delete_failed
+    );
 
     // Verify the cleanup worked by checking again
     if cancelled_count > 0 || assignments_deleted > 0 {
@@ -244,19 +277,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!("\n⚠️  Cleanup incomplete:");
             if !final_distributions.is_empty() {
-                println!("   - {} distributions still exist", final_distributions.len());
+                println!(
+                    "   - {} distributions still exist",
+                    final_distributions.len()
+                );
                 for dist in &final_distributions {
-                    println!("     • {} ({})", dist.distribution_uuid,
+                    println!(
+                        "     • {} ({})",
+                        dist.distribution_uuid,
                         match dist.distribution_status {
                             Status::Unconfirmed => "UNCONFIRMED",
                             Status::Confirmed => "CONFIRMED",
-                        });
+                        }
+                    );
                 }
             }
             if !final_assignments.is_empty() {
                 println!("   - {} assignments still exist", final_assignments.len());
                 for assignment in &final_assignments {
-                    println!("     • ID {} - User {} - Amount {} - Ready: {} - Distributed: {}",
+                    println!(
+                        "     • ID {} - User {} - Amount {} - Ready: {} - Distributed: {}",
                         assignment.id,
                         assignment.registered_user,
                         assignment.amount,
@@ -278,7 +318,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Analyze UTXOs and outputs for a specific asset to diagnose distribution issues
-async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn analyze_asset_utxos(
+    client: &ApiClient,
+    asset_uuid: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔍 UTXO Analysis for Asset: {}", asset_uuid);
     println!("{}", "=".repeat(80));
 
@@ -299,7 +342,9 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
         }
         Err(e) => {
             println!("❌ Failed to get asset details: {}", e);
-            println!("   This asset may not be registered in AMP or the asset UUID may be incorrect.");
+            println!(
+                "   This asset may not be registered in AMP or the asset UUID may be incorrect."
+            );
             println!("   Cannot proceed with Elements RPC analysis without asset_id.");
             return Ok(());
         }
@@ -311,7 +356,8 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
         Ok(assignments) => {
             println!("✅ Found {} assignments", assignments.len());
             for (i, assignment) in assignments.iter().enumerate() {
-                println!("   {}. ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
+                println!(
+                    "   {}. ID: {} - User: {} - Amount: {} - Ready: {} - Distributed: {}",
                     i + 1,
                     assignment.id,
                     assignment.registered_user,
@@ -340,7 +386,8 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
                     Status::Unconfirmed => "🟡 UNCONFIRMED",
                     Status::Confirmed => "🟢 CONFIRMED",
                 };
-                println!("   {}. {} - {} (Transactions: {})",
+                println!(
+                    "   {}. {} - {} (Transactions: {})",
                     i + 1,
                     distribution.distribution_uuid,
                     status_str,
@@ -349,7 +396,12 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
 
                 // Show transaction details
                 for (j, tx) in distribution.transactions.iter().enumerate() {
-                    println!("      Tx {}: {} (Status: {:?})", j + 1, tx.txid, tx.transaction_status);
+                    println!(
+                        "      Tx {}: {} (Status: {:?})",
+                        j + 1,
+                        tx.txid,
+                        tx.transaction_status
+                    );
                 }
             }
         }
@@ -368,8 +420,12 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
                 println!("   No balance entries found");
             } else {
                 for (i, entry) in balance_entries.iter().enumerate() {
-                    println!("   Entry {}: Asset {} - Balance: {}",
-                        i + 1, entry.asset_id, entry.balance);
+                    println!(
+                        "   Entry {}: Asset {} - Balance: {}",
+                        i + 1,
+                        entry.asset_id,
+                        entry.balance
+                    );
                 }
             }
         }
@@ -386,7 +442,7 @@ async fn analyze_asset_utxos(client: &ApiClient, asset_uuid: &str) -> Result<(),
     if let (Ok(rpc_url), Ok(rpc_user), Ok(_rpc_password)) = (
         std::env::var("ELEMENTS_RPC_URL"),
         std::env::var("ELEMENTS_RPC_USER"),
-        std::env::var("ELEMENTS_RPC_PASSWORD")
+        std::env::var("ELEMENTS_RPC_PASSWORD"),
     ) {
         println!("✅ Elements RPC configured:");
         println!("   URL: {}", rpc_url);
@@ -446,7 +502,10 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
         let result: Value = response.json().await?;
         if let Some(result_data) = result.get("result") {
             if let Some(blocks) = result_data.get("blocks") {
-                println!("✅ Elements RPC connected - Current block height: {}", blocks);
+                println!(
+                    "✅ Elements RPC connected - Current block height: {}",
+                    blocks
+                );
             }
         }
     } else {
@@ -485,10 +544,16 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
                         utxo.get("txid").and_then(|v| v.as_str()),
                         utxo.get("vout").and_then(|v| v.as_u64()),
                         utxo.get("amount").and_then(|v| v.as_f64()),
-                        utxo.get("address").and_then(|v| v.as_str())
+                        utxo.get("address").and_then(|v| v.as_str()),
                     ) {
-                        println!("   {}. TXID: {}:{} - Amount: {} - Address: {}",
-                            i + 1, txid, vout, amount, address);
+                        println!(
+                            "   {}. TXID: {}:{} - Amount: {} - Address: {}",
+                            i + 1,
+                            txid,
+                            vout,
+                            amount,
+                            address
+                        );
                         total_amount += amount;
                     }
                 }

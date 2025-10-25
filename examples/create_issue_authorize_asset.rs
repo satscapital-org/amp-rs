@@ -57,7 +57,9 @@ async fn main() -> Result<(), AmpError> {
         .map_err(|e| AmpError::rpc(format!("Failed to create Elements RPC client: {}", e)))?;
 
     // Test Elements connectivity
-    elements_rpc.get_network_info().await
+    elements_rpc
+        .get_network_info()
+        .await
         .map_err(|e| AmpError::rpc(format!("Failed to connect to Elements node: {}", e)))?;
 
     println!("✅ Connected to Elements node");
@@ -77,12 +79,7 @@ async fn main() -> Result<(), AmpError> {
     let confidential_address = elements_rpc
         .get_confidential_address(WALLET_NAME, &unconfidential_address)
         .await
-        .map_err(|e| {
-            AmpError::rpc(format!(
-                "Failed to derive confidential address: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| AmpError::rpc(format!("Failed to derive confidential address: {}", e)))?;
 
     println!("✅ Successfully derived address pair:");
     println!("   Unconfidential: {}", unconfidential_address);
@@ -92,7 +89,8 @@ async fn main() -> Result<(), AmpError> {
     println!("\n2️⃣  Issuing asset with maximum circulation");
     println!("=========================================");
 
-    let client = ApiClient::new().await
+    let client = ApiClient::new()
+        .await
         .map_err(|e| AmpError::api(format!("Failed to create AMP API client: {}", e)))?;
 
     // Create unique asset name with timestamp
@@ -118,19 +116,17 @@ async fn main() -> Result<(), AmpError> {
     println!("📋 Asset details:");
     println!("   Name: {}", asset_name);
     println!("   Ticker: {}", asset_ticker);
-    println!("   Amount: {} (21 million with 8 decimals)", MAX_ASSET_AMOUNT);
+    println!(
+        "   Amount: {} (21 million with 8 decimals)",
+        MAX_ASSET_AMOUNT
+    );
     println!("   Destination: {}", confidential_address);
     println!("   Transfer Restricted: false");
 
     let issuance_response = client
         .issue_asset(&issuance_request)
         .await
-        .map_err(|e| {
-            AmpError::api(format!(
-                "Asset issuance was refused by AMP API: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| AmpError::api(format!("Asset issuance was refused by AMP API: {}", e)))?;
 
     println!("✅ Asset issuance request accepted!");
     println!("   Asset UUID: {}", issuance_response.asset_uuid);
@@ -145,8 +141,15 @@ async fn main() -> Result<(), AmpError> {
     let txid = &issuance_response.txid;
     let start_time = Instant::now();
 
-    println!("🕐 Checking transaction {} every {} seconds...", txid, CONFIRMATION_CHECK_INTERVAL.as_secs());
-    println!("⏰ Timeout after {} seconds", CONFIRMATION_TIMEOUT.as_secs());
+    println!(
+        "🕐 Checking transaction {} every {} seconds...",
+        txid,
+        CONFIRMATION_CHECK_INTERVAL.as_secs()
+    );
+    println!(
+        "⏰ Timeout after {} seconds",
+        CONFIRMATION_TIMEOUT.as_secs()
+    );
 
     loop {
         if start_time.elapsed() > CONFIRMATION_TIMEOUT {
@@ -159,8 +162,11 @@ async fn main() -> Result<(), AmpError> {
 
         match elements_rpc.get_transaction(txid).await {
             Ok(tx_detail) => {
-                println!("📊 Transaction found with {} confirmations", tx_detail.confirmations);
-                
+                println!(
+                    "📊 Transaction found with {} confirmations",
+                    tx_detail.confirmations
+                );
+
                 if tx_detail.confirmations >= 3 {
                     println!("✅ Issuance transaction confirmed with sufficient confirmations!");
                     println!("   Confirmations: {}", tx_detail.confirmations);
@@ -169,7 +175,10 @@ async fn main() -> Result<(), AmpError> {
                     }
                     break;
                 } else {
-                    println!("⏳ Transaction found but needs more confirmations ({}/3 confirmations)", tx_detail.confirmations);
+                    println!(
+                        "⏳ Transaction found but needs more confirmations ({}/3 confirmations)",
+                        tx_detail.confirmations
+                    );
                 }
             }
             Err(e) => {
@@ -178,7 +187,10 @@ async fn main() -> Result<(), AmpError> {
             }
         }
 
-        println!("   Waiting {} seconds before next check...", CONFIRMATION_CHECK_INTERVAL.as_secs());
+        println!(
+            "   Waiting {} seconds before next check...",
+            CONFIRMATION_CHECK_INTERVAL.as_secs()
+        );
         sleep(CONFIRMATION_CHECK_INTERVAL).await;
     }
 
@@ -187,7 +199,7 @@ async fn main() -> Result<(), AmpError> {
     println!("================================================");
 
     let treasury_addresses = vec![confidential_address.clone()];
-    
+
     client
         .add_asset_treasury_addresses(&issuance_response.asset_uuid, &treasury_addresses)
         .await
@@ -205,14 +217,12 @@ async fn main() -> Result<(), AmpError> {
     let current_treasury_addresses = client
         .get_asset_treasury_addresses(&issuance_response.asset_uuid)
         .await
-        .map_err(|e| {
-            AmpError::api(format!(
-                "Failed to verify treasury addresses: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| AmpError::api(format!("Failed to verify treasury addresses: {}", e)))?;
 
-    println!("📋 Current treasury addresses: {:?}", current_treasury_addresses);
+    println!(
+        "📋 Current treasury addresses: {:?}",
+        current_treasury_addresses
+    );
 
     // Step 5: Authorize asset for distribution
     println!("\n5️⃣  Authorizing asset for distribution");
@@ -221,12 +231,7 @@ async fn main() -> Result<(), AmpError> {
     let authorized_asset = client
         .register_asset_authorized(&issuance_response.asset_uuid)
         .await
-        .map_err(|e| {
-            AmpError::api(format!(
-                "Failed to authorize asset for distribution: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| AmpError::api(format!("Failed to authorize asset for distribution: {}", e)))?;
 
     println!("✅ Asset successfully authorized for distribution!");
     println!("   Is Authorized: {}", authorized_asset.is_authorized);
@@ -243,11 +248,20 @@ async fn main() -> Result<(), AmpError> {
     println!("   Name: {}", asset_name);
     println!("   Ticker: {}", asset_ticker);
     println!("   Amount Issued: {} satoshis", MAX_ASSET_AMOUNT);
-    println!("   Treasury Address (Confidential): {}", confidential_address);
-    println!("   Treasury Address (Unconfidential): {}", unconfidential_address);
+    println!(
+        "   Treasury Address (Confidential): {}",
+        confidential_address
+    );
+    println!(
+        "   Treasury Address (Unconfidential): {}",
+        unconfidential_address
+    );
     println!("   Transaction ID: {}", issuance_response.txid);
     println!("   Is Authorized: {}", authorized_asset.is_authorized);
-    println!("   Transfer Restricted: {}", authorized_asset.transfer_restricted);
+    println!(
+        "   Transfer Restricted: {}",
+        authorized_asset.transfer_restricted
+    );
     println!();
     println!("🚀 This asset is now ready for:");
     println!("   • Distribution tests");

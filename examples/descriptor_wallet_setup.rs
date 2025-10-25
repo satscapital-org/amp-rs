@@ -102,9 +102,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up the descriptor wallet
     let wallet_result = async {
         elements_rpc.create_descriptor_wallet(&wallet_name).await?;
-        elements_rpc.import_descriptor(&wallet_name, &descriptor).await
-    }.await;
-    
+        elements_rpc
+            .import_descriptor(&wallet_name, &descriptor)
+            .await
+    }
+    .await;
+
     match wallet_result {
         Ok(()) => {
             println!("✅ Successfully set up descriptor wallet");
@@ -115,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("❌ Failed to set up descriptor wallet: {}", e);
-            
+
             // Provide manual instructions
             println!("\n🔧 Manual Setup Instructions");
             println!("============================");
@@ -125,7 +128,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   elements-cli createwallet \"{}\" true", wallet_name);
             println!();
             println!("2. Import descriptor:");
-            println!("   elements-cli -rpcwallet={} importdescriptors '[", wallet_name);
+            println!(
+                "   elements-cli -rpcwallet={} importdescriptors '[",
+                wallet_name
+            );
             println!("     {{");
             println!("       \"desc\": \"{}\",", descriptor);
             println!("       \"timestamp\": \"now\",");
@@ -136,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!();
             println!("3. Verify import:");
             println!("   elements-cli -rpcwallet={} listdescriptors", wallet_name);
-            
+
             return Err(e.into());
         }
     }
@@ -154,8 +160,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("💡 Next steps:");
     println!("  - Send test funds to: {}", treasury_address);
-    println!("  - Check wallet balance: elements-cli -rpcwallet={} getbalance", wallet_name);
-    println!("  - List UTXOs: elements-cli -rpcwallet={} listunspent", wallet_name);
+    println!(
+        "  - Check wallet balance: elements-cli -rpcwallet={} getbalance",
+        wallet_name
+    );
+    println!(
+        "  - List UTXOs: elements-cli -rpcwallet={} listunspent",
+        wallet_name
+    );
 
     Ok(())
 }

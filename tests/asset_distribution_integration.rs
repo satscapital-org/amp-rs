@@ -166,7 +166,10 @@ async fn setup_test_user(
 
     // Debug: Check if address is empty
     if user_address.is_empty() {
-        println!("   ⚠️  Warning: GAID address API returned empty address for GAID {}", gaid);
+        println!(
+            "   ⚠️  Warning: GAID address API returned empty address for GAID {}",
+            gaid
+        );
         println!("   This may indicate the GAID doesn't have an associated address in the system");
     } else {
         println!("   ✅ Retrieved GAID address: {}", user_address);
@@ -183,7 +186,10 @@ async fn setup_test_user(
         }
         Err(_) => {
             // User might not exist, or the API call failed
-            println!("   ⚠️  Could not find existing user with GAID {}, attempting to create", gaid);
+            println!(
+                "   ⚠️  Could not find existing user with GAID {}, attempting to create",
+                gaid
+            );
         }
     }
 
@@ -206,7 +212,10 @@ async fn setup_test_user(
         Err(e) => {
             // If creation failed because user already exists, try to find the existing user
             if e.to_string().contains("already created") {
-                println!("   ⚠️  User with GAID {} already exists, searching for existing user", gaid);
+                println!(
+                    "   ⚠️  User with GAID {} already exists, searching for existing user",
+                    gaid
+                );
 
                 // Try to find the user by searching all users
                 match client.get_registered_users().await {
@@ -220,11 +229,17 @@ async fn setup_test_user(
                                 return Ok((user.id, user.name, user_address));
                             }
                         }
-                        Err(format!("User with GAID {} exists but could not be found in user list", gaid).into())
+                        Err(format!(
+                            "User with GAID {} exists but could not be found in user list",
+                            gaid
+                        )
+                        .into())
                     }
-                    Err(list_error) => {
-                        Err(format!("Failed to list users to find existing user: {}", list_error).into())
-                    }
+                    Err(list_error) => Err(format!(
+                        "Failed to list users to find existing user: {}",
+                        list_error
+                    )
+                    .into()),
                 }
             } else {
                 Err(e.into())
@@ -307,18 +322,29 @@ async fn setup_asset_assignments_with_retry(
     let mut retry_count = 0;
 
     loop {
-        match client.create_asset_assignments(asset_uuid, &assignment_requests).await {
+        match client
+            .create_asset_assignments(asset_uuid, &assignment_requests)
+            .await
+        {
             Ok(created_assignments) => {
                 if retry_count > 0 {
-                    println!("✅ Asset assignments created successfully after {} retries", retry_count);
+                    println!(
+                        "✅ Asset assignments created successfully after {} retries",
+                        retry_count
+                    );
                 }
                 return Ok(created_assignments.iter().map(|a| a.id).collect());
             }
             Err(e) => {
                 let error_msg = e.to_string();
-                if error_msg.contains("not enough in the treasury balance") && retry_count < max_retries {
+                if error_msg.contains("not enough in the treasury balance")
+                    && retry_count < max_retries
+                {
                     retry_count += 1;
-                    println!("⚠️  Treasury balance not ready (attempt {}/{}): {}", retry_count, max_retries, error_msg);
+                    println!(
+                        "⚠️  Treasury balance not ready (attempt {}/{}): {}",
+                        retry_count, max_retries, error_msg
+                    );
                     println!("   Waiting 60 seconds before retry...");
                     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                     continue;
@@ -352,7 +378,8 @@ async fn setup_elements_first_wallet(
         }
         Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
+            if error_msg.contains("already exists") || error_msg.contains("Database already exists")
+            {
                 println!("   ✅ Wallet '{}' already exists, proceeding", wallet_name);
             } else {
                 return Err(format!("Failed to create Elements wallet: {}", e).into());
@@ -362,48 +389,73 @@ async fn setup_elements_first_wallet(
 
     // Step 2: Generate new address in Elements (use bech32 for native segwit)
     println!("   🏠 Generating new address in Elements");
-    let unconfidential_address = elements_rpc.get_new_address(wallet_name, Some("bech32")).await
+    let unconfidential_address = elements_rpc
+        .get_new_address(wallet_name, Some("bech32"))
+        .await
         .map_err(|e| format!("Failed to generate address in Elements: {}", e))?;
 
-    println!("   ✅ Elements generated unconfidential address: {}", unconfidential_address);
+    println!(
+        "   ✅ Elements generated unconfidential address: {}",
+        unconfidential_address
+    );
 
     // Step 2b: Get the confidential version of the address for asset issuance
     println!("   🔐 Getting confidential version of address");
-    let confidential_address = elements_rpc.get_confidential_address(wallet_name, &unconfidential_address).await
+    let confidential_address = elements_rpc
+        .get_confidential_address(wallet_name, &unconfidential_address)
+        .await
         .map_err(|e| format!("Failed to get confidential address: {}", e))?;
 
-    println!("   ✅ Elements generated confidential address: {}", confidential_address);
+    println!(
+        "   ✅ Elements generated confidential address: {}",
+        confidential_address
+    );
 
     // Step 3: Export private key from Elements (use unconfidential address)
     println!("   🔑 Exporting private key from Elements");
-    let private_key_wif = elements_rpc.dump_private_key(wallet_name, &unconfidential_address).await
+    let private_key_wif = elements_rpc
+        .dump_private_key(wallet_name, &unconfidential_address)
+        .await
         .map_err(|e| format!("Failed to export private key from Elements: {}", e))?;
 
     println!("   ✅ Private key exported from Elements");
 
     // Step 4: Create LWK signer from Elements private key
     println!("   🔐 Creating LWK signer from Elements private key");
-    let lwk_signer = LwkSoftwareSigner::from_elements_private_key(&private_key_wif)
-        .map_err(|e| format!("Failed to create LWK signer from Elements private key: {}", e))?;
+    let lwk_signer =
+        LwkSoftwareSigner::from_elements_private_key(&private_key_wif).map_err(|e| {
+            format!(
+                "Failed to create LWK signer from Elements private key: {}",
+                e
+            )
+        })?;
 
     println!("   ✅ LWK signer created from Elements private key");
 
     // Step 5: Verify address compatibility (use unconfidential address for LWK verification)
     println!("   🔍 Verifying address compatibility between Elements and LWK");
-    let lwk_address = lwk_signer.verify_elements_address(&unconfidential_address)
+    let lwk_address = lwk_signer
+        .verify_elements_address(&unconfidential_address)
         .map_err(|e| format!("Address verification failed: {}", e))?;
 
     if lwk_address == unconfidential_address {
-        println!("   ✅ Address compatibility verified: {}", unconfidential_address);
+        println!(
+            "   ✅ Address compatibility verified: {}",
+            unconfidential_address
+        );
     } else {
         return Err(format!(
             "Address mismatch: Elements={}, LWK={}",
             unconfidential_address, lwk_address
-        ).into());
+        )
+        .into());
     }
 
     println!("   🎯 Elements-first wallet setup complete!");
-    println!("      - Elements can see all transactions to: {}", confidential_address);
+    println!(
+        "      - Elements can see all transactions to: {}",
+        confidential_address
+    );
     println!("      - LWK can sign transactions using the imported private key");
     println!("      - Confidential address will be used for asset issuance");
     println!("      - No descriptor import or blinding key compatibility issues");
@@ -439,8 +491,12 @@ async fn setup_elements_wallet_with_mnemonic(
         }
         Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
-                println!("   ✅ Wallet '{}' already exists, proceeding with descriptor import", wallet_name);
+            if error_msg.contains("already exists") || error_msg.contains("Database already exists")
+            {
+                println!(
+                    "   ✅ Wallet '{}' already exists, proceeding with descriptor import",
+                    wallet_name
+                );
             } else {
                 return Err(e.into());
             }
@@ -448,9 +504,14 @@ async fn setup_elements_wallet_with_mnemonic(
     }
 
     // Import the descriptor
-    elements_rpc.import_descriptor(wallet_name, &descriptor).await?;
+    elements_rpc
+        .import_descriptor(wallet_name, &descriptor)
+        .await?;
 
-    println!("   ✅ Elements wallet '{}' configured with descriptor", wallet_name);
+    println!(
+        "   ✅ Elements wallet '{}' configured with descriptor",
+        wallet_name
+    );
     println!("   🔍 The wallet can now scan for transactions involving mnemonic-derived addresses");
     println!("   🔐 Includes blinding keys for confidential transactions");
 
@@ -731,7 +792,10 @@ async fn test_descriptor_wallet_setup() -> Result<(), Box<dyn std::error::Error>
             println!("🎯 Descriptor wallet setup test completed successfully!");
         }
         Err(e) => {
-            println!("⚠️  Wallet setup failed (may be expected in some environments): {}", e);
+            println!(
+                "⚠️  Wallet setup failed (may be expected in some environments): {}",
+                e
+            );
 
             // Check for common error conditions that are expected
             let error_msg = e.to_string();
@@ -739,8 +803,11 @@ async fn test_descriptor_wallet_setup() -> Result<(), Box<dyn std::error::Error>
                 || error_msg.contains("not supported")
                 || error_msg.contains("500 Internal Server Error")
                 || error_msg.contains("Invalid descriptor")
-                || error_msg.contains("importdescriptors") {
-                println!("   This is expected if the Elements node doesn't support descriptor wallets");
+                || error_msg.contains("importdescriptors")
+            {
+                println!(
+                    "   This is expected if the Elements node doesn't support descriptor wallets"
+                );
                 println!("   or the specific descriptor format used by LWK");
 
                 // Provide manual instructions
@@ -748,7 +815,10 @@ async fn test_descriptor_wallet_setup() -> Result<(), Box<dyn std::error::Error>
                 println!("\n🔧 Manual Setup Instructions:");
                 println!("   If your Elements node supports descriptor wallets, try:");
                 println!("   1. elements-cli createwallet \"{}\" true", wallet_name);
-                println!("   2. elements-cli -rpcwallet={} importdescriptors '[", wallet_name);
+                println!(
+                    "   2. elements-cli -rpcwallet={} importdescriptors '[",
+                    wallet_name
+                );
                 println!("        {{");
                 println!("          \"desc\": \"{}\",", descriptor);
                 println!("          \"timestamp\": \"now\",");
@@ -772,7 +842,9 @@ async fn test_descriptor_wallet_setup() -> Result<(), Box<dyn std::error::Error>
     println!("   ✅ Descriptors imported for transaction scanning");
     println!();
     println!("🚀 The Elements wallet can now detect transactions involving addresses");
-    println!("   derived from the mnemonic, including blinding keys for confidential transactions!");
+    println!(
+        "   derived from the mnemonic, including blinding keys for confidential transactions!"
+    );
 
     Ok(())
 }
@@ -1175,31 +1247,56 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
 
     // Verify that we can query UTXOs from the existing funded wallet
     println!("🔍 Verifying UTXO availability in existing funded wallet");
-    match elements_rpc.list_unspent_for_wallet(&wallet_name, None).await {
+    match elements_rpc
+        .list_unspent_for_wallet(&wallet_name, None)
+        .await
+    {
         Ok(wallet_utxos) => {
-            println!("   ✅ Successfully queried {} UTXOs from Elements wallet: {}", wallet_utxos.len(), wallet_name);
+            println!(
+                "   ✅ Successfully queried {} UTXOs from Elements wallet: {}",
+                wallet_utxos.len(),
+                wallet_name
+            );
 
             // Check if any UTXOs are for our treasury address
-            let treasury_utxos: Vec<_> = wallet_utxos.iter()
+            let treasury_utxos: Vec<_> = wallet_utxos
+                .iter()
                 .filter(|utxo| utxo.address == unconfidential_address)
                 .collect();
 
             if !treasury_utxos.is_empty() {
-                println!("   ✅ Found {} UTXOs for treasury address (funding available)", treasury_utxos.len());
+                println!(
+                    "   ✅ Found {} UTXOs for treasury address (funding available)",
+                    treasury_utxos.len()
+                );
                 for (i, utxo) in treasury_utxos.iter().enumerate() {
-                    println!("     UTXO {}: {} {} (spendable: {})",
-                        i + 1, utxo.amount, utxo.asset, utxo.spendable);
+                    println!(
+                        "     UTXO {}: {} {} (spendable: {})",
+                        i + 1,
+                        utxo.amount,
+                        utxo.asset,
+                        utxo.spendable
+                    );
                 }
             } else {
                 println!("   ⚠️  No UTXOs found for treasury address - checking all UTXOs:");
                 for (i, utxo) in wallet_utxos.iter().enumerate() {
-                    println!("     UTXO {}: address={}, amount={}, asset={}, spendable={}",
-                        i + 1, utxo.address, utxo.amount, utxo.asset, utxo.spendable);
+                    println!(
+                        "     UTXO {}: address={}, amount={}, asset={}, spendable={}",
+                        i + 1,
+                        utxo.address,
+                        utxo.amount,
+                        utxo.asset,
+                        utxo.spendable
+                    );
                 }
             }
         }
         Err(e) => {
-            println!("   ⚠️  Failed to query UTXOs from wallet {}: {}", wallet_name, e);
+            println!(
+                "   ⚠️  Failed to query UTXOs from wallet {}: {}",
+                wallet_name, e
+            );
             println!("   This may indicate Elements node connectivity issues");
         }
     }
@@ -1217,13 +1314,19 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
 
     // Ensure the treasury address is added to the existing asset
     println!("🔧 Ensuring treasury address is configured for asset");
-    match api_client.add_asset_treasury_addresses(&asset_uuid, &vec![treasury_address.clone()]).await {
+    match api_client
+        .add_asset_treasury_addresses(&asset_uuid, &vec![treasury_address.clone()])
+        .await
+    {
         Ok(_) => {
             println!("✅ Treasury address added to asset (or was already present)");
         }
         Err(e) => {
             // This might fail if the address is already added, which is fine
-            println!("⚠️  Treasury address addition result: {} (may already exist)", e);
+            println!(
+                "⚠️  Treasury address addition result: {} (may already exist)",
+                e
+            );
         }
     }
 
@@ -1233,7 +1336,10 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
         Ok(addresses) => {
             println!("   - Treasury addresses: {:?}", addresses);
             if !addresses.contains(&treasury_address) {
-                println!("   ⚠️  Treasury address {} not found in asset, but proceeding anyway", treasury_address);
+                println!(
+                    "   ⚠️  Treasury address {} not found in asset, but proceeding anyway",
+                    treasury_address
+                );
             } else {
                 println!("✅ Treasury address verified in asset");
             }
@@ -1246,41 +1352,70 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
 
     // Verify UTXOs are available in the existing funded wallet
     println!("🔍 Verifying UTXOs are available in existing funded wallet");
-    match elements_rpc.list_unspent_for_wallet(&wallet_name, None).await {
+    match elements_rpc
+        .list_unspent_for_wallet(&wallet_name, None)
+        .await
+    {
         Ok(wallet_utxos) => {
-            println!("   ✅ Successfully queried {} UTXOs from Elements wallet: {}", wallet_utxos.len(), wallet_name);
+            println!(
+                "   ✅ Successfully queried {} UTXOs from Elements wallet: {}",
+                wallet_utxos.len(),
+                wallet_name
+            );
 
             // Show all UTXOs to understand what we have available
             println!("   🔍 Available UTXOs in wallet:");
             for (i, utxo) in wallet_utxos.iter().enumerate() {
-                println!("     UTXO {}: address={}, amount={}, asset={}, spendable={}",
-                    i + 1, utxo.address, utxo.amount, utxo.asset, utxo.spendable);
+                println!(
+                    "     UTXO {}: address={}, amount={}, asset={}, spendable={}",
+                    i + 1,
+                    utxo.address,
+                    utxo.amount,
+                    utxo.asset,
+                    utxo.spendable
+                );
             }
 
             // Check for L-BTC UTXOs (needed for fees)
-            let lbtc_utxos: Vec<_> = wallet_utxos.iter()
-                .filter(|utxo| utxo.asset == "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d" || utxo.asset.starts_with("5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"))
+            let lbtc_utxos: Vec<_> = wallet_utxos
+                .iter()
+                .filter(|utxo| {
+                    utxo.asset == "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
+                        || utxo.asset.starts_with(
+                            "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225",
+                        )
+                })
                 .collect();
 
             if !lbtc_utxos.is_empty() {
-                println!("   ✅ Found {} L-BTC UTXOs for transaction fees", lbtc_utxos.len());
+                println!(
+                    "   ✅ Found {} L-BTC UTXOs for transaction fees",
+                    lbtc_utxos.len()
+                );
             } else {
                 println!("   ⚠️  No L-BTC UTXOs found - may need funding for transaction fees");
             }
 
             // Check for existing asset UTXOs
-            let treasury_utxos: Vec<_> = wallet_utxos.iter()
+            let treasury_utxos: Vec<_> = wallet_utxos
+                .iter()
                 .filter(|utxo| utxo.address == unconfidential_address)
                 .collect();
 
             if !treasury_utxos.is_empty() {
-                println!("   ✅ Found {} UTXOs for treasury address", treasury_utxos.len());
+                println!(
+                    "   ✅ Found {} UTXOs for treasury address",
+                    treasury_utxos.len()
+                );
             } else {
                 println!("   ⚠️  No UTXOs found for treasury address - may need funding");
             }
         }
         Err(e) => {
-            println!("   ❌ Failed to query UTXOs from wallet {}: {}", wallet_name, e);
+            println!(
+                "   ❌ Failed to query UTXOs from wallet {}: {}",
+                wallet_name, e
+            );
             return Err(format!("Cannot verify UTXO availability: {}", e).into());
         }
     }
@@ -1307,7 +1442,7 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
 
     // Register test user
     // let test_gaid = "GAbzSbgCZ6M6WU85rseKTrfehPsjt"; // basic testing
-    let test_gaid = "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ";   // Greg's Phone
+    let test_gaid = "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ"; // Greg's Phone
     let (user_id, user_name, user_address) = setup_test_user(&api_client, test_gaid)
         .await
         .map_err(|e| format!("Failed to setup test user: {}", e))?;
@@ -1336,9 +1471,10 @@ async fn test_end_to_end_distribution_workflow() -> Result<(), Box<dyn std::erro
     println!("💰 Setting up initial asset assignments for distribution funding");
     println!("   - Assignment amount: {} satoshis", assignment_amount);
 
-    let assignment_ids = setup_asset_assignments_with_retry(&api_client, &asset_uuid, user_id, assignment_amount)
-        .await
-        .map_err(|e| format!("Failed to setup asset assignments: {}", e))?;
+    let assignment_ids =
+        setup_asset_assignments_with_retry(&api_client, &asset_uuid, user_id, assignment_amount)
+            .await
+            .map_err(|e| format!("Failed to setup asset assignments: {}", e))?;
 
     println!("✅ Asset assignments created");
     println!("   - Assignment IDs: {:?}", assignment_ids);
@@ -3078,7 +3214,9 @@ async fn test_fee_fix_with_existing_asset() -> Result<(), Box<dyn std::error::Er
     node_rpc.create_wallet(&wallet_name, false).await?;
 
     // Generate address and signer
-    let address = node_rpc.get_new_address(&wallet_name, Some("bech32")).await?;
+    let address = node_rpc
+        .get_new_address(&wallet_name, Some("bech32"))
+        .await?;
     let private_key = node_rpc.dump_private_key(&wallet_name, &address).await?;
     let signer = LwkSoftwareSigner::from_elements_private_key(&private_key)?;
 
@@ -3089,7 +3227,9 @@ async fn test_fee_fix_with_existing_asset() -> Result<(), Box<dyn std::error::Er
     println!("   - Address: {}", address);
 
     // Check if there are any UTXOs for this asset
-    let utxos = node_rpc.list_unspent_for_wallet(&wallet_name, Some(asset_id)).await?;
+    let utxos = node_rpc
+        .list_unspent_for_wallet(&wallet_name, Some(asset_id))
+        .await?;
     println!("   - UTXOs found: {}", utxos.len());
 
     if utxos.is_empty() {
@@ -3105,11 +3245,15 @@ async fn test_fee_fix_with_existing_asset() -> Result<(), Box<dyn std::error::Er
     // Create a minimal assignment
     let assignments = vec![amp_rs::model::AssetDistributionAssignment {
         user_id: "1352".to_string(), // Use existing test user
-        amount: 0.00000001, // 1 satoshi
-        address: "vjU7D4L6585envvv2Yf2ivk63d8dLihgZNzih3XAsYaUTzxYew6pVQecpgLj3PzRiWjJL3m8dADT5Fqp".to_string(),
+        amount: 0.00000001,          // 1 satoshi
+        address: "vjU7D4L6585envvv2Yf2ivk63d8dLihgZNzih3XAsYaUTzxYew6pVQecpgLj3PzRiWjJL3m8dADT5Fqp"
+            .to_string(),
     }];
 
-    match api_client.distribute_asset(asset_uuid, assignments, &node_rpc, &wallet_name, &signer).await {
+    match api_client
+        .distribute_asset(asset_uuid, assignments, &node_rpc, &wallet_name, &signer)
+        .await
+    {
         Ok(_result) => {
             println!("✅ Distribution successful!");
             println!("   - Fee fix is working correctly");
@@ -3169,12 +3313,20 @@ async fn test_distribution_with_existing_asset() -> Result<(), Box<dyn std::erro
 
     // Import the treasury address as watch-only to see UTXOs
     // Note: This won't allow spending, but will let us see if there are UTXOs
-    if let Err(e) = node_rpc.import_address(treasury_address, Some("treasury"), false).await {
-        println!("⚠️  Could not import treasury address (may already exist): {}", e);
+    if let Err(e) = node_rpc
+        .import_address(treasury_address, Some("treasury"), false)
+        .await
+    {
+        println!(
+            "⚠️  Could not import treasury address (may already exist): {}",
+            e
+        );
     }
 
     // Check for UTXOs
-    let utxos = node_rpc.list_unspent_for_wallet(&wallet_name, Some(asset_id)).await?;
+    let utxos = node_rpc
+        .list_unspent_for_wallet(&wallet_name, Some(asset_id))
+        .await?;
     println!("   - UTXOs found: {}", utxos.len());
 
     if utxos.is_empty() {

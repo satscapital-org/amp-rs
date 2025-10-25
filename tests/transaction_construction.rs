@@ -207,7 +207,9 @@ async fn test_utxo_selection_sufficient_funds_single_utxo() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test selecting UTXOs for 100.0 + 1.0 fee = 101.0 total
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0)
+        .await;
 
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
@@ -228,7 +230,9 @@ async fn test_utxo_selection_sufficient_funds_multiple_utxos() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test selecting UTXos for 120.0 + 1.0 fee = 121.0 total
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 120.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 120.0, 1.0)
+        .await;
 
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
@@ -256,7 +260,9 @@ async fn test_utxo_selection_insufficient_funds() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Try to select UTXOs for 100.0 + 1.0 fee = 101.0 total, but only have 18.0
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0)
+        .await;
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -278,7 +284,9 @@ async fn test_utxo_selection_no_spendable_utxos() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 50.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 50.0, 1.0)
+        .await;
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -297,7 +305,9 @@ async fn test_utxo_selection_exact_amount_needed() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Need exactly 101.0 (100.0 + 1.0 fee), have 51.0 + 50.0 = 101.0
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 100.0, 1.0)
+        .await;
 
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
@@ -317,7 +327,9 @@ async fn test_utxo_selection_algorithm_largest_first() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Need 120.0 + 1.0 fee = 121.0 total
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 120.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 120.0, 1.0)
+        .await;
 
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
@@ -845,7 +857,9 @@ async fn test_utxo_selection_edge_cases() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 100.0, 0.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 100.0, 0.0)
+        .await;
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
     assert_eq!(selected_utxos.len(), 1);
@@ -866,7 +880,9 @@ async fn test_utxo_selection_with_confirmations_filter() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.select_utxos_for_amount("test_wallet", asset_id, 75.0, 1.0).await;
+    let result = rpc
+        .select_utxos_for_amount("test_wallet", asset_id, 75.0, 1.0)
+        .await;
 
     assert!(result.is_ok());
     let (selected_utxos, total_amount) = result.unwrap();
@@ -1066,7 +1082,9 @@ async fn test_change_data_collection_success_with_multiple_outputs() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_data = result.unwrap();
@@ -1130,7 +1148,9 @@ async fn test_change_data_collection_no_change_outputs() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_data = result.unwrap();
@@ -1182,7 +1202,9 @@ async fn test_change_data_collection_filters_unspendable() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_data = result.unwrap();
@@ -1238,7 +1260,9 @@ async fn test_change_data_collection_filters_wrong_asset() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_data = result.unwrap();
@@ -1276,7 +1300,9 @@ async fn test_change_data_collection_rpc_error() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -1323,7 +1349,9 @@ async fn test_change_data_formatting_for_api() {
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-    let result = rpc.collect_change_data(asset_id, txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_data = result.unwrap();
@@ -1428,8 +1456,12 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914abc123def456789abc123def456789abc123de88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
-        amountblinder: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
-        assetblinder: Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+        amountblinder: Some(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        ),
+        assetblinder: Some(
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string(),
+        ),
     });
 
     // Add change outputs from the distribution transaction
@@ -1444,8 +1476,12 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914def456abc123789def456abc123789def456ab88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
-        amountblinder: Some("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string()),
-        assetblinder: Some("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string()),
+        amountblinder: Some(
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string(),
+        ),
+        assetblinder: Some(
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string(),
+        ),
     });
 
     all_utxos.push(Unspent {
@@ -1459,8 +1495,12 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914ghi789jkl012345ghi789jkl012345ghi789jk88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
-        amountblinder: Some("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string()),
-        assetblinder: Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string()),
+        amountblinder: Some(
+            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string(),
+        ),
+        assetblinder: Some(
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+        ),
     });
 
     // Add another UTXO from a different transaction
@@ -1475,8 +1515,12 @@ async fn test_collect_change_data_integration() {
         scriptpubkey: Some("76a914mno012pqr345678mno012pqr345678mno012pq88ac".to_string()),
         redeemscript: None,
         witnessscript: None,
-        amountblinder: Some("1010101010101010101010101010101010101010101010101010101010101010".to_string()),
-        assetblinder: Some("2020202020202020202020202020202020202020202020202020202020202020".to_string()),
+        amountblinder: Some(
+            "1010101010101010101010101010101010101010101010101010101010101010".to_string(),
+        ),
+        assetblinder: Some(
+            "2020202020202020202020202020202020202020202020202020202020202020".to_string(),
+        ),
     });
 
     // Create mock for listunspent RPC call
@@ -1485,7 +1529,9 @@ async fn test_collect_change_data_integration() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test collecting change data for the distribution transaction
-    let result = rpc.collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_utxos = result.unwrap();
@@ -1535,8 +1581,12 @@ async fn test_collect_change_data_no_change_scenario() {
             scriptpubkey: Some("76a914abc123def456789abc123def456789abc123de88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
-            amountblinder: Some("3030303030303030303030303030303030303030303030303030303030303030".to_string()),
-            assetblinder: Some("4040404040404040404040404040404040404040404040404040404040404040".to_string()),
+            amountblinder: Some(
+                "3030303030303030303030303030303030303030303030303030303030303030".to_string(),
+            ),
+            assetblinder: Some(
+                "4040404040404040404040404040404040404040404040404040404040404040".to_string(),
+            ),
         },
         Unspent {
             txid: "different_txid_456".to_string(),
@@ -1549,8 +1599,12 @@ async fn test_collect_change_data_no_change_scenario() {
             scriptpubkey: Some("76a914mno012pqr345678mno012pqr345678mno012pq88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
-            amountblinder: Some("5050505050505050505050505050505050505050505050505050505050505050".to_string()),
-            assetblinder: Some("6060606060606060606060606060606060606060606060606060606060606060".to_string()),
+            amountblinder: Some(
+                "5050505050505050505050505050505050505050505050505050505050505050".to_string(),
+            ),
+            assetblinder: Some(
+                "6060606060606060606060606060606060606060606060606060606060606060".to_string(),
+            ),
         },
     ];
 
@@ -1560,7 +1614,9 @@ async fn test_collect_change_data_no_change_scenario() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test collecting change data when no change outputs exist
-    let result = rpc.collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet").await;
+    let result = rpc
+        .collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet")
+        .await;
 
     assert!(result.is_ok());
     let change_utxos = result.unwrap();
@@ -1589,8 +1645,12 @@ async fn test_collect_change_data_workflow_integration() {
             scriptpubkey: Some("76a914change_address_script_hash88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
-            amountblinder: Some("7070707070707070707070707070707070707070707070707070707070707070".to_string()),
-            assetblinder: Some("8080808080808080808080808080808080808080808080808080808080808080".to_string()),
+            amountblinder: Some(
+                "7070707070707070707070707070707070707070707070707070707070707070".to_string(),
+            ),
+            assetblinder: Some(
+                "8080808080808080808080808080808080808080808080808080808080808080".to_string(),
+            ),
         },
         // Some other unrelated UTXOs
         Unspent {
@@ -1604,8 +1664,12 @@ async fn test_collect_change_data_workflow_integration() {
             scriptpubkey: Some("76a914other_address_script_hash88ac".to_string()),
             redeemscript: None,
             witnessscript: None,
-            amountblinder: Some("9090909090909090909090909090909090909090909090909090909090909090".to_string()),
-            assetblinder: Some("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0".to_string()),
+            amountblinder: Some(
+                "9090909090909090909090909090909090909090909090909090909090909090".to_string(),
+            ),
+            assetblinder: Some(
+                "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0".to_string(),
+            ),
         },
     ];
 
@@ -1615,7 +1679,9 @@ async fn test_collect_change_data_workflow_integration() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Collect change data for confirmation
-    let change_result = rpc.collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet").await;
+    let change_result = rpc
+        .collect_change_data(asset_id, distribution_txid, &rpc, "test_wallet")
+        .await;
 
     assert!(change_result.is_ok());
     let change_utxos = change_result.unwrap();

@@ -12,9 +12,9 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OnceCell, Semaphore};
 use tokio::time::sleep;
 
+use elements::encode::Decodable;
 use secrecy::ExposeSecret;
 use secrecy::Secret;
-use elements::encode::Decodable;
 use std::str::FromStr;
 
 use crate::model::{
@@ -906,7 +906,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -1143,7 +1146,7 @@ impl ElementsRpc {
             })?;
 
         tracing::debug!("Found {} unspent outputs", utxos.len());
-        
+
         // If we're looking for a specific asset and found no UTXOs, provide helpful context
         if utxos.is_empty() && asset_id.is_some() {
             tracing::warn!(
@@ -1154,7 +1157,7 @@ impl ElementsRpc {
                 asset_id.unwrap()
             );
         }
-        
+
         Ok(utxos)
     }
 
@@ -1182,8 +1185,16 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_unspent_for_wallet(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
-        tracing::debug!("Listing unspent outputs for wallet {} and asset: {:?}", wallet_name, asset_id);
+    pub async fn list_unspent_for_wallet(
+        &self,
+        wallet_name: &str,
+        asset_id: Option<&str>,
+    ) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!(
+            "Listing unspent outputs for wallet {} and asset: {:?}",
+            wallet_name,
+            asset_id
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -1202,7 +1213,7 @@ impl ElementsRpc {
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -1214,7 +1225,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -1234,50 +1248,86 @@ impl ElementsRpc {
         }
 
         let mut utxos = rpc_response.result.unwrap_or_default();
-        
+
         // Enrich UTXOs with scriptpubkey information if missing
         for utxo in &mut utxos {
             if utxo.scriptpubkey.is_none() {
-                tracing::debug!("UTXO {}:{} missing scriptpubkey, attempting to derive from address", utxo.txid, utxo.vout);
-                
+                tracing::debug!(
+                    "UTXO {}:{} missing scriptpubkey, attempting to derive from address",
+                    utxo.txid,
+                    utxo.vout
+                );
+
                 // Try to derive scriptpubkey from the address
                 if let Ok(address) = elements::Address::from_str(&utxo.address) {
                     let script_pubkey = address.script_pubkey();
                     utxo.scriptpubkey = Some(hex::encode(script_pubkey.as_bytes()));
-                    tracing::info!("Derived scriptpubkey for UTXO {}:{} from address {}: {}", 
-                        utxo.txid, utxo.vout, utxo.address, utxo.scriptpubkey.as_ref().unwrap());
+                    tracing::info!(
+                        "Derived scriptpubkey for UTXO {}:{} from address {}: {}",
+                        utxo.txid,
+                        utxo.vout,
+                        utxo.address,
+                        utxo.scriptpubkey.as_ref().unwrap()
+                    );
                 } else {
-                    tracing::error!("Failed to parse address {} for UTXO {}:{}", utxo.address, utxo.txid, utxo.vout);
-                    
+                    tracing::error!(
+                        "Failed to parse address {} for UTXO {}:{}",
+                        utxo.address,
+                        utxo.txid,
+                        utxo.vout
+                    );
+
                     // Fallback: try to get transaction details
                     match self.get_transaction(&utxo.txid).await {
                         Ok(tx_detail) => {
-                            tracing::debug!("Retrieved transaction details for {} as fallback", utxo.txid);
+                            tracing::debug!(
+                                "Retrieved transaction details for {} as fallback",
+                                utxo.txid
+                            );
                             // Parse the transaction hex to extract the scriptpubkey for this output
                             match hex::decode(&tx_detail.hex) {
                                 Ok(tx_bytes) => {
                                     match elements::Transaction::consensus_decode(&tx_bytes[..]) {
                                         Ok(tx) => {
-                                            if let Some(output) = tx.output.get(utxo.vout as usize) {
-                                                utxo.scriptpubkey = Some(hex::encode(output.script_pubkey.as_bytes()));
+                                            if let Some(output) = tx.output.get(utxo.vout as usize)
+                                            {
+                                                utxo.scriptpubkey = Some(hex::encode(
+                                                    output.script_pubkey.as_bytes(),
+                                                ));
                                                 tracing::info!("Enriched UTXO {}:{} with scriptpubkey from transaction: {}", 
                                                     utxo.txid, utxo.vout, utxo.scriptpubkey.as_ref().unwrap());
                                             } else {
-                                                tracing::error!("Output {} not found in transaction {}", utxo.vout, utxo.txid);
+                                                tracing::error!(
+                                                    "Output {} not found in transaction {}",
+                                                    utxo.vout,
+                                                    utxo.txid
+                                                );
                                             }
                                         }
                                         Err(e) => {
-                                            tracing::error!("Failed to decode transaction {}: {}", utxo.txid, e);
+                                            tracing::error!(
+                                                "Failed to decode transaction {}: {}",
+                                                utxo.txid,
+                                                e
+                                            );
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::error!("Failed to decode hex for transaction {}: {}", utxo.txid, e);
+                                    tracing::error!(
+                                        "Failed to decode hex for transaction {}: {}",
+                                        utxo.txid,
+                                        e
+                                    );
                                 }
                             }
                         }
                         Err(e) => {
-                            tracing::error!("Failed to get transaction details for {}: {}", utxo.txid, e);
+                            tracing::error!(
+                                "Failed to get transaction details for {}: {}",
+                                utxo.txid,
+                                e
+                            );
                         }
                     }
                 }
@@ -1285,9 +1335,13 @@ impl ElementsRpc {
                 tracing::debug!("UTXO {}:{} already has scriptpubkey", utxo.txid, utxo.vout);
             }
         }
-        
-        tracing::debug!("Found {} unspent outputs for wallet {}", utxos.len(), wallet_name);
-        
+
+        tracing::debug!(
+            "Found {} unspent outputs for wallet {}",
+            utxos.len(),
+            wallet_name
+        );
+
         // If we're looking for a specific asset and found no UTXOs, provide helpful context
         if utxos.is_empty() && asset_id.is_some() {
             tracing::warn!(
@@ -1295,10 +1349,11 @@ impl ElementsRpc {
                 1. The asset issuance transaction hasn't been confirmed yet\n\
                 2. The UTXOs have already been spent\n\
                 3. The wallet doesn't contain the expected addresses",
-                asset_id.unwrap(), wallet_name
+                asset_id.unwrap(),
+                wallet_name
             );
         }
-        
+
         Ok(utxos)
     }
 
@@ -1356,9 +1411,18 @@ impl ElementsRpc {
 
         // Debug: Log the exact parameters being sent to createrawtransaction
         tracing::error!("createrawtransaction parameters:");
-        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
-        tracing::error!("  outputs: {}", serde_json::to_string_pretty(&outputs).unwrap_or_default());
-        tracing::error!("  assets: {}", serde_json::to_string_pretty(&assets).unwrap_or_default());
+        tracing::error!(
+            "  inputs: {}",
+            serde_json::to_string_pretty(&inputs).unwrap_or_default()
+        );
+        tracing::error!(
+            "  outputs: {}",
+            serde_json::to_string_pretty(&outputs).unwrap_or_default()
+        );
+        tracing::error!(
+            "  assets: {}",
+            serde_json::to_string_pretty(&assets).unwrap_or_default()
+        );
 
         let raw_tx: String = self
             .rpc_call("createrawtransaction", params)
@@ -1394,14 +1458,10 @@ impl ElementsRpc {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
 
-        let params = serde_json::json!([
-            address,
-            label.unwrap_or(""),
-            rescan
-        ]);
+        let params = serde_json::json!([address, label.unwrap_or(""), rescan]);
 
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -1420,7 +1480,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -1442,7 +1505,11 @@ impl ElementsRpc {
             }
         }
 
-        tracing::debug!("Successfully imported address {} into wallet {}", address, wallet_name);
+        tracing::debug!(
+            "Successfully imported address {} into wallet {}",
+            address,
+            wallet_name
+        );
         Ok(())
     }
 
@@ -1462,6 +1529,7 @@ impl ElementsRpc {
     ///
     /// # Errors
     /// Returns an error if the RPC call fails
+    #[allow(dead_code)]
     async fn create_raw_transaction_with_wallet(
         &self,
         wallet_name: &str,
@@ -1482,15 +1550,15 @@ impl ElementsRpc {
         // Elements RPC createrawtransaction expects outputs as an array of objects
         // Each output object should contain both address, amount, and asset
         let mut outputs_array = Vec::new();
-        
+
         for (address, amount) in &outputs {
             let asset_id = assets.get(address).ok_or_else(|| {
                 AmpError::validation(format!("No asset ID found for address {}", address))
             })?;
-            
+
             // Convert amount to string with proper precision for Elements
             let amount_str = format!("{:.8}", amount);
-            
+
             outputs_array.push(serde_json::json!({
                 address.clone(): amount_str,
                 "asset": asset_id
@@ -1507,12 +1575,18 @@ impl ElementsRpc {
         // Debug: Log the exact parameters being sent to createrawtransaction
         tracing::error!("createrawtransaction parameters (wallet-specific, corrected format):");
         tracing::error!("  wallet: {}", wallet_name);
-        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
-        tracing::error!("  outputs_array: {}", serde_json::to_string_pretty(&outputs_array).unwrap_or_default());
+        tracing::error!(
+            "  inputs: {}",
+            serde_json::to_string_pretty(&inputs).unwrap_or_default()
+        );
+        tracing::error!(
+            "  outputs_array: {}",
+            serde_json::to_string_pretty(&outputs_array).unwrap_or_default()
+        );
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -1531,7 +1605,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -1550,11 +1627,15 @@ impl ElementsRpc {
             )));
         }
 
-        let raw_tx = rpc_response.result.ok_or_else(|| {
-            AmpError::rpc("No raw transaction returned".to_string())
-        })?;
+        let raw_tx = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("No raw transaction returned".to_string()))?;
 
-        tracing::debug!("Created raw transaction with wallet {}: {}", wallet_name, raw_tx);
+        tracing::debug!(
+            "Created raw transaction with wallet {}: {}",
+            wallet_name,
+            raw_tx
+        );
         Ok(raw_tx)
     }
 
@@ -1578,14 +1659,20 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn import_address(&self, address: &str, label: Option<&str>, rescan: bool) -> Result<(), AmpError> {
-        tracing::debug!("Importing address: {} with label: {:?}, rescan: {}", address, label, rescan);
-
-        let params = serde_json::json!([
+    pub async fn import_address(
+        &self,
+        address: &str,
+        label: Option<&str>,
+        rescan: bool,
+    ) -> Result<(), AmpError> {
+        tracing::debug!(
+            "Importing address: {} with label: {:?}, rescan: {}",
             address,
-            label.unwrap_or(""),
+            label,
             rescan
-        ]);
+        );
+
+        let params = serde_json::json!([address, label.unwrap_or(""), rescan]);
 
         // importaddress returns null on success
         let request = RpcRequest {
@@ -1646,13 +1733,18 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn create_wallet(&self, wallet_name: &str, disable_private_keys: bool) -> Result<(), AmpError> {
-        tracing::debug!("Creating wallet: {} with disable_private_keys: {}", wallet_name, disable_private_keys);
-
-        let params = serde_json::json!([
+    pub async fn create_wallet(
+        &self,
+        wallet_name: &str,
+        disable_private_keys: bool,
+    ) -> Result<(), AmpError> {
+        tracing::debug!(
+            "Creating wallet: {} with disable_private_keys: {}",
             wallet_name,
             disable_private_keys
-        ]);
+        );
+
+        let params = serde_json::json!([wallet_name, disable_private_keys]);
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -1739,16 +1831,26 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
-            tracing::debug!("Load wallet failed with status: {} - Body: {}", status, error_body);
-            
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
+            tracing::debug!(
+                "Load wallet failed with status: {} - Body: {}",
+                status,
+                error_body
+            );
+
             // For wallet loading, we want to be more permissive with errors
             // since the wallet might already be loaded
             if status == 500 && error_body.contains("already loaded") {
-                tracing::debug!("Wallet {} appears to already be loaded (500 error)", wallet_name);
+                tracing::debug!(
+                    "Wallet {} appears to already be loaded (500 error)",
+                    wallet_name
+                );
                 return Ok(());
             }
-            
+
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -1828,17 +1930,36 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn setup_watch_only_wallet(&self, wallet_name: &str, address: &str, label: Option<&str>) -> Result<(), AmpError> {
-        tracing::info!("Setting up watch-only wallet '{}' with address: {}", wallet_name, address);
+    pub async fn setup_watch_only_wallet(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        label: Option<&str>,
+    ) -> Result<(), AmpError> {
+        tracing::info!(
+            "Setting up watch-only wallet '{}' with address: {}",
+            wallet_name,
+            address
+        );
 
         // Try the full wallet setup approach first
-        match self.setup_wallet_with_address(wallet_name, address, label).await {
+        match self
+            .setup_wallet_with_address(wallet_name, address, label)
+            .await
+        {
             Ok(()) => {
-                tracing::info!("Successfully set up watch-only wallet '{}' with address: {}", wallet_name, address);
+                tracing::info!(
+                    "Successfully set up watch-only wallet '{}' with address: {}",
+                    wallet_name,
+                    address
+                );
                 return Ok(());
             }
             Err(e) => {
-                tracing::warn!("Full wallet setup failed: {}, trying direct address import", e);
+                tracing::warn!(
+                    "Full wallet setup failed: {}, trying direct address import",
+                    e
+                );
             }
         }
 
@@ -1849,7 +1970,10 @@ impl ElementsRpc {
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Both wallet setup and direct import failed for address: {}", address);
+                tracing::error!(
+                    "Both wallet setup and direct import failed for address: {}",
+                    address
+                );
                 Err(AmpError::rpc(format!(
                     "Failed to set up watch-only wallet or import address: wallet setup error: {}, direct import error: {}",
                     e, e
@@ -1859,7 +1983,12 @@ impl ElementsRpc {
     }
 
     /// Attempts to set up a wallet with address using the standard approach
-    async fn setup_wallet_with_address(&self, wallet_name: &str, address: &str, label: Option<&str>) -> Result<(), AmpError> {
+    async fn setup_wallet_with_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        label: Option<&str>,
+    ) -> Result<(), AmpError> {
         // Try to create the wallet (will ignore if it already exists)
         self.create_wallet(wallet_name, true).await?;
 
@@ -1873,9 +2002,13 @@ impl ElementsRpc {
     }
 
     /// Attempts to import an address directly without wallet operations
-    async fn import_address_direct(&self, address: &str, label: Option<&str>) -> Result<(), AmpError> {
+    async fn import_address_direct(
+        &self,
+        address: &str,
+        label: Option<&str>,
+    ) -> Result<(), AmpError> {
         tracing::debug!("Attempting direct address import for: {}", address);
-        
+
         // Try to import the address directly (this might work even if wallet operations fail)
         self.import_address(address, label, false).await
     }
@@ -1914,7 +2047,7 @@ impl ElementsRpc {
             .map_err(|e| {
                 tracing::error!("Raw transaction broadcast failed: {}", e);
                 tracing::error!("Transaction hex (first 200 chars): {}", &hex[..std::cmp::min(hex.len(), 200)]);
-                
+
                 // Provide specific guidance for blinding-related errors
                 if e.to_string().contains("bad-txns-in-ne-out") || e.to_string().contains("value in != value out") {
                     AmpError::rpc(format!(
@@ -2004,20 +2137,21 @@ impl ElementsRpc {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// 
+    ///
     /// let mut address_amounts = HashMap::new();
     /// address_amounts.insert("address1".to_string(), 100.0);
     /// address_amounts.insert("address2".to_string(), 50.0);
-    /// 
+    ///
     /// let mut asset_amounts = HashMap::new();
     /// asset_amounts.insert("address1".to_string(), "asset_id_hex".to_string());
     /// asset_amounts.insert("address2".to_string(), "asset_id_hex".to_string());
-    /// 
+    ///
     /// let txid = rpc.sendmany("wallet_name", address_amounts, asset_amounts, None, None, None, None, None, None).await?;
     /// println!("Transaction sent with ID: {}", txid);
     /// # Ok(())
     /// # }
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub async fn sendmany(
         &self,
         wallet_name: &str,
@@ -2050,20 +2184,20 @@ impl ElementsRpc {
         // 8. estimate_mode (fee estimation mode)
         // 9. assetlabel (map of address -> asset_id for multi-asset sends)
         let params = serde_json::json!([
-            "",                                                    // dummy (required for compatibility)
-            address_amounts,                                       // amounts map
-            min_conf.unwrap_or(1),                                // minconf
-            comment.unwrap_or(""),                                // comment
-            subtract_fee_from.unwrap_or_default(),                // subtractfeefrom
-            replaceable.unwrap_or(false),                         // replaceable
-            conf_target.unwrap_or(1),                             // conf_target
-            estimate_mode.unwrap_or("UNSET"),                     // estimate_mode
-            asset_amounts                                          // assetlabel (asset map)
+            "",                                    // dummy (required for compatibility)
+            address_amounts,                       // amounts map
+            min_conf.unwrap_or(1),                 // minconf
+            comment.unwrap_or(""),                 // comment
+            subtract_fee_from.unwrap_or_default(), // subtractfeefrom
+            replaceable.unwrap_or(false),          // replaceable
+            conf_target.unwrap_or(1),              // conf_target
+            estimate_mode.unwrap_or("UNSET"),      // estimate_mode
+            asset_amounts                          // assetlabel (asset map)
         ]);
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -2087,7 +2221,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "Sendmany RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -2291,7 +2428,9 @@ impl ElementsRpc {
         );
 
         // Get all UTXOs for this asset from the specified wallet
-        let mut utxos = self.list_unspent_for_wallet(wallet_name, Some(asset_id)).await?;
+        let mut utxos = self
+            .list_unspent_for_wallet(wallet_name, Some(asset_id))
+            .await?;
 
         // Filter for spendable UTXOs only
         utxos.retain(|utxo| utxo.spendable && utxo.asset == asset_id);
@@ -2403,7 +2542,8 @@ impl ElementsRpc {
         _estimated_fee: f64,
     ) -> Result<(String, Vec<Unspent>, f64), AmpError> {
         const DUST_THRESHOLD: f64 = 0.00001;
-        const LBTC_ASSET_ID: &str = "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49"; // L-BTC on Liquid testnet
+        const LBTC_ASSET_ID: &str =
+            "144c654344aa716d6f3abcc1ca90e5641e4e2a7f633bc09fe3baf64585819a49"; // L-BTC on Liquid testnet
 
         tracing::debug!(
             "Building distribution transaction for asset {} with {} outputs",
@@ -2433,11 +2573,18 @@ impl ElementsRpc {
             .await
         {
             Ok((utxos, total)) => {
-                tracing::info!("Selected {} L-BTC UTXOs totaling {} for fees", utxos.len(), total);
+                tracing::info!(
+                    "Selected {} L-BTC UTXOs totaling {} for fees",
+                    utxos.len(),
+                    total
+                );
                 (utxos, total)
             }
             Err(e) => {
-                tracing::warn!("Could not select L-BTC UTXOs for fees: {}. Transaction may fail.", e);
+                tracing::warn!(
+                    "Could not select L-BTC UTXOs for fees: {}. Transaction may fail.",
+                    e
+                );
                 (Vec::new(), 0.0)
             }
         };
@@ -2445,7 +2592,7 @@ impl ElementsRpc {
         // Combine custom asset UTXOs and L-BTC UTXOs
         let mut all_utxos = selected_asset_utxos.clone();
         all_utxos.extend(selected_lbtc_utxos.clone());
-        
+
         if selected_lbtc_utxos.is_empty() {
             tracing::warn!(
                 "No L-BTC UTXOs selected for fees. Transaction may fail during broadcast."
@@ -2483,7 +2630,11 @@ impl ElementsRpc {
 
         // Add asset change output if there's a significant amount left
         if asset_change_amount > DUST_THRESHOLD {
-            output_list.push((change_address.to_string(), asset_change_amount, asset_id.to_string()));
+            output_list.push((
+                change_address.to_string(),
+                asset_change_amount,
+                asset_id.to_string(),
+            ));
 
             tracing::debug!(
                 "Adding asset change output: {} {} to address {}",
@@ -2508,23 +2659,22 @@ impl ElementsRpc {
                 lbtc_total,
                 min_lbtc_fee
             );
-            
+
             // Check if we have enough L-BTC for the minimum fee
             if lbtc_total < min_lbtc_fee {
                 return Err(AmpError::validation(format!(
-                    "Insufficient L-BTC for fees: have {}, need at least {}", 
-                    lbtc_total, 
-                    min_lbtc_fee
+                    "Insufficient L-BTC for fees: have {}, need at least {}",
+                    lbtc_total, min_lbtc_fee
                 )));
             }
-            
+
             // For now, let's try NOT adding any L-BTC change output
             // and let Elements handle the fee automatically from the input/output difference
             tracing::info!(
                 "Using L-BTC input {} for fees - no explicit L-BTC change output (Elements will handle fee automatically)",
                 lbtc_total
             );
-            
+
             // Note: If this approach works, the entire L-BTC input will become the fee
             // If we need change, we'll need to figure out the correct way to handle it
         }
@@ -2532,9 +2682,13 @@ impl ElementsRpc {
         // For confidential addresses, we need to import them into the wallet first
         // so Elements knows about the blinding keys
         for address in address_amounts.keys() {
-            if address.starts_with('v') { // Confidential address
+            if address.starts_with('v') {
+                // Confidential address
                 tracing::debug!("Importing confidential address into wallet: {}", address);
-                if let Err(e) = self.import_address_to_wallet(wallet_name, address, None, false).await {
+                if let Err(e) = self
+                    .import_address_to_wallet(wallet_name, address, None, false)
+                    .await
+                {
                     tracing::warn!("Failed to import confidential address {}: {}", address, e);
                     // Continue anyway - the address might already be imported
                 }
@@ -2571,7 +2725,10 @@ impl ElementsRpc {
             .blind_raw_transaction(wallet_name, &raw_transaction)
             .await
             .map_err(|e| {
-                tracing::warn!("Failed to blind transaction, proceeding with unblinded: {}", e);
+                tracing::warn!(
+                    "Failed to blind transaction, proceeding with unblinded: {}",
+                    e
+                );
                 // If blinding fails, we'll try to proceed with the unblinded transaction
                 // This might work for some cases but could fail during broadcast
                 e.with_context("Transaction blinding failed")
@@ -2585,7 +2742,11 @@ impl ElementsRpc {
             "Built distribution transaction: {} inputs, {} outputs, asset change: {}",
             all_utxos.len(),
             address_amounts.len() + usize::from(asset_change_amount > DUST_THRESHOLD),
-            if asset_change_amount > DUST_THRESHOLD { asset_change_amount } else { 0.0 }
+            if asset_change_amount > DUST_THRESHOLD {
+                asset_change_amount
+            } else {
+                0.0
+            }
         );
 
         Ok((blinded_transaction, all_utxos, asset_change_amount))
@@ -2622,11 +2783,11 @@ impl ElementsRpc {
         // Elements RPC createrawtransaction expects outputs as an array of objects
         // Each output object should contain both address, amount, and asset
         let mut outputs_array = Vec::new();
-        
+
         for (address, amount, asset_id) in &outputs {
             // Convert amount to string with proper precision for Elements
             let amount_str = format!("{:.8}", amount);
-            
+
             outputs_array.push(serde_json::json!({
                 address.clone(): amount_str,
                 "asset": asset_id
@@ -2643,12 +2804,18 @@ impl ElementsRpc {
         // Debug: Log the exact parameters being sent to createrawtransaction
         tracing::error!("createrawtransaction parameters (wallet-specific, corrected format):");
         tracing::error!("  wallet: {}", wallet_name);
-        tracing::error!("  inputs: {}", serde_json::to_string_pretty(&inputs).unwrap_or_default());
-        tracing::error!("  outputs_array: {}", serde_json::to_string_pretty(&outputs_array).unwrap_or_default());
+        tracing::error!(
+            "  inputs: {}",
+            serde_json::to_string_pretty(&inputs).unwrap_or_default()
+        );
+        tracing::error!(
+            "  outputs_array: {}",
+            serde_json::to_string_pretty(&outputs_array).unwrap_or_default()
+        );
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -2667,7 +2834,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -2726,7 +2896,7 @@ impl ElementsRpc {
         // 5. Input asset blinders (can be empty array for auto-detection)
         // 6. Input amount blinders (can be empty array for auto-detection)
         let params = serde_json::json!([
-            raw_transaction,  // Raw transaction hex
+            raw_transaction, // Raw transaction hex
             [],              // Input blinding data (empty for auto-detection)
             [],              // Input amounts (empty for auto-detection)
             [],              // Input assets (empty for auto-detection)
@@ -2736,7 +2906,7 @@ impl ElementsRpc {
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -2751,21 +2921,28 @@ impl ElementsRpc {
             .json(&request)
             .send()
             .await
-            .map_err(|e| AmpError::rpc(format!("Failed to send blindrawtransaction request: {}", e)))?;
+            .map_err(|e| {
+                AmpError::rpc(format!("Failed to send blindrawtransaction request: {}", e))
+            })?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "blindrawtransaction failed with status: {} - Body: {}",
                 status, error_body
             )));
         }
 
-        let rpc_response: RpcResponse<String> = response
-            .json()
-            .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse blindrawtransaction response: {}", e)))?;
+        let rpc_response: RpcResponse<String> = response.json().await.map_err(|e| {
+            AmpError::rpc(format!(
+                "Failed to parse blindrawtransaction response: {}",
+                e
+            ))
+        })?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -2775,7 +2952,7 @@ impl ElementsRpc {
         }
 
         let blinded_tx = rpc_response.result.unwrap_or_default();
-        
+
         tracing::info!(
             "Successfully blinded transaction - original: {} chars, blinded: {} chars",
             raw_transaction.len(),
@@ -3004,16 +3181,25 @@ impl ElementsRpc {
         utxos: &[Unspent],
         signer: &dyn crate::signer::Signer,
     ) -> Result<String, AmpError> {
-        tracing::info!("Signing and broadcasting transaction with {} UTXOs", utxos.len());
+        tracing::info!(
+            "Signing and broadcasting transaction with {} UTXOs",
+            utxos.len()
+        );
 
         // Try to use the enhanced signing method if the signer supports it
-        let signed_tx_hex = if let Some(lwk_signer) = signer.as_any().downcast_ref::<crate::signer::LwkSoftwareSigner>() {
+        let signed_tx_hex = if let Some(lwk_signer) = signer
+            .as_any()
+            .downcast_ref::<crate::signer::LwkSoftwareSigner>(
+        ) {
             // Use the enhanced signing method with UTXO information
             tracing::debug!("Using LWK signer with UTXO information");
             lwk_signer
                 .sign_transaction_with_utxos(unsigned_tx_hex, utxos)
                 .await
-                .map_err(|e| AmpError::Signer(e).with_context("Failed during enhanced transaction signing phase"))?
+                .map_err(|e| {
+                    AmpError::Signer(e)
+                        .with_context("Failed during enhanced transaction signing phase")
+                })?
         } else {
             // Fall back to standard signing method
             tracing::debug!("Using standard signing method (no UTXO information)");
@@ -3087,9 +3273,14 @@ impl ElementsRpc {
         // Use the raw listunspent RPC call to get full blinding information
         // This is essential for confidential transactions as the AMP API requires
         // both amountblinder and assetblinder fields
-        let all_utxos = node_rpc.list_unspent_with_blinding_data(wallet_name).await.map_err(|e| {
-            e.with_context("Failed to query unspent outputs with blinding data for change data collection")
-        })?;
+        let all_utxos = node_rpc
+            .list_unspent_with_blinding_data(wallet_name)
+            .await
+            .map_err(|e| {
+                e.with_context(
+                    "Failed to query unspent outputs with blinding data for change data collection",
+                )
+            })?;
 
         // Filter UTXOs to only include those from the specified transaction
         let change_utxos: Vec<Unspent> = all_utxos
@@ -3159,14 +3350,20 @@ impl ElementsRpc {
     /// let rpc = ElementsRpc::from_env()?;
     /// let utxos = rpc.list_unspent_with_blinding_data("wallet_name").await?;
     /// for utxo in utxos {
-    ///     println!("UTXO: {} with blinders: {:?}, {:?}", 
+    ///     println!("UTXO: {} with blinders: {:?}, {:?}",
     ///              utxo.txid, utxo.amountblinder, utxo.assetblinder);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_unspent_with_blinding_data(&self, wallet_name: &str) -> Result<Vec<Unspent>, AmpError> {
-        tracing::debug!("Listing unspent outputs with blinding data for wallet: {}", wallet_name);
+    pub async fn list_unspent_with_blinding_data(
+        &self,
+        wallet_name: &str,
+    ) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!(
+            "Listing unspent outputs with blinding data for wallet: {}",
+            wallet_name
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -3174,16 +3371,16 @@ impl ElementsRpc {
         // Call listunspent with parameters to get all UTXOs
         // Parameters: minconf, maxconf, addresses, include_unsafe, query_options
         let params = serde_json::json!([
-            0,      // minconf: include unconfirmed
+            0,       // minconf: include unconfirmed
             9999999, // maxconf: include all confirmed
-            [],     // addresses: empty array means all addresses
-            true,   // include_unsafe: include unconfirmed transactions
-            {}      // query_options: empty object for default options
+            [],      // addresses: empty array means all addresses
+            true,    // include_unsafe: include unconfirmed transactions
+            {}       // query_options: empty object for default options
         ]);
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
             id: "amp-client".to_string(),
@@ -3202,17 +3399,19 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "Listunspent RPC request failed with status: {} - Body: {}",
                 status, error_body
             )));
         }
 
-        let rpc_response: RpcResponse<Vec<Unspent>> = response
-            .json()
-            .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse listunspent RPC response: {}", e)))?;
+        let rpc_response: RpcResponse<Vec<Unspent>> = response.json().await.map_err(|e| {
+            AmpError::rpc(format!("Failed to parse listunspent RPC response: {}", e))
+        })?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
@@ -3222,7 +3421,11 @@ impl ElementsRpc {
         }
 
         let utxos = rpc_response.result.unwrap_or_default();
-        tracing::info!("Retrieved {} UTXOs with blinding data from wallet {}", utxos.len(), wallet_name);
+        tracing::info!(
+            "Retrieved {} UTXOs with blinding data from wallet {}",
+            utxos.len(),
+            wallet_name
+        );
 
         Ok(utxos)
     }
@@ -3251,9 +3454,9 @@ impl ElementsRpc {
     /// ```
     pub async fn create_elements_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
         let params = serde_json::json!([wallet_name]);
-        
+
         let _result: serde_json::Value = self.rpc_call("createwallet", params).await?;
-        
+
         tracing::info!("Successfully created Elements wallet: {}", wallet_name);
         Ok(())
     }
@@ -3277,28 +3480,32 @@ impl ElementsRpc {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// 
+    ///
     /// // Generate native segwit address (default)
     /// let address = rpc.get_new_address("test_wallet", None).await?;
-    /// 
+    ///
     /// // Or explicitly request native segwit
     /// let bech32_address = rpc.get_new_address("test_wallet", Some("bech32")).await?;
-    /// 
+    ///
     /// println!("Native segwit address: {}", address);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_new_address(&self, wallet_name: &str, address_type: Option<&str>) -> Result<String, AmpError> {
+    pub async fn get_new_address(
+        &self,
+        wallet_name: &str,
+        address_type: Option<&str>,
+    ) -> Result<String, AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
-        
+
         // Set default to native segwit (bech32) for Elements
         let addr_type = address_type.unwrap_or("bech32");
-        
+
         // For Elements, we need to use the correct parameters for getnewaddress
         // getnewaddress [label] [address_type]
         let params = serde_json::json!(["", addr_type]);
-        
+
         // Create RPC request for getnewaddress
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -3309,7 +3516,7 @@ impl ElementsRpc {
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -3321,7 +3528,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -3378,12 +3588,16 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_confidential_address(&self, wallet_name: &str, address: &str) -> Result<String, AmpError> {
+    pub async fn get_confidential_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> Result<String, AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
-        
+
         let params = serde_json::json!([address]);
-        
+
         // Create RPC request for getaddressinfo
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -3394,7 +3608,7 @@ impl ElementsRpc {
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -3406,7 +3620,10 @@ impl ElementsRpc {
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_body = response.text().await.unwrap_or_else(|_| "Unable to read error body".to_string());
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
             return Err(AmpError::rpc(format!(
                 "RPC request failed with status: {} - Body: {}",
                 status, error_body
@@ -3426,7 +3643,8 @@ impl ElementsRpc {
         }
 
         if let Some(result) = rpc_response.result {
-            if let Some(confidential_address) = result.get("confidential").and_then(|v| v.as_str()) {
+            if let Some(confidential_address) = result.get("confidential").and_then(|v| v.as_str())
+            {
                 tracing::info!("Retrieved confidential address for: {}", address);
                 return Ok(confidential_address.to_string());
             }
@@ -3465,12 +3683,16 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn dump_private_key(&self, wallet_name: &str, address: &str) -> Result<String, AmpError> {
+    pub async fn dump_private_key(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> Result<String, AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
-        
+
         let params = serde_json::json!([address]);
-        
+
         // Create RPC request for dumpprivkey
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -3481,7 +3703,7 @@ impl ElementsRpc {
 
         // Use the wallet-specific RPC endpoint
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -3543,9 +3765,9 @@ impl ElementsRpc {
     /// ```
     pub async fn create_descriptor_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
         let params = serde_json::json!([wallet_name, true]); // true enables descriptors
-        
+
         let _result: serde_json::Value = self.rpc_call("createwallet", params).await?;
-        
+
         tracing::info!("Successfully created descriptor wallet: {}", wallet_name);
         Ok(())
     }
@@ -3600,7 +3822,7 @@ impl ElementsRpc {
         };
 
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -3638,7 +3860,8 @@ impl ElementsRpc {
             if let Some(result) = results.first() {
                 if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
                     if !success {
-                        let error_msg = result.get("error")
+                        let error_msg = result
+                            .get("error")
                             .and_then(|e| e.get("message"))
                             .and_then(|m| m.as_str())
                             .unwrap_or("Unknown error");
@@ -3661,7 +3884,10 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::info!("Successfully imported descriptor into wallet: {}", wallet_name);
+        tracing::info!(
+            "Successfully imported descriptor into wallet: {}",
+            wallet_name
+        );
         Ok(())
     }
 
@@ -3698,10 +3924,15 @@ impl ElementsRpc {
     ) -> Result<(), AmpError> {
         // If both descriptors are the same (LWK case), import only once
         if receive_descriptor == change_descriptor {
-            return self.import_descriptor(wallet_name, receive_descriptor).await;
+            return self
+                .import_descriptor(wallet_name, receive_descriptor)
+                .await;
         }
 
-        tracing::info!("Importing separate receive and change descriptors into wallet: {}", wallet_name);
+        tracing::info!(
+            "Importing separate receive and change descriptors into wallet: {}",
+            wallet_name
+        );
         tracing::debug!("Receive descriptor: {}", receive_descriptor);
         tracing::debug!("Change descriptor: {}", change_descriptor);
 
@@ -3714,7 +3945,7 @@ impl ElementsRpc {
             },
             {
                 "desc": change_descriptor,
-                "timestamp": "now", 
+                "timestamp": "now",
                 "active": true,
                 "internal": true
             }
@@ -3729,7 +3960,7 @@ impl ElementsRpc {
         };
 
         let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
-        
+
         let response = self
             .client
             .post(&wallet_url)
@@ -3768,7 +3999,8 @@ impl ElementsRpc {
                 if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
                     if !success {
                         let desc_type = if i == 0 { "receive" } else { "change" };
-                        let error_msg = result.get("error")
+                        let error_msg = result
+                            .get("error")
                             .and_then(|e| e.get("message"))
                             .and_then(|m| m.as_str())
                             .unwrap_or("Unknown error");
@@ -3791,7 +4023,10 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::info!("Successfully imported descriptors into wallet: {}", wallet_name);
+        tracing::info!(
+            "Successfully imported descriptors into wallet: {}",
+            wallet_name
+        );
         Ok(())
     }
 
@@ -3836,8 +4071,13 @@ impl ElementsRpc {
             }
             Err(e) => {
                 let error_msg = e.to_string();
-                if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
-                    tracing::info!("Wallet {} already exists, proceeding with descriptor import", wallet_name);
+                if error_msg.contains("already exists")
+                    || error_msg.contains("Database already exists")
+                {
+                    tracing::info!(
+                        "Wallet {} already exists, proceeding with descriptor import",
+                        wallet_name
+                    );
                 } else {
                     return Err(e);
                 }
@@ -3845,9 +4085,13 @@ impl ElementsRpc {
         }
 
         // Import the descriptors
-        self.import_descriptors(wallet_name, receive_descriptor, change_descriptor).await?;
+        self.import_descriptors(wallet_name, receive_descriptor, change_descriptor)
+            .await?;
 
-        tracing::info!("Successfully set up wallet with descriptors: {}", wallet_name);
+        tracing::info!(
+            "Successfully set up wallet with descriptors: {}",
+            wallet_name
+        );
         Ok(())
     }
 }
@@ -4707,14 +4951,6 @@ mod elements_rpc_tests {
 
     // Tests for UTXO selection and transaction building logic
 
-
-
-
-
-
-
-
-
     #[tokio::test]
     async fn test_build_distribution_transaction_zero_amount() {
         let rpc = ElementsRpc::new(
@@ -4726,7 +4962,13 @@ mod elements_rpc_tests {
         let address_amounts = HashMap::new(); // Empty distribution
 
         let result = rpc
-            .build_distribution_transaction("test_wallet", "asset_id", address_amounts, "change_address", 1.0)
+            .build_distribution_transaction(
+                "test_wallet",
+                "asset_id",
+                address_amounts,
+                "change_address",
+                1.0,
+            )
             .await;
 
         assert!(result.is_err());
@@ -4737,8 +4979,6 @@ mod elements_rpc_tests {
             _ => panic!("Expected validation error for zero distribution amount"),
         }
     }
-
-
 
     #[tokio::test]
     async fn test_sign_transaction_validation() {
@@ -5310,16 +5550,6 @@ mod elements_rpc_tests {
         // Should only need one call since confirmations are already sufficient
         mock.assert();
     }
-
-
-
-
-
-
-
-
-
-
 }
 
 /// Configuration for retry behavior in API requests
@@ -6848,12 +7078,13 @@ impl ApiClient {
         path: &[&str],
         body: Option<impl serde::Serialize>,
     ) -> Result<reqwest::Response, Error> {
-        let debug_logging = std::env::var("AMP_DEBUG").is_ok() || std::env::var("AMP_TESTS").unwrap_or_default() == "live";
-        
+        let debug_logging = std::env::var("AMP_DEBUG").is_ok()
+            || std::env::var("AMP_TESTS").unwrap_or_default() == "live";
+
         if debug_logging {
             eprintln!("🌐 HTTP Request: {} /{}", method, path.join("/"));
         }
-        
+
         let token = self.get_token().await?;
         let mut url = self.base_url.clone();
         url.path_segments_mut().unwrap().extend(path);
@@ -6865,12 +7096,12 @@ impl ApiClient {
         // Retry logic for network issues
         let max_retries = 3;
         let mut last_error = None;
-        
+
         for attempt in 1..=max_retries {
             if debug_logging && attempt > 1 {
                 eprintln!("🔄 Retry attempt {} of {}", attempt, max_retries);
             }
-            
+
             let mut request_builder = self
                 .client
                 .request(method.clone(), url.clone())
@@ -6880,7 +7111,11 @@ impl ApiClient {
             if let Some(ref body) = body {
                 if debug_logging && attempt == 1 {
                     if let Ok(json_body) = serde_json::to_string_pretty(&body) {
-                        eprintln!("📤 Request body ({} bytes):\n{}", json_body.len(), json_body);
+                        eprintln!(
+                            "📤 Request body ({} bytes):\n{}",
+                            json_body.len(),
+                            json_body
+                        );
                     } else {
                         eprintln!("📤 Request body: [serialization failed]");
                     }
@@ -6893,11 +7128,11 @@ impl ApiClient {
             if debug_logging {
                 eprintln!("🚀 Sending HTTP request (attempt {})...", attempt);
             }
-            
+
             match request_builder.send().await {
                 Ok(response) => {
                     let status = response.status();
-                    
+
                     if debug_logging {
                         eprintln!("📥 Response status: {}", status);
                     }
@@ -6907,11 +7142,11 @@ impl ApiClient {
                             .text()
                             .await
                             .unwrap_or_else(|_| "Unknown error".to_string());
-                        
+
                         if debug_logging {
                             eprintln!("❌ Error response body: {}", error_text);
                         }
-                        
+
                         return Err(Error::RequestFailed(format!(
                             "Request to {path:?} failed with status {status}: {error_text}"
                         )));
@@ -6930,9 +7165,9 @@ impl ApiClient {
                         eprintln!("   Is connect error: {}", e.is_connect());
                         eprintln!("   Is request error: {}", e.is_request());
                     }
-                    
+
                     last_error = Some(e);
-                    
+
                     // Only retry on network/connection errors, not on client errors
                     if attempt < max_retries {
                         let delay = std::time::Duration::from_millis(1000 * attempt as u64);
@@ -6944,12 +7179,12 @@ impl ApiClient {
                 }
             }
         }
-        
+
         // If we get here, all retries failed
         if debug_logging {
             eprintln!("❌ All {} retry attempts failed", max_retries);
         }
-        
+
         Err(Error::Reqwest(last_error.unwrap()))
     }
 
@@ -9335,10 +9570,7 @@ impl ApiClient {
         }
 
         // Log transaction details for debugging
-        tracing::debug!(
-            "Transaction details array: {:?}",
-            tx_data.details
-        );
+        tracing::debug!("Transaction details array: {:?}", tx_data.details);
 
         // Log change data details
         if change_data.is_empty() {
@@ -9486,7 +9718,13 @@ impl ApiClient {
 
         self.request_empty(
             Method::DELETE,
-            &["assets", asset_uuid, "distributions", distribution_uuid, "cancel"],
+            &[
+                "assets",
+                asset_uuid,
+                "distributions",
+                distribution_uuid,
+                "cancel",
+            ],
             None::<&()>,
         )
         .await
@@ -9501,13 +9739,20 @@ impl ApiClient {
             // Check for specific API error patterns
             let error_str = e.to_string();
             if error_str.contains("404") || error_str.contains("not found") {
-                tracing::error!("Distribution {} not found - verify distribution UUID is correct", distribution_uuid);
+                tracing::error!(
+                    "Distribution {} not found - verify distribution UUID is correct",
+                    distribution_uuid
+                );
             } else if error_str.contains("400") || error_str.contains("bad request") {
                 tracing::error!("Bad request - distribution may already be confirmed or invalid");
             } else if error_str.contains("409") || error_str.contains("conflict") {
-                tracing::error!("Conflict - distribution may already be confirmed and cannot be cancelled");
+                tracing::error!(
+                    "Conflict - distribution may already be confirmed and cannot be cancelled"
+                );
             } else if error_str.contains("422") || error_str.contains("unprocessable") {
-                tracing::error!("Unprocessable entity - distribution is in a state that cannot be cancelled");
+                tracing::error!(
+                    "Unprocessable entity - distribution is in a state that cannot be cancelled"
+                );
             }
 
             AmpError::api(error_msg)
@@ -9553,8 +9798,8 @@ impl ApiClient {
     ///     let distributions = client.get_asset_distributions("asset-uuid-123").await?;
     ///     
     ///     for distribution in distributions {
-    ///         println!("Distribution: {} - Status: {:?}", 
-    ///                  distribution.distribution_uuid, 
+    ///         println!("Distribution: {} - Status: {:?}",
+    ///                  distribution.distribution_uuid,
     ///                  distribution.distribution_status);
     ///     }
     ///     Ok(())
@@ -9575,7 +9820,9 @@ impl ApiClient {
         // Validate input
         if asset_uuid.is_empty() {
             tracing::error!("Get distributions failed: empty asset UUID");
-            return Err(Error::RequestFailed("Asset UUID cannot be empty".to_string()));
+            return Err(Error::RequestFailed(
+                "Asset UUID cannot be empty".to_string(),
+            ));
         }
 
         self.request_json(
@@ -10208,7 +10455,7 @@ impl ApiClient {
 
         // Step 8: Send distribution transaction using Elements' sendmany
         tracing::debug!("Step 8: Sending distribution transaction using Elements sendmany");
-        
+
         // Create asset amounts map for sendmany (all outputs use the same asset)
         let mut asset_amounts = std::collections::HashMap::new();
         for address in distribution_response.map_address_amount.keys() {
@@ -10227,12 +10474,12 @@ impl ApiClient {
                 wallet_name,
                 distribution_response.map_address_amount.clone(),
                 asset_amounts,
-                Some(0),        // min_conf: 0 to include unconfirmed UTXOs (matches Python implementation)
+                Some(0), // min_conf: 0 to include unconfirmed UTXOs (matches Python implementation)
                 Some("AMP asset distribution"), // comment
-                None,           // subtract_fee_from: let Elements handle fees automatically
-                Some(false),    // replaceable: false for final transactions
-                Some(1),        // conf_target: 1 block for faster confirmation
-                Some("UNSET"),  // estimate_mode: let Elements choose
+                None,    // subtract_fee_from: let Elements handle fees automatically
+                Some(false), // replaceable: false for final transactions
+                Some(1), // conf_target: 1 block for faster confirmation
+                Some("UNSET"), // estimate_mode: let Elements choose
             )
             .await
             .map_err(|e| {
@@ -10290,7 +10537,12 @@ impl ApiClient {
         // Step 10: Collect change data for confirmation
         tracing::debug!("Step 10: Collecting change data for distribution confirmation");
         let change_data = node_rpc
-            .collect_change_data(&distribution_response.asset_id, &txid, node_rpc, wallet_name)
+            .collect_change_data(
+                &distribution_response.asset_id,
+                &txid,
+                node_rpc,
+                wallet_name,
+            )
             .await
             .map_err(|e| {
                 tracing::error!("Change data collection failed: {}", e);
@@ -10309,28 +10561,31 @@ impl ApiClient {
 
         // Step 11: Submit final confirmation to AMP API
         tracing::debug!("Step 11: Submitting final confirmation to AMP API");
-        
+
         // Extract the details field from the transaction (matching Python implementation)
         // Python: details = rpc.call('gettransaction', txid).get('details')
-        let transaction_details = tx_detail.details.unwrap_or_else(|| vec![]);
-        tracing::debug!("Transaction details for confirmation: {:?}", transaction_details);
-        
+        let transaction_details = tx_detail.details.unwrap_or_else(Vec::new);
+        tracing::debug!(
+            "Transaction details for confirmation: {:?}",
+            transaction_details
+        );
+
         let amp_tx_data = crate::model::AmpTxData {
             details: serde_json::Value::Array(transaction_details),
             txid: txid.clone(),
         };
-        
+
         // Log the exact payload being sent to AMP for debugging
         tracing::info!("Sending confirmation payload to AMP:");
         tracing::info!("  tx_data.txid: {}", amp_tx_data.txid);
         tracing::info!("  tx_data.details: {:?}", amp_tx_data.details);
         tracing::info!("  change_data: {} UTXOs", change_data.len());
-        
+
         let confirmation_request = crate::model::ConfirmDistributionRequest {
             tx_data: amp_tx_data.clone(),
             change_data: change_data.clone(),
         };
-        
+
         if let Ok(payload_json) = serde_json::to_string_pretty(&confirmation_request) {
             tracing::debug!("Full confirmation payload: {}", payload_json);
         }
@@ -10656,10 +10911,7 @@ impl ApiClient {
 
         if let Some(warnings) = &blockchain_info.warnings {
             if !warnings.is_empty() {
-                tracing::warn!(
-                    "Elements node blockchain warnings: {}",
-                    warnings
-                );
+                tracing::warn!("Elements node blockchain warnings: {}", warnings);
             }
         }
 
@@ -11362,7 +11614,13 @@ mod tests {
 
         // Test with invalid UUID format
         let result = client
-            .distribute_asset("invalid-uuid", assignments.clone(), &elements_rpc, "test_wallet", &signer)
+            .distribute_asset(
+                "invalid-uuid",
+                assignments.clone(),
+                &elements_rpc,
+                "test_wallet",
+                &signer,
+            )
             .await;
 
         assert!(result.is_err());

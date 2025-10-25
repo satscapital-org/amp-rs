@@ -15,7 +15,7 @@
 //! - `AMP_USERNAME`: AMP API username
 //! - `AMP_PASSWORD`: AMP API password
 
-use amp_rs::{ApiClient, model::Status};
+use amp_rs::{model::Status, ApiClient};
 use dotenvy;
 use std::env;
 
@@ -30,14 +30,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables from .env file
     println!("📁 Loading environment variables from .env file");
     dotenvy::dotenv().ok();
-    
+
     // Set environment for live testing
     env::set_var("AMP_TESTS", "live");
 
     // Create API client
     println!("🌐 Creating AMP API client");
     let client = ApiClient::new().await?;
-    println!("✅ Connected to AMP API with {} strategy", client.get_strategy_type());
+    println!(
+        "✅ Connected to AMP API with {} strategy",
+        client.get_strategy_type()
+    );
 
     // Get all assets
     println!("\n📋 Getting all assets...");
@@ -45,17 +48,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Found {} total assets", assets.len());
 
     // Filter for "Test Distribution Asset" entries
-    let test_assets: Vec<_> = assets.iter()
+    let test_assets: Vec<_> = assets
+        .iter()
         .filter(|asset| asset.name.contains("Test Distribution Asset"))
         .collect();
 
     if test_assets.is_empty() {
         println!("\n❌ No 'Test Distribution Asset' entries found");
-        println!("   You may need to create test assets first using create_test_distribution example");
+        println!(
+            "   You may need to create test assets first using create_test_distribution example"
+        );
         return Ok(());
     }
 
-    println!("\n🎯 Found {} 'Test Distribution Asset' entries:", test_assets.len());
+    println!(
+        "\n🎯 Found {} 'Test Distribution Asset' entries:",
+        test_assets.len()
+    );
 
     let mut suitable_assets = Vec::new();
 
@@ -95,11 +104,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("   💰 Balance check: Skipped (focusing on cleanup candidates)");
 
         // Analyze suitability for testing
-        let unconfirmed_distributions = distributions.iter()
+        let unconfirmed_distributions = distributions
+            .iter()
             .filter(|d| matches!(d.distribution_status, Status::Unconfirmed))
             .count();
-        
-        let active_assignments = assignments.iter()
+
+        let active_assignments = assignments
+            .iter()
             .filter(|a| !a.is_distributed || a.distribution_uuid.is_some())
             .count();
 
@@ -108,13 +119,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let is_suitable = needs_cleanup; // Focus on assets that need cleanup
 
         println!("   🔍 Analysis:");
-        println!("      - Unconfirmed distributions: {}", unconfirmed_distributions);
+        println!(
+            "      - Unconfirmed distributions: {}",
+            unconfirmed_distributions
+        );
         println!("      - Active assignments: {}", active_assignments);
         println!("      - Is clean: {}", is_clean);
         println!("      - Needs cleanup: {}", needs_cleanup);
 
         if is_suitable {
-            suitable_assets.push((asset, has_balance, is_clean, unconfirmed_distributions, active_assignments));
+            suitable_assets.push((
+                asset,
+                has_balance,
+                is_clean,
+                unconfirmed_distributions,
+                active_assignments,
+            ));
             println!("   🧹 CLEANUP CANDIDATE - Asset has distributions/assignments to clean");
         } else if is_clean {
             println!("   ✅ ALREADY CLEAN - No distributions or assignments");
@@ -130,19 +150,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if suitable_assets.is_empty() {
         println!("❌ No test assets found that need cleanup");
         println!("   All test assets appear to be clean already");
-        
+
         // Show the first clean asset as a recommendation
         if !test_assets.is_empty() {
             let first_clean = test_assets.first().unwrap();
             println!("\n🚀 RECOMMENDATION:");
-            println!("✅ Use clean asset: {} ({})", first_clean.name, first_clean.asset_uuid);
+            println!(
+                "✅ Use clean asset: {} ({})",
+                first_clean.name, first_clean.asset_uuid
+            );
             println!("   This asset appears clean and ready for testing");
             println!("   Note: You may need to check if it has UTXOs available");
         }
         return Ok(());
     }
 
-    println!("✅ Found {} test assets that need cleanup:", suitable_assets.len());
+    println!(
+        "✅ Found {} test assets that need cleanup:",
+        suitable_assets.len()
+    );
 
     println!("\n🧹 ASSETS NEEDING CLEANUP:");
     for (asset, _, _, unconfirmed, active) in &suitable_assets {
@@ -154,7 +180,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Provide specific recommendation for cleanup
     if let Some((best_asset, _, _, unconfirmed, active)) = suitable_assets.first() {
         println!("\n🚀 CLEANUP RECOMMENDATION:");
-        println!("🧹 Clean asset: {} ({})", best_asset.name, best_asset.asset_uuid);
+        println!(
+            "🧹 Clean asset: {} ({})",
+            best_asset.name, best_asset.asset_uuid
+        );
         println!("   - Unconfirmed distributions: {}", unconfirmed);
         println!("   - Active assignments: {}", active);
         println!("\n📋 Steps to clean:");

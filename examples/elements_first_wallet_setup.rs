@@ -85,10 +85,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("❌ Failed to create Elements wallet: {}", e);
-            
+
             // Check if wallet already exists
             let error_msg = e.to_string();
-            if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
+            if error_msg.contains("already exists") || error_msg.contains("Database already exists")
+            {
                 println!("   Wallet already exists, continuing with existing wallet");
             } else {
                 return Err(e.into());
@@ -100,9 +101,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("======================================================");
 
     // Get a new native segwit address from Elements
-    let unconfidential_address = match elements_rpc.get_new_address(&wallet_name, Some("bech32")).await {
+    let unconfidential_address = match elements_rpc
+        .get_new_address(&wallet_name, Some("bech32"))
+        .await
+    {
         Ok(address) => {
-            println!("✅ Generated new unconfidential address in Elements: {}", address);
+            println!(
+                "✅ Generated new unconfidential address in Elements: {}",
+                address
+            );
             address
         }
         Err(e) => {
@@ -112,7 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Get the confidential version of the address
-    let confidential_address = match elements_rpc.get_confidential_address(&wallet_name, &unconfidential_address).await {
+    let confidential_address = match elements_rpc
+        .get_confidential_address(&wallet_name, &unconfidential_address)
+        .await
+    {
         Ok(address) => {
             println!("✅ Retrieved confidential address: {}", address);
             address
@@ -127,7 +137,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("==============================================");
 
     // Export the private key for the unconfidential address
-    let private_key = match elements_rpc.dump_private_key(&wallet_name, &unconfidential_address).await {
+    let private_key = match elements_rpc
+        .dump_private_key(&wallet_name, &unconfidential_address)
+        .await
+    {
         Ok(key) => {
             println!("✅ Successfully exported private key");
             println!("   Private key: {}...", &key[..10]); // Show only first 10 chars for security
@@ -164,7 +177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✅ Address verification successful");
             println!("   Unconfidential address: {}", unconfidential_address);
             println!("   Verified address: {}", verified_address);
-            
+
             if unconfidential_address == verified_address {
                 println!("✅ Addresses match perfectly!");
             } else {
@@ -203,8 +216,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🎯 Elements-First Setup Complete!");
     println!("=================================");
     println!("✅ Elements wallet created: {}", wallet_name);
-    println!("✅ Unconfidential address generated: {}", unconfidential_address);
-    println!("✅ Confidential address retrieved: {}", confidential_address);
+    println!(
+        "✅ Unconfidential address generated: {}",
+        unconfidential_address
+    );
+    println!(
+        "✅ Confidential address retrieved: {}",
+        confidential_address
+    );
     println!("✅ Private key exported from Elements");
     println!("✅ LWK signer created from Elements private key");
     println!("✅ Address compatibility verified");
@@ -217,15 +236,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Confidential address supports blinded transactions");
     println!();
     println!("💡 Next steps:");
-    println!("  - Use '{}' as treasury address for asset issuance (confidential)", confidential_address);
-    println!("  - Use '{}' for LWK signing operations (unconfidential)", unconfidential_address);
+    println!(
+        "  - Use '{}' as treasury address for asset issuance (confidential)",
+        confidential_address
+    );
+    println!(
+        "  - Use '{}' for LWK signing operations (unconfidential)",
+        unconfidential_address
+    );
     println!("  - Use the LWK signer for transaction signing");
     println!("  - Elements wallet will automatically see incoming transactions");
     println!();
     println!("🔧 Manual verification commands:");
-    println!("  - Check wallet: elements-cli -rpcwallet={} getwalletinfo", wallet_name);
-    println!("  - List addresses: elements-cli -rpcwallet={} listreceivedbyaddress 0 true", wallet_name);
-    println!("  - Check balance: elements-cli -rpcwallet={} getbalance", wallet_name);
+    println!(
+        "  - Check wallet: elements-cli -rpcwallet={} getwalletinfo",
+        wallet_name
+    );
+    println!(
+        "  - List addresses: elements-cli -rpcwallet={} listreceivedbyaddress 0 true",
+        wallet_name
+    );
+    println!(
+        "  - Check balance: elements-cli -rpcwallet={} getbalance",
+        wallet_name
+    );
 
     Ok(())
 }

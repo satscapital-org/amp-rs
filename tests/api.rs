@@ -434,7 +434,7 @@ async fn test_remove_asset_from_category_mock() {
 #[tokio::test]
 async fn test_issue_asset_live() {
     eprintln!("🚀 Starting test_issue_asset_live");
-    
+
     dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         eprintln!("⏭️  Skipping live test (AMP_TESTS != 'live')");
@@ -479,7 +479,7 @@ async fn test_issue_asset_live() {
         reissuance_address: None,
         transfer_restricted: Some(true),
     };
-    
+
     eprintln!("📝 Issuance request details:");
     eprintln!("   Name: {}", issuance_request.name);
     eprintln!("   Amount: {}", issuance_request.amount);
@@ -490,7 +490,10 @@ async fn test_issue_asset_live() {
     eprintln!("   Precision: {:?}", issuance_request.precision);
     eprintln!("   Confidential: {:?}", issuance_request.is_confidential);
     eprintln!("   Reissuable: {:?}", issuance_request.is_reissuable);
-    eprintln!("   Transfer restricted: {:?}", issuance_request.transfer_restricted);
+    eprintln!(
+        "   Transfer restricted: {:?}",
+        issuance_request.transfer_restricted
+    );
 
     // Test basic connectivity first
     // Test basic connectivity first
@@ -502,15 +505,20 @@ async fn test_issue_asset_live() {
             eprintln!("   This suggests a fundamental connectivity issue");
         }
     }
-    
+
     // Test with curl to compare
     eprintln!("🔍 Testing with curl for comparison...");
     match std::process::Command::new("curl")
         .args(&[
-            "-s", "-o", "/dev/null", "-w", "%{http_code}",
-            "https://amp-test.blockstream.com/api/changelog"
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "https://amp-test.blockstream.com/api/changelog",
         ])
-        .output() {
+        .output()
+    {
         Ok(output) => {
             let status_code = String::from_utf8_lossy(&output.stdout);
             eprintln!("✅ Curl test result: HTTP {}", status_code);
@@ -519,26 +527,35 @@ async fn test_issue_asset_live() {
             eprintln!("❌ Curl test failed: {}", e);
         }
     }
-    
+
     // Test a simple POST request to see if the issue is with POST requests in general
-    eprintln!("🔍 Testing simple POST request (password change - expect failure but should connect)...");
-    match client.user_change_password(Secret::new("dummy_password".to_string())).await {
+    eprintln!(
+        "🔍 Testing simple POST request (password change - expect failure but should connect)..."
+    );
+    match client
+        .user_change_password(Secret::new("dummy_password".to_string()))
+        .await
+    {
         Ok(_) => eprintln!("✅ POST request succeeded (unexpected)"),
         Err(e) => {
             eprintln!("📝 POST request failed as expected: {:?}", e);
             // We expect this to fail with authentication/validation error, not connection error
             let error_str = format!("{:?}", e);
             if error_str.contains("IncompleteMessage") || error_str.contains("connection closed") {
-                eprintln!("❌ POST request failed with connection issue - same problem as asset issuance");
+                eprintln!(
+                    "❌ POST request failed with connection issue - same problem as asset issuance"
+                );
             } else {
-                eprintln!("✅ POST request failed with different error - connection is working for POST");
+                eprintln!(
+                    "✅ POST request failed with different error - connection is working for POST"
+                );
             }
         }
     }
-    
+
     eprintln!("🚀 Calling issue_asset API...");
     let result = client.issue_asset(&issuance_request).await;
-    
+
     match &result {
         Ok(response) => {
             eprintln!("✅ API call successful!");
@@ -551,7 +568,7 @@ async fn test_issue_asset_live() {
             eprintln!("   Error details: {}", e);
         }
     }
-    
+
     assert!(result.is_ok(), "Asset issuance failed: {:?}", result.err());
 
     let issuance_response = result.unwrap();
@@ -561,15 +578,18 @@ async fn test_issue_asset_live() {
     println!("Destination address: {}", destination_address);
 
     // Clean up: delete the created asset
-    eprintln!("🧹 Starting cleanup: deleting asset with UUID {}", issuance_response.asset_uuid);
+    eprintln!(
+        "🧹 Starting cleanup: deleting asset with UUID {}",
+        issuance_response.asset_uuid
+    );
     println!(
         "Cleaning up: deleting asset with UUID {}",
         issuance_response.asset_uuid
     );
-    
+
     eprintln!("🗑️  Calling delete_asset API...");
     let delete_result = client.delete_asset(&issuance_response.asset_uuid).await;
-    
+
     match &delete_result {
         Ok(_) => {
             eprintln!("✅ Asset deletion successful");
@@ -581,7 +601,7 @@ async fn test_issue_asset_live() {
             println!("Warning: Failed to delete asset: {:?}", e);
         }
     }
-    
+
     eprintln!("🏁 test_issue_asset_live completed");
 }
 

@@ -1,18 +1,18 @@
 use super::{Signer, SignerError};
+use crate::model::Unspent;
 use async_trait::async_trait;
+use bip39::{Language, Mnemonic};
+use elements::bitcoin::bip32::{ChildNumber, DerivationPath, Xpriv};
+use elements::bitcoin::PublicKey;
 use elements::encode::Decodable;
 use elements::pset::PartiallySignedTransaction;
+use elements::secp256k1_zkp::Secp256k1;
+use elements::{Address, AddressParams, TxOut};
 use lwk_common::Signer as LwkSigner;
 use lwk_signer::SwSigner;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
-use elements::secp256k1_zkp::Secp256k1;
-use elements::{Address, AddressParams, TxOut};
-use bip39::{Mnemonic, Language};
-use elements::bitcoin::bip32::{Xpriv, DerivationPath, ChildNumber};
-use elements::bitcoin::PublicKey;
-use crate::model::Unspent;
 
 /// JSON structure for persistent mnemonic storage
 ///
@@ -830,7 +830,9 @@ impl LwkSoftwareSigner {
     /// # }
     /// ```
     pub fn get_wpkh_slip77_descriptor(&self) -> Result<String, SignerError> {
-        tracing::debug!("Generating P2SH-wrapped WPkH Slip77 descriptor for Elements wallet import");
+        tracing::debug!(
+            "Generating P2SH-wrapped WPkH Slip77 descriptor for Elements wallet import"
+        );
 
         // Generate custom P2SH-wrapped segwit descriptor to match our address derivation
         self.get_p2sh_wpkh_slip77_descriptor()
@@ -869,25 +871,24 @@ impl LwkSoftwareSigner {
         tracing::debug!("Generating custom P2SH-wrapped WPkH Slip77 descriptor");
 
         // First get the native segwit descriptor from LWK
-        let native_descriptor = self.signer.wpkh_slip77_descriptor()
-            .map_err(|e| {
-                tracing::error!("Failed to generate native descriptor: {}", e);
-                SignerError::Lwk(format!("Failed to generate native descriptor: {}", e))
-            })?;
+        let native_descriptor = self.signer.wpkh_slip77_descriptor().map_err(|e| {
+            tracing::error!("Failed to generate native descriptor: {}", e);
+            SignerError::Lwk(format!("Failed to generate native descriptor: {}", e))
+        })?;
 
         tracing::debug!("Native descriptor: {}", native_descriptor);
 
         // Convert the native segwit descriptor to P2SH-wrapped
         // The native descriptor looks like: ct(slip77(...),elwpkh([...]/84h/1h/0h]tpub.../<0;1>/*))#checksum
         // We need to convert it to: ct(slip77(...),elsh(elwpkh([...]/49h/1h/0h]tpub.../<0;1>/*)))#checksum
-        
+
         let p2sh_descriptor = if native_descriptor.contains("elwpkh(") {
             // Replace the derivation path from 84h (native segwit) to 49h (P2SH-wrapped segwit)
             let with_p2sh_path = native_descriptor.replace("/84h/1h/0h]", "/49h/1h/0h]");
-            
+
             // Wrap the elwpkh with elsh() for P2SH
             let wrapped = with_p2sh_path.replace("elwpkh(", "elsh(elwpkh(");
-            
+
             // Add the closing parenthesis for elsh() before the checksum
             if let Some(checksum_pos) = wrapped.rfind("))#") {
                 let mut result = wrapped;
@@ -899,7 +900,7 @@ impl LwkSoftwareSigner {
             }
         } else {
             return Err(SignerError::Lwk(
-                "Unexpected descriptor format - expected elwpkh".to_string()
+                "Unexpected descriptor format - expected elwpkh".to_string(),
             ));
         };
 
@@ -936,7 +937,7 @@ impl LwkSoftwareSigner {
     /// ```
     pub fn get_wpkh_slip77_descriptors(&self) -> Result<(String, String), SignerError> {
         let descriptor = self.get_wpkh_slip77_descriptor()?;
-        
+
         // LWK generates a single descriptor with <0;1>/* that covers both chains
         // Return the same descriptor twice for compatibility
         Ok((descriptor.clone(), descriptor))
@@ -944,8 +945,8 @@ impl LwkSoftwareSigner {
 
     /// Derive a P2SH-wrapped segwit receiving address from the signer's mnemonic
     ///
-    /// This method derives a P2SH-wrapped segwit receiving address from the signer's mnemonic 
-    /// using BIP49 derivation paths. The address is suitable for receiving confidential assets 
+    /// This method derives a P2SH-wrapped segwit receiving address from the signer's mnemonic
+    /// using BIP49 derivation paths. The address is suitable for receiving confidential assets
     /// and can be used as a treasury address for asset operations. This provides a more complex
     /// testing scenario with blinded P2SH transactions.
     ///
@@ -977,51 +978,57 @@ impl LwkSoftwareSigner {
     /// ```
     pub fn derive_address(&self, index: Option<u32>) -> Result<String, SignerError> {
         let derivation_index = index.unwrap_or(0);
-        
+
         tracing::debug!("Deriving address at index {} for testnet", derivation_index);
-        
+
         // Parse the mnemonic
-        let mnemonic = Mnemonic::parse_in(Language::English, &self.mnemonic)
-            .map_err(|e| SignerError::InvalidMnemonic(format!("Failed to parse mnemonic: {}", e)))?;
-        
+        let mnemonic = Mnemonic::parse_in(Language::English, &self.mnemonic).map_err(|e| {
+            SignerError::InvalidMnemonic(format!("Failed to parse mnemonic: {}", e))
+        })?;
+
         // Create secp256k1 context
         let secp = Secp256k1::new();
-        
+
         // Generate seed from mnemonic
         let seed = mnemonic.to_seed("");
-        
+
         // Create master extended private key
         let master_key = Xpriv::new_master(elements::bitcoin::Network::Regtest, &seed)
             .map_err(|e| SignerError::Lwk(format!("Failed to create master key: {}", e)))?;
-        
+
         // Derive using BIP49 path: m/49'/1776'/0'/0/index (BIP49 for P2SH-wrapped segwit, 1776 is Liquid's coin type)
         let derivation_path = DerivationPath::from(vec![
-            ChildNumber::from_hardened_idx(49).unwrap(),  // BIP49 for P2SH-wrapped segwit
+            ChildNumber::from_hardened_idx(49).unwrap(), // BIP49 for P2SH-wrapped segwit
             ChildNumber::from_hardened_idx(1776).unwrap(), // Liquid coin type
             ChildNumber::from_hardened_idx(0).unwrap(),
             ChildNumber::from_normal_idx(0).unwrap(),
             ChildNumber::from_normal_idx(derivation_index).unwrap(),
         ]);
-        
-        let derived_key = master_key.derive_priv(&secp, &derivation_path)
+
+        let derived_key = master_key
+            .derive_priv(&secp, &derivation_path)
             .map_err(|e| SignerError::Lwk(format!("Failed to derive key: {}", e)))?;
-        
+
         // Get the public key and convert to bitcoin::PublicKey
         let secp_public_key = derived_key.private_key.public_key(&secp);
         let public_key = PublicKey::from(secp_public_key);
-        
+
         // Create confidential address (using Liquid testnet parameters)
         let address_params = &AddressParams::LIQUID_TESTNET;
         // Generate a blinding key for confidential transactions
         let blinding_key = derived_key.private_key;
         let blinding_pubkey = blinding_key.public_key(&secp);
-        
+
         // Create P2SH-wrapped segwit address for more complex testing scenario
         let address = Address::p2shwpkh(&public_key, Some(blinding_pubkey), address_params);
-        
+
         let address_str = address.to_string();
-        tracing::info!("Successfully derived address at index {}: {}", derivation_index, address_str);
-        
+        tracing::info!(
+            "Successfully derived address at index {}: {}",
+            derivation_index,
+            address_str
+        );
+
         Ok(address_str)
     }
 
@@ -1098,15 +1105,15 @@ impl LwkSoftwareSigner {
     /// # use amp_rs::ElementsRpc;
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let elements_rpc = ElementsRpc::from_env()?;
-    /// 
+    ///
     /// // Create wallet and get address from Elements
     /// elements_rpc.create_elements_wallet("test_wallet").await?;
     /// let address = elements_rpc.get_new_address("test_wallet", None).await?;
     /// let private_key = elements_rpc.dump_private_key("test_wallet", &address).await?;
-    /// 
+    ///
     /// // Create LWK signer from Elements private key
     /// let signer = LwkSoftwareSigner::from_elements_private_key(&private_key)?;
-    /// 
+    ///
     /// // Now LWK can sign for the Elements-generated address
     /// assert!(signer.is_testnet());
     /// # Ok(())
@@ -1118,18 +1125,18 @@ impl LwkSoftwareSigner {
         // For now, we'll convert the private key to a mnemonic-like format
         // This is a simplified approach - in a full implementation, you might want
         // to create a different signer type that works directly with private keys
-        
+
         // Validate the private key format (basic WIF validation)
         if private_key_wif.is_empty() {
             return Err(SignerError::InvalidMnemonic(
-                "Private key cannot be empty".to_string()
+                "Private key cannot be empty".to_string(),
             ));
         }
 
         // For Elements testnet, private keys typically start with 'c' (compressed) or '9' (uncompressed)
         if !private_key_wif.starts_with('c') && !private_key_wif.starts_with('9') {
             return Err(SignerError::InvalidMnemonic(
-                "Invalid private key format for Elements testnet".to_string()
+                "Invalid private key format for Elements testnet".to_string(),
             ));
         }
 
@@ -1137,7 +1144,7 @@ impl LwkSoftwareSigner {
         // Note: This is a workaround since LWK's SwSigner expects a mnemonic
         // In a production implementation, you'd want a different approach
         let temp_mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        
+
         // Create the base signer structure
         let signer = SwSigner::new(temp_mnemonic, false) // false for testnet
             .map_err(|e| {
@@ -1178,7 +1185,7 @@ impl LwkSoftwareSigner {
     /// let private_key = "cT1..."; // Elements private key
     /// let signer = LwkSoftwareSigner::from_elements_private_key(private_key)?;
     /// let elements_address = "el1qq..."; // Address from Elements
-    /// 
+    ///
     /// let derived_address = signer.verify_elements_address(elements_address)?;
     /// println!("Derived address: {}", derived_address);
     /// # Ok(())
@@ -1186,14 +1193,14 @@ impl LwkSoftwareSigner {
     /// ```
     pub fn verify_elements_address(&self, expected_address: &str) -> Result<String, SignerError> {
         tracing::debug!("Verifying Elements address: {}", expected_address);
-        
+
         // For now, we'll just return the expected address
         // In a full implementation, you'd derive the address from the private key
         // and verify it matches the expected address
-        
+
         if expected_address.is_empty() {
             return Err(SignerError::InvalidMnemonic(
-                "Expected address cannot be empty".to_string()
+                "Expected address cannot be empty".to_string(),
             ));
         }
 
@@ -1201,12 +1208,13 @@ impl LwkSoftwareSigner {
         // Liquid mainnet: lq1... (bech32)
         // Liquid testnet: tex1... (bech32) or el1... (legacy)
         // Elements regtest: ert1... (bech32)
-        if !expected_address.starts_with("lq1") 
-            && !expected_address.starts_with("tex1") 
-            && !expected_address.starts_with("el1") 
-            && !expected_address.starts_with("ert1") {
+        if !expected_address.starts_with("lq1")
+            && !expected_address.starts_with("tex1")
+            && !expected_address.starts_with("el1")
+            && !expected_address.starts_with("ert1")
+        {
             return Err(SignerError::InvalidMnemonic(
-                "Invalid Elements address format".to_string()
+                "Invalid Elements address format".to_string(),
             ));
         }
 
@@ -1356,7 +1364,8 @@ impl LwkSoftwareSigner {
             }
 
             // Create TxOut from UTXO information
-            let value = elements::confidential::Value::Explicit((utxo.amount * 100_000_000.0) as u64);
+            let value =
+                elements::confidential::Value::Explicit((utxo.amount * 100_000_000.0) as u64);
             let asset = hex::decode(&utxo.asset).map_err(|e| {
                 SignerError::InvalidTransaction(format!("Invalid asset hex in UTXO {}: {}", i, e))
             })?;
@@ -1364,25 +1373,35 @@ impl LwkSoftwareSigner {
                 let mut asset_bytes = [0u8; 32];
                 asset_bytes.copy_from_slice(&asset);
                 // Create AssetId from the raw bytes
-                let asset_id = elements::issuance::AssetId::from_slice(&asset_bytes)
-                    .map_err(|e| SignerError::InvalidTransaction(format!("Invalid asset ID in UTXO {}: {}", i, e)))?;
+                let asset_id =
+                    elements::issuance::AssetId::from_slice(&asset_bytes).map_err(|e| {
+                        SignerError::InvalidTransaction(format!(
+                            "Invalid asset ID in UTXO {}: {}",
+                            i, e
+                        ))
+                    })?;
                 elements::confidential::Asset::Explicit(asset_id)
             } else {
                 return Err(SignerError::InvalidTransaction(format!(
                     "Invalid asset length in UTXO {}: expected 32 bytes, got {}",
-                    i, asset.len()
+                    i,
+                    asset.len()
                 )));
             };
 
             // Parse script pubkey if available
             let script_pubkey = if let Some(ref spk) = utxo.scriptpubkey {
                 hex::decode(spk).map_err(|e| {
-                    SignerError::InvalidTransaction(format!("Invalid scriptpubkey hex in UTXO {}: {}", i, e))
+                    SignerError::InvalidTransaction(format!(
+                        "Invalid scriptpubkey hex in UTXO {}: {}",
+                        i, e
+                    ))
                 })?
             } else {
                 // If no scriptpubkey provided, we can't properly construct the UTXO
                 return Err(SignerError::InvalidTransaction(format!(
-                    "Missing scriptpubkey for UTXO {}", i
+                    "Missing scriptpubkey for UTXO {}",
+                    i
                 )));
             };
 
@@ -1400,7 +1419,8 @@ impl LwkSoftwareSigner {
                 tracing::debug!("Added UTXO {} to PSBT input {}", utxo.txid, i);
             } else {
                 return Err(SignerError::InvalidTransaction(format!(
-                    "Failed to get PSBT input {} for UTXO addition", i
+                    "Failed to get PSBT input {} for UTXO addition",
+                    i
                 )));
             }
         }
