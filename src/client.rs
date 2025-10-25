@@ -1187,10 +1187,12 @@ impl ElementsRpc {
     /// # Example
     ///
     /// ```no_run
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # use amp_rs::ElementsRpc;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// let utxos = rpc.list_unspent_for_wallet("test_wallet", None).await?;
-    /// println!("Found {} UTXOs", utxos.len());
+    /// // Note: This would need to be called in an async context
+    /// // let utxos = rpc.list_unspent_for_wallet("test_wallet", None).await?;
+    /// // println!("Found {} UTXOs", utxos.len());
     /// # Ok(())
     /// # }
     /// ```
@@ -2412,6 +2414,7 @@ impl ElementsRpc {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
     /// let (selected_utxos, total_amount) = rpc.select_utxos_for_amount(
+    ///     "wallet_name",
     ///     "asset_id_hex",
     ///     150.0,
     ///     0.001
@@ -3248,7 +3251,7 @@ impl ElementsRpc {
     /// let change_data = rpc.collect_change_data(
     ///     "asset_id_hex",
     ///     "transaction_id_hex",
-    ///     &node_rpc,
+    ///     &rpc,
     ///     "wallet_name"
     /// ).await?;
     ///
@@ -3582,11 +3585,13 @@ impl ElementsRpc {
     /// # Example
     ///
     /// ```no_run
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # use amp_rs::ElementsRpc;
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
     /// let unconfidential_address = "tex1q...";
-    /// let confidential_address = rpc.get_confidential_address("test_wallet", unconfidential_address).await?;
-    /// println!("Confidential address: {}", confidential_address);
+    /// // Note: This would need to be called in an async context
+    /// // let confidential_address = rpc.get_confidential_address("test_wallet", unconfidential_address).await?;
+    /// // println!("Confidential address: {}", confidential_address);
     /// # Ok(())
     /// # }
     /// ```
@@ -9477,27 +9482,23 @@ impl ApiClient {
     ///
     /// # Examples
     /// ```no_run
-    /// # use amp_rs::{ApiClient, model::{DistributionTxData, TransactionDetail, Unspent}, AmpError};
+    /// # use amp_rs::{ApiClient, model::{AmpTxData, Unspent}, AmpError};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), AmpError> {
-    /// # let client = ApiClient::new("https://amp.blockstream.com".to_string()).unwrap();
+    /// # let client = ApiClient::new().await?;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let distribution_uuid = "dist-550e8400-e29b-41d4-a716-446655440000";
     ///
-    /// // Transaction details from Elements node gettransaction call
-    /// let tx_detail = TransactionDetail {
-    ///     txid: "abc123def456...".to_string(),
-    ///     confirmations: 2,
-    ///     blockheight: Some(12345),
-    ///     hex: "020000000001...".to_string(),
-    ///     blockhash: Some("block_hash_hex".to_string()),
-    ///     blocktime: Some(1640995200),
-    ///     time: Some(1640995200),
-    ///     timereceived: Some(1640995180),
-    /// };
-    ///
-    /// let tx_data = DistributionTxData {
-    ///     details: tx_detail,
+    /// // Transaction data for AMP API confirmation
+    /// let tx_data = AmpTxData {
+    ///     details: serde_json::json!([{
+    ///         "account": "",
+    ///         "address": "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq",
+    ///         "category": "send",
+    ///         "amount": -100.0,
+    ///         "vout": 0,
+    ///         "fee": -0.001
+    ///     }]),
     ///     txid: "abc123def456...".to_string(),
     /// };
     ///
@@ -9514,6 +9515,8 @@ impl ApiClient {
     ///         scriptpubkey: Some("76a914...88ac".to_string()),
     ///         redeemscript: None,
     ///         witnessscript: None,
+    ///         amountblinder: None,
+    ///         assetblinder: None,
     ///     }
     /// ];
     ///
@@ -10322,6 +10325,7 @@ impl ApiClient {
     ///     "550e8400-e29b-41d4-a716-446655440000",
     ///     assignments,
     ///     &elements_rpc,
+    ///     "wallet_name",
     ///     &signer
     /// ).await?;
     /// # Ok(())

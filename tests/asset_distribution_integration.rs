@@ -34,6 +34,22 @@ use std::env;
 // use std::process::Command; // No longer needed - removed address.py dependency
 use tracing_subscriber;
 
+/// Helper function to conditionally print based on nocapture mode
+fn print_if_nocapture(msg: &str) {
+    let should_print = std::env::args().any(|arg| arg == "--nocapture");
+    if should_print {
+        println!("{}", msg);
+    }
+}
+
+/// Helper function to conditionally initialize tracing based on nocapture mode
+fn init_tracing_if_nocapture() {
+    let should_print = std::env::args().any(|arg| arg == "--nocapture");
+    if should_print {
+        let _ = tracing_subscriber::fmt::try_init();
+    }
+}
+
 // NOTE: This function is no longer used - we now get addresses directly from the AMP API
 // /// Helper function to get a destination address for a specific GAID using address.py
 // async fn get_destination_address_for_gaid(gaid: &str) -> Result<String, String> {
@@ -528,12 +544,12 @@ async fn setup_elements_wallet_with_mnemonic(
 #[serial]
 async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for test debugging
-    let _ = tracing_subscriber::fmt::try_init();
+    init_tracing_if_nocapture();
 
-    println!("🔧 Setting up test environment and infrastructure");
+    print_if_nocapture("🔧 Setting up test environment and infrastructure");
 
     // Task requirement: Load environment variables using dotenvy for RPC and AMP credentials
-    println!("📁 Loading environment variables from .env file");
+    print_if_nocapture("📁 Loading environment variables from .env file");
     dotenvy::dotenv().ok();
 
     // Verify required environment variables are present
@@ -549,13 +565,13 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
     let elements_rpc_password =
         env::var("ELEMENTS_RPC_PASSWORD").unwrap_or_else(|_| "pass".to_string());
 
-    println!("✅ Environment variables loaded successfully");
-    println!("   - AMP Username: {}", amp_username);
-    println!("   - Elements RPC URL: {}", elements_rpc_url);
-    println!("   - Elements RPC User: {}", elements_rpc_user);
+    print_if_nocapture("✅ Environment variables loaded successfully");
+    print_if_nocapture(&format!("   - AMP Username: {}", amp_username));
+    print_if_nocapture(&format!("   - Elements RPC URL: {}", elements_rpc_url));
+    print_if_nocapture(&format!("   - Elements RPC User: {}", elements_rpc_user));
 
     // Task requirement: Create ApiClient with testnet configuration
-    println!("🌐 Creating ApiClient with testnet configuration");
+    print_if_nocapture("🌐 Creating ApiClient with testnet configuration");
 
     // Set environment for live testing
     env::set_var("AMP_TESTS", "live");
@@ -564,15 +580,15 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
         .await
         .map_err(|e| format!("Failed to create ApiClient: {}", e))?;
 
-    println!("✅ ApiClient created successfully");
-    println!("   - Strategy type: {}", api_client.get_strategy_type());
-    println!(
+    print_if_nocapture("✅ ApiClient created successfully");
+    print_if_nocapture(&format!("   - Strategy type: {}", api_client.get_strategy_type()));
+    print_if_nocapture(&format!(
         "   - Token persistence: {}",
         api_client.should_persist_tokens()
-    );
+    ));
 
     // Task requirement: Create ElementsRpc instance
-    println!("⚡ Creating ElementsRpc instance");
+    print_if_nocapture("⚡ Creating ElementsRpc instance");
 
     let elements_rpc = ElementsRpc::new(
         elements_rpc_url.clone(),
@@ -580,42 +596,42 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
         elements_rpc_password.clone(),
     );
 
-    println!("✅ ElementsRpc instance created successfully");
+    print_if_nocapture("✅ ElementsRpc instance created successfully");
 
     // Verify Elements node connectivity (optional - may fail if node is not running)
-    println!("🔍 Testing Elements node connectivity");
+    print_if_nocapture("🔍 Testing Elements node connectivity");
     match elements_rpc.get_network_info().await {
         Ok(network_info) => {
-            println!("✅ Elements node connection successful");
-            println!("   - Network: {:?}", network_info);
+            print_if_nocapture("✅ Elements node connection successful");
+            print_if_nocapture(&format!("   - Network: {:?}", network_info));
         }
         Err(e) => {
-            println!(
+            print_if_nocapture(&format!(
                 "⚠️  Elements node connection failed (this may be expected): {}",
                 e
-            );
-            println!("   Note: This test can still proceed without active Elements node");
+            ));
+            print_if_nocapture("   Note: This test can still proceed without active Elements node");
         }
     }
 
     // Task requirement: Generate LwkSoftwareSigner with new mnemonic for test isolation
-    println!("🔐 Generating LwkSoftwareSigner with new mnemonic for test isolation");
+    print_if_nocapture("🔐 Generating LwkSoftwareSigner with new mnemonic for test isolation");
 
     let (mnemonic, signer) = LwkSoftwareSigner::generate_new()
         .map_err(|e| format!("Failed to generate LwkSoftwareSigner: {}", e))?;
 
-    println!("✅ LwkSoftwareSigner generated successfully");
-    println!("   - Mnemonic: {}...", &mnemonic[..50]);
-    println!("   - Testnet mode: {}", signer.is_testnet());
+    print_if_nocapture("✅ LwkSoftwareSigner generated successfully");
+    print_if_nocapture(&format!("   - Mnemonic: {}...", &mnemonic[..50]));
+    print_if_nocapture(&format!("   - Testnet mode: {}", signer.is_testnet()));
 
     // Verify signer functionality with mock transaction
-    println!("🧪 Testing signer functionality");
+    print_if_nocapture("🧪 Testing signer functionality");
 
     // Test with invalid transaction (should fail gracefully)
     match signer.sign_transaction("invalid_hex").await {
         Ok(_) => return Err("Expected signer to reject invalid hex".into()),
         Err(e) => {
-            println!("✅ Signer correctly rejected invalid transaction: {}", e);
+            print_if_nocapture(&format!("✅ Signer correctly rejected invalid transaction: {}", e));
         }
     }
 
@@ -623,7 +639,7 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
     match signer.sign_transaction("").await {
         Ok(_) => return Err("Expected signer to reject empty transaction".into()),
         Err(e) => {
-            println!("✅ Signer correctly rejected empty transaction: {}", e);
+            print_if_nocapture(&format!("✅ Signer correctly rejected empty transaction: {}", e));
         }
     }
 
@@ -632,23 +648,23 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
     match signer_ref.sign_transaction("invalid").await {
         Ok(_) => return Err("Expected trait method to reject invalid transaction".into()),
         Err(_) => {
-            println!("✅ Signer trait implementation working correctly");
+            print_if_nocapture("✅ Signer trait implementation working correctly");
         }
     }
 
-    println!("🎯 Test environment setup completed successfully!");
-    println!();
-    println!("Summary of infrastructure components:");
-    println!("  ✅ Environment variables loaded from .env");
-    println!("  ✅ ApiClient configured for testnet operations");
-    println!("  ✅ ElementsRpc instance ready for blockchain operations");
-    println!("  ✅ LwkSoftwareSigner generated with unique mnemonic");
-    println!("  ✅ All components verified and ready for integration testing");
-    println!();
-    println!("Requirements satisfied:");
-    println!("  📋 6.1: Environment variables loaded using dotenvy");
-    println!("  📋 6.2: ApiClient created with testnet configuration");
-    println!("  📋 6.3: LwkSoftwareSigner generated for test isolation");
+    print_if_nocapture("🎯 Test environment setup completed successfully!");
+    print_if_nocapture("");
+    print_if_nocapture("Summary of infrastructure components:");
+    print_if_nocapture("  ✅ Environment variables loaded from .env");
+    print_if_nocapture("  ✅ ApiClient configured for testnet operations");
+    print_if_nocapture("  ✅ ElementsRpc instance ready for blockchain operations");
+    print_if_nocapture("  ✅ LwkSoftwareSigner generated with unique mnemonic");
+    print_if_nocapture("  ✅ All components verified and ready for integration testing");
+    print_if_nocapture("");
+    print_if_nocapture("Requirements satisfied:");
+    print_if_nocapture("  📋 6.1: Environment variables loaded using dotenvy");
+    print_if_nocapture("  📋 6.2: ApiClient created with testnet configuration");
+    print_if_nocapture("  📋 6.3: LwkSoftwareSigner generated for test isolation");
 
     Ok(())
 }
@@ -656,7 +672,7 @@ async fn test_environment_setup_and_infrastructure() -> Result<(), Box<dyn std::
 /// Test helper function to verify environment variable loading
 #[tokio::test]
 async fn test_environment_variable_loading() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔍 Testing environment variable loading patterns");
+    print_if_nocapture("🔍 Testing environment variable loading patterns");
 
     // Test dotenvy loading
     dotenvy::dotenv().ok();
@@ -673,29 +689,29 @@ async fn test_environment_variable_loading() -> Result<(), Box<dyn std::error::E
     for var_name in &vars_to_check {
         match env::var(var_name) {
             Ok(value) => {
-                println!("✅ {}: {} characters", var_name, value.len());
+                print_if_nocapture(&format!("✅ {}: {} characters", var_name, value.len()));
             }
             Err(_) => {
-                println!("⚠️  {}: not set", var_name);
+                print_if_nocapture(&format!("⚠️  {}: not set", var_name));
             }
         }
     }
 
     // Test ElementsRpc::from_env() method if environment variables are set
-    println!("🧪 Testing ElementsRpc::from_env() method");
+    print_if_nocapture("🧪 Testing ElementsRpc::from_env() method");
     match ElementsRpc::from_env() {
         Ok(rpc) => {
-            println!("✅ ElementsRpc::from_env() succeeded");
+            print_if_nocapture("✅ ElementsRpc::from_env() succeeded");
 
             // Test basic functionality
             match rpc.get_network_info().await {
-                Ok(_) => println!("✅ Network info retrieval successful"),
-                Err(e) => println!("⚠️  Network info failed (may be expected): {}", e),
+                Ok(_) => print_if_nocapture("✅ Network info retrieval successful"),
+                Err(e) => print_if_nocapture(&format!("⚠️  Network info failed (may be expected): {}", e)),
             }
         }
         Err(e) => {
-            println!("⚠️  ElementsRpc::from_env() failed: {}", e);
-            println!("   This is expected if environment variables are not properly set");
+            print_if_nocapture(&format!("⚠️  ElementsRpc::from_env() failed: {}", e));
+            print_if_nocapture("   This is expected if environment variables are not properly set");
         }
     }
 
@@ -705,7 +721,7 @@ async fn test_environment_variable_loading() -> Result<(), Box<dyn std::error::E
 /// Test helper function to verify ApiClient testnet configuration
 #[tokio::test]
 async fn test_api_client_testnet_configuration() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🌐 Testing ApiClient testnet configuration");
+    print_if_nocapture("🌐 Testing ApiClient testnet configuration");
 
     // Load environment
     dotenvy::dotenv().ok();
@@ -715,15 +731,15 @@ async fn test_api_client_testnet_configuration() -> Result<(), Box<dyn std::erro
     let client = ApiClient::new().await?;
 
     // Verify configuration
-    println!("✅ ApiClient configuration:");
-    println!("   - Strategy: {}", client.get_strategy_type());
-    println!("   - Persistence: {}", client.should_persist_tokens());
+    print_if_nocapture("✅ ApiClient configuration:");
+    print_if_nocapture(&format!("   - Strategy: {}", client.get_strategy_type()));
+    print_if_nocapture(&format!("   - Persistence: {}", client.should_persist_tokens()));
 
     // Verify it's configured for live testing
     assert_eq!(client.get_strategy_type(), "live");
     assert!(client.should_persist_tokens());
 
-    println!("✅ ApiClient correctly configured for testnet operations");
+    print_if_nocapture("✅ ApiClient correctly configured for testnet operations");
 
     Ok(())
 }
@@ -852,7 +868,7 @@ async fn test_descriptor_wallet_setup() -> Result<(), Box<dyn std::error::Error>
 /// Test helper function to verify LwkSoftwareSigner generation and isolation
 #[tokio::test]
 async fn test_lwk_signer_generation_and_isolation() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔐 Testing LwkSoftwareSigner generation and isolation");
+    print_if_nocapture("🔐 Testing LwkSoftwareSigner generation and isolation");
 
     // Generate multiple signers to test isolation using indexed generation
     let (mnemonic1, signer1) = LwkSoftwareSigner::generate_new_indexed(100)?;
@@ -1992,10 +2008,20 @@ async fn test_distribution_assignment_creation() -> Result<(), Box<dyn std::erro
 #[tokio::test]
 #[serial]
 async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🌐 Testing network failure scenarios");
+    // Helper function to conditionally print based on nocapture mode
+    let should_print = std::env::args().any(|arg| arg == "--nocapture");
+    let print_if_nocapture = |msg: &str| {
+        if should_print {
+            println!("{}", msg);
+        }
+    };
 
-    // Initialize tracing for detailed logging
-    let _ = tracing_subscriber::fmt::try_init();
+    print_if_nocapture("🌐 Testing network failure scenarios");
+
+    // Initialize tracing for detailed logging only if nocapture is enabled
+    if should_print {
+        let _ = tracing_subscriber::fmt::try_init();
+    }
 
     // Setup environment
     dotenvy::dotenv().ok();
@@ -2004,11 +2030,11 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
     let api_client = ApiClient::new().await?;
     let (mnemonic, signer) = LwkSoftwareSigner::generate_new_indexed(400)?;
 
-    println!("✅ Test infrastructure setup complete");
-    println!("   - Signer mnemonic: {}...", &mnemonic[..50]);
+    print_if_nocapture("✅ Test infrastructure setup complete");
+    print_if_nocapture(&format!("   - Signer mnemonic: {}...", &mnemonic[..50]));
 
     // Test 1: Invalid Elements RPC URL (network failure)
-    println!("\n🧪 Test 1: Invalid Elements RPC URL");
+    print_if_nocapture("\n🧪 Test 1: Invalid Elements RPC URL");
     let invalid_rpc = ElementsRpc::new(
         "http://invalid-host:18884".to_string(),
         "user".to_string(),
@@ -2034,13 +2060,13 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
 
     match result {
         Err(amp_rs::AmpError::Rpc(_)) => {
-            println!("   ✅ Network failure correctly detected as RPC error");
+            print_if_nocapture("   ✅ Network failure correctly detected as RPC error");
         }
         Err(amp_rs::AmpError::Network(_)) => {
-            println!("   ✅ Network failure correctly detected as Network error");
+            print_if_nocapture("   ✅ Network failure correctly detected as Network error");
         }
         Err(e) => {
-            println!("   ✅ Network failure detected with error: {}", e);
+            print_if_nocapture(&format!("   ✅ Network failure detected with error: {}", e));
         }
         Ok(_) => {
             return Err("Expected network failure to be detected".into());
@@ -2048,7 +2074,7 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
     }
 
     // Test 2: Unreachable Elements RPC (connection timeout)
-    println!("\n🧪 Test 2: Unreachable Elements RPC endpoint");
+    print_if_nocapture("\n🧪 Test 2: Unreachable Elements RPC endpoint");
     let unreachable_rpc = ElementsRpc::new(
         "http://192.0.2.1:18884".to_string(), // RFC 5737 test address
         "user".to_string(),
@@ -2067,13 +2093,13 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
 
     match result {
         Err(e) => {
-            println!("   ✅ Unreachable RPC correctly detected: {}", e);
+            print_if_nocapture(&format!("   ✅ Unreachable RPC correctly detected: {}", e));
 
             // Verify error is marked as retryable
             if e.is_retryable() {
-                println!("   ✅ Error correctly marked as retryable");
+                print_if_nocapture("   ✅ Error correctly marked as retryable");
                 if let Some(instructions) = e.retry_instructions() {
-                    println!("   ✅ Retry instructions provided: {}", instructions);
+                    print_if_nocapture(&format!("   ✅ Retry instructions provided: {}", instructions));
                 }
             }
         }
@@ -2083,7 +2109,7 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
     }
 
     // Test 3: Invalid API credentials (authentication failure)
-    println!("\n🧪 Test 3: Invalid API credentials");
+    print_if_nocapture("\n🧪 Test 3: Invalid API credentials");
 
     // Create client with invalid credentials by temporarily changing environment
     let original_username = env::var("AMP_USERNAME").ok();
@@ -2123,29 +2149,29 @@ async fn test_network_failure_scenarios() -> Result<(), Box<dyn std::error::Erro
 
             match result {
                 Err(e) => {
-                    println!("   ✅ Authentication failure correctly detected: {}", e);
+                    print_if_nocapture(&format!("   ✅ Authentication failure correctly detected: {}", e));
                 }
                 Ok(_) => {
-                    println!(
+                    print_if_nocapture(
                         "   ⚠️  Authentication failure not detected (may be using cached token)"
                     );
                 }
             }
         }
         Err(e) => {
-            println!(
+            print_if_nocapture(&format!(
                 "   ✅ Invalid credentials detected during client creation: {}",
                 e
-            );
+            ));
         }
     }
 
-    println!("\n🎯 Network failure scenarios test completed!");
-    println!();
-    println!("Requirements satisfied:");
-    println!("   📋 5.1: API errors properly detected and handled");
-    println!("   📋 5.2: RPC errors properly detected and handled");
-    println!("   📋 5.4: Network timeouts properly detected and handled");
+    print_if_nocapture("\n🎯 Network failure scenarios test completed!");
+    print_if_nocapture("");
+    print_if_nocapture("Requirements satisfied:");
+    print_if_nocapture("   📋 5.1: API errors properly detected and handled");
+    print_if_nocapture("   📋 5.2: RPC errors properly detected and handled");
+    print_if_nocapture("   📋 5.4: Network timeouts properly detected and handled");
 
     Ok(())
 }

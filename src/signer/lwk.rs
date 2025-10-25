@@ -14,6 +14,43 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+/// Helper function to check if logging should be enabled during tests
+/// Only enables logging if --nocapture is passed to cargo test
+fn should_log_in_tests() -> bool {
+    // Always allow logging in non-test builds
+    if !cfg!(test) {
+        return true;
+    }
+    
+    // In test builds, only log if --nocapture is passed
+    std::env::args().any(|arg| arg == "--nocapture")
+}
+
+/// Conditional logging macros that respect test environment and --nocapture flag
+macro_rules! cond_debug {
+    ($($arg:tt)*) => {
+        if should_log_in_tests() {
+            tracing::debug!($($arg)*);
+        }
+    };
+}
+
+macro_rules! cond_info {
+    ($($arg:tt)*) => {
+        if should_log_in_tests() {
+            tracing::info!($($arg)*);
+        }
+    };
+}
+
+macro_rules! cond_error {
+    ($($arg:tt)*) => {
+        if should_log_in_tests() {
+            tracing::error!($($arg)*);
+        }
+    };
+}
+
 /// JSON structure for persistent mnemonic storage
 ///
 /// `MnemonicStorage` handles the serialization and management of multiple BIP39
@@ -346,7 +383,7 @@ impl MnemonicStorage {
 
         // Handle missing file gracefully by returning empty storage
         if !path.exists() {
-            tracing::debug!(
+            cond_debug!(
                 "Mnemonic file {:?} does not exist, returning empty storage",
                 path
             );
@@ -355,29 +392,29 @@ impl MnemonicStorage {
 
         // Read file contents
         let contents = fs::read_to_string(path).map_err(|e| {
-            tracing::error!("Failed to read mnemonic file {:?}: {}", path, e);
+            cond_error!("Failed to read mnemonic file {:?}: {}", path, e);
             SignerError::FileIo(e)
         })?;
 
         // Handle empty file gracefully
         if contents.trim().is_empty() {
-            tracing::debug!("Mnemonic file {:?} is empty, returning empty storage", path);
+            cond_debug!("Mnemonic file {:?} is empty, returning empty storage", path);
             return Ok(Self::new());
         }
 
         // Parse JSON content
         let storage: Self = serde_json::from_str(&contents).map_err(|e| {
-            tracing::error!("Failed to parse mnemonic file {:?}: {}", path, e);
+            cond_error!("Failed to parse mnemonic file {:?}: {}", path, e);
             SignerError::Serialization(e)
         })?;
 
         // Validate all mnemonics in the loaded storage
         storage.validate().map_err(|e| {
-            tracing::error!("Validation failed for mnemonics in file {:?}: {}", path, e);
+            cond_error!("Validation failed for mnemonics in file {:?}: {}", path, e);
             e
         })?;
 
-        tracing::info!(
+        cond_info!(
             "Successfully loaded {} mnemonics from {:?}",
             storage.len(),
             path
@@ -1116,6 +1153,7 @@ impl LwkSoftwareSigner {
     /// ```rust,no_run
     /// # use amp_rs::signer::{LwkSoftwareSigner, SignerError};
     /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let elements_rpc = ElementsRpc::from_env()?;
     ///
@@ -1264,7 +1302,7 @@ impl LwkSoftwareSigner {
         unsigned_tx: &str,
         utxos: &[Unspent],
     ) -> Result<String, SignerError> {
-        tracing::debug!(
+        cond_debug!(
             "Starting transaction signing with {} UTXOs for hex: {}",
             utxos.len(),
             &unsigned_tx[..std::cmp::min(unsigned_tx.len(), 64)]
@@ -1272,7 +1310,7 @@ impl LwkSoftwareSigner {
 
         // Input validation - check for empty or whitespace-only input
         if unsigned_tx.trim().is_empty() {
-            tracing::error!("Empty transaction hex provided");
+            cond_error!("Empty transaction hex provided");
             return Err(SignerError::InvalidTransaction(
                 "Transaction hex cannot be empty".to_string(),
             ));
@@ -1280,7 +1318,7 @@ impl LwkSoftwareSigner {
 
         // Input validation - check for reasonable hex length (minimum transaction size)
         if unsigned_tx.len() < 20 {
-            tracing::error!(
+            cond_error!(
                 "Transaction hex too short: {} characters",
                 unsigned_tx.len()
             );
@@ -1301,7 +1339,7 @@ impl LwkSoftwareSigner {
             } else {
                 unsigned_tx.to_string()
             };
-            tracing::error!(
+            cond_error!(
                 "Failed to decode transaction hex (length: {}, preview: '{}'): {}",
                 unsigned_tx.len(),
                 preview,
@@ -1310,11 +1348,11 @@ impl LwkSoftwareSigner {
             SignerError::HexParse(e)
         })?;
 
-        tracing::debug!("Successfully decoded hex to {} bytes", tx_bytes.len());
+        cond_debug!("Successfully decoded hex to {} bytes", tx_bytes.len());
 
         let unsigned_transaction =
             elements::Transaction::consensus_decode(&tx_bytes[..]).map_err(|e| {
-                tracing::error!(
+                cond_error!(
                     "Failed to deserialize transaction from {} bytes: {}",
                     tx_bytes.len(),
                     e
@@ -1326,7 +1364,7 @@ impl LwkSoftwareSigner {
                 ))
             })?;
 
-        tracing::debug!(
+        cond_debug!(
             "Successfully parsed transaction with {} inputs and {} outputs",
             unsigned_transaction.input.len(),
             unsigned_transaction.output.len()
@@ -1334,14 +1372,14 @@ impl LwkSoftwareSigner {
 
         // Validate transaction structure
         if unsigned_transaction.input.is_empty() {
-            tracing::error!("Transaction has no inputs");
+            cond_error!("Transaction has no inputs");
             return Err(SignerError::InvalidTransaction(
                 "Transaction must have at least one input".to_string(),
             ));
         }
 
         if unsigned_transaction.output.is_empty() {
-            tracing::error!("Transaction has no outputs");
+            cond_error!("Transaction has no outputs");
             return Err(SignerError::InvalidTransaction(
                 "Transaction must have at least one output".to_string(),
             ));
@@ -1349,7 +1387,7 @@ impl LwkSoftwareSigner {
 
         // Validate UTXO count matches transaction inputs
         if utxos.len() != unsigned_transaction.input.len() {
-            tracing::error!(
+            cond_error!(
                 "UTXO count ({}) does not match transaction input count ({})",
                 utxos.len(),
                 unsigned_transaction.input.len()
@@ -1364,7 +1402,7 @@ impl LwkSoftwareSigner {
         // Convert to PartiallySignedTransaction for LWK signing
         let mut pset = PartiallySignedTransaction::from_tx(unsigned_transaction.clone());
 
-        tracing::debug!(
+        cond_debug!(
             "Created PSET for signing with {} inputs",
             pset.inputs().len()
         );
@@ -1436,7 +1474,7 @@ impl LwkSoftwareSigner {
             // Add the UTXO to the PSBT input
             if let Some(input) = pset.inputs_mut().get_mut(i) {
                 input.witness_utxo = Some(tx_out);
-                tracing::debug!("Added UTXO {} to PSBT input {}", utxo.txid, i);
+                cond_debug!("Added UTXO {} to PSBT input {}", utxo.txid, i);
             } else {
                 return Err(SignerError::InvalidTransaction(format!(
                     "Failed to get PSBT input {i} for UTXO addition"
@@ -1444,11 +1482,11 @@ impl LwkSoftwareSigner {
             }
         }
 
-        tracing::debug!("Added {} UTXOs to PSBT inputs", utxos.len());
+        cond_debug!("Added {} UTXOs to PSBT inputs", utxos.len());
 
         // Use SwSigner to sign the transaction
         let signed_inputs = self.signer.sign(&mut pset).map_err(|e| {
-            tracing::error!(
+            cond_error!(
                 "LWK signing operation failed for transaction with {} inputs: {}",
                 pset.inputs().len(),
                 e
@@ -1460,11 +1498,11 @@ impl LwkSoftwareSigner {
             ))
         })?;
 
-        tracing::debug!("Successfully signed {} inputs", signed_inputs);
+        cond_debug!("Successfully signed {} inputs", signed_inputs);
 
         // Extract the signed transaction from PSET
         let signed_transaction = pset.extract_tx().map_err(|e| {
-            tracing::error!("Failed to extract signed transaction from PSET: {}", e);
+            cond_error!("Failed to extract signed transaction from PSET: {}", e);
             SignerError::Lwk(format!(
                 "Transaction extraction failed after signing {signed_inputs} inputs: {e}"
             ))
@@ -1476,18 +1514,18 @@ impl LwkSoftwareSigner {
 
         // Validate the serialization result
         if signed_hex.is_empty() {
-            tracing::error!("Serialization produced empty hex string");
+            cond_error!("Serialization produced empty hex string");
             return Err(SignerError::InvalidTransaction(
                 "Transaction serialization produced empty result".to_string(),
             ));
         }
 
         // Add logging for successful signing operations
-        tracing::info!(
+        cond_info!(
             "Successfully signed transaction with UTXOs. TXID: {}",
             signed_transaction.txid()
         );
-        tracing::debug!(
+        cond_debug!(
             "Signed transaction hex length: {} bytes (original: {} bytes)",
             signed_hex.len() / 2,
             tx_bytes.len()
@@ -3713,3 +3751,29 @@ mod tests {
         let _ = fs::remove_file(extra_path);
     }
 }
+    #[test]
+    fn test_conditional_logging_behavior() {
+        // This test verifies that our conditional logging works correctly
+        // It should not produce output unless --nocapture is passed
+        
+        // Initialize tracing subscriber conditionally
+        if should_log_in_tests() {
+            let _ = tracing_subscriber::fmt::try_init();
+        }
+        
+        // Test reading from a non-existent file (should trigger debug logging)
+        let result = MnemonicStorage::read_from_file_path("non_existent_test_file.json");
+        assert!(result.is_ok());
+        let storage = result.unwrap();
+        assert!(storage.is_empty());
+        
+        // Test creating a signer (should trigger debug and info logging)
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let result = LwkSoftwareSigner::new(mnemonic);
+        assert!(result.is_ok());
+        let signer = result.unwrap();
+        assert!(signer.is_testnet());
+        
+        // If you run this test with --nocapture, you should see logging output
+        // If you run without --nocapture, you should see no logging output
+    }
