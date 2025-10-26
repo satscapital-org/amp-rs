@@ -30,6 +30,9 @@ cargo run --example changelog
 
 # Create, issue, and authorize a new asset for distribution tests (requires live API)
 AMP_TESTS=live cargo run --example create_issue_authorize_asset
+
+# Run end-to-end asset distribution workflow with specific asset and user (requires live API)
+cargo run --example end_to_end_distribution_example
 ```
 
 Make sure to set up your `.env` file with the required credentials first.

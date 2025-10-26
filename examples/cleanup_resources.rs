@@ -16,6 +16,7 @@ const TEST_USER_GAIDS: &[&str] = &[
 const TEST_ASSET_NAME: &str = "Test Environment Asset";
 const PROTECTED_ASSET_UUIDS: &[&str] = &[
     "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset
+    "9bcd9987-9544-439f-80b3-6d76b072fd9b", // Asset ID: 02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87
 ];
 
 #[tokio::main]
