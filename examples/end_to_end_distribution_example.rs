@@ -80,7 +80,10 @@ async fn setup_test_user(
     let user_address = gaid_address_response.address;
 
     if user_address.is_empty() {
-        println!("   ⚠️  Warning: GAID address API returned empty address for GAID {}", gaid);
+        println!(
+            "   ⚠️  Warning: GAID address API returned empty address for GAID {}",
+            gaid
+        );
         return Err("GAID does not have an associated address".into());
     }
     println!("   ✅ Retrieved GAID address: {}", user_address);
@@ -88,16 +91,25 @@ async fn setup_test_user(
     // Check if user with this GAID already exists
     match client.get_gaid_registered_user(gaid).await {
         Ok(existing_user) => {
-            println!("   ✅ Found existing user with GAID {} (ID: {})", gaid, existing_user.id);
+            println!(
+                "   ✅ Found existing user with GAID {} (ID: {})",
+                gaid, existing_user.id
+            );
             return Ok((existing_user.id, existing_user.name, user_address));
         }
         Err(_) => {
-            println!("   ⚠️  User with GAID {} not found, attempting to register", gaid);
+            println!(
+                "   ⚠️  User with GAID {} not found, attempting to register",
+                gaid
+            );
         }
     }
 
     // Try to register new user
-    let user_name = format!("Distribution Example User {}", chrono::Utc::now().timestamp());
+    let user_name = format!(
+        "Distribution Example User {}",
+        chrono::Utc::now().timestamp()
+    );
     let user_add_request = amp_rs::model::RegisteredUserAdd {
         name: user_name.clone(),
         gaid: Some(gaid.to_string()),
@@ -106,7 +118,10 @@ async fn setup_test_user(
 
     match client.add_registered_user(&user_add_request).await {
         Ok(created_user) => {
-            println!("   🎉 Created new user with GAID {} (ID: {})", gaid, created_user.id);
+            println!(
+                "   🎉 Created new user with GAID {} (ID: {})",
+                gaid, created_user.id
+            );
             Ok((created_user.id, user_name, user_address))
         }
         Err(e) => {
@@ -116,7 +131,10 @@ async fn setup_test_user(
                     Ok(users) => {
                         for user in users {
                             if user.gaid.as_ref() == Some(&gaid.to_string()) {
-                                println!("   ✅ Found existing user with GAID {} (ID: {})", gaid, user.id);
+                                println!(
+                                    "   ✅ Found existing user with GAID {} (ID: {})",
+                                    gaid, user.id
+                                );
                                 return Ok((user.id, user.name, user_address));
                             }
                         }
@@ -139,7 +157,10 @@ async fn setup_test_category(
 ) -> Result<(i64, String), Box<dyn std::error::Error>> {
     println!("📂 Setting up test category");
 
-    let category_name = format!("Distribution Example Category {}", chrono::Utc::now().timestamp());
+    let category_name = format!(
+        "Distribution Example Category {}",
+        chrono::Utc::now().timestamp()
+    );
     let category_description = Some("Category for testing asset distribution workflow".to_string());
 
     let category_add_request = amp_rs::model::CategoryAdd {
@@ -149,13 +170,20 @@ async fn setup_test_category(
 
     let created_category = client.add_category(&category_add_request).await?;
     let category_id = created_category.id;
-    println!("   ✅ Created category: {} (ID: {})", category_name, category_id);
+    println!(
+        "   ✅ Created category: {} (ID: {})",
+        category_name, category_id
+    );
 
     // Associate user and asset with category
-    client.add_registered_user_to_category(category_id, user_id).await?;
+    client
+        .add_registered_user_to_category(category_id, user_id)
+        .await?;
     println!("   ✅ Associated user {} with category", user_id);
 
-    client.add_asset_to_category(category_id, asset_uuid).await?;
+    client
+        .add_asset_to_category(category_id, asset_uuid)
+        .await?;
     println!("   ✅ Associated asset {} with category", asset_uuid);
 
     Ok((category_id, category_name))
@@ -185,10 +213,16 @@ async fn setup_asset_assignments_with_retry(
     let mut retry_count = 0;
 
     loop {
-        match client.create_asset_assignments(asset_uuid, &assignment_requests).await {
+        match client
+            .create_asset_assignments(asset_uuid, &assignment_requests)
+            .await
+        {
             Ok(created_assignments) => {
                 if retry_count > 0 {
-                    println!("   ✅ Asset assignments created successfully after {} retries", retry_count);
+                    println!(
+                        "   ✅ Asset assignments created successfully after {} retries",
+                        retry_count
+                    );
                 } else {
                     println!("   ✅ Asset assignments created successfully");
                 }
@@ -196,9 +230,14 @@ async fn setup_asset_assignments_with_retry(
             }
             Err(e) => {
                 let error_msg = e.to_string();
-                if error_msg.contains("not enough in the treasury balance") && retry_count < max_retries {
+                if error_msg.contains("not enough in the treasury balance")
+                    && retry_count < max_retries
+                {
                     retry_count += 1;
-                    println!("   ⚠️  Treasury balance not ready (attempt {}/{}): {}", retry_count, max_retries, error_msg);
+                    println!(
+                        "   ⚠️  Treasury balance not ready (attempt {}/{}): {}",
+                        retry_count, max_retries, error_msg
+                    );
                     println!("   Waiting 60 seconds before retry...");
                     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                     continue;
@@ -220,36 +259,69 @@ async fn cleanup_test_data(
     // Step 1: Delete asset assignments first
     println!("📋 Cleaning up asset assignments");
     for assignment_id in &test_setup.assignment_ids {
-        match client.delete_asset_assignment(&test_setup.asset_uuid, &assignment_id.to_string()).await {
+        match client
+            .delete_asset_assignment(&test_setup.asset_uuid, &assignment_id.to_string())
+            .await
+        {
             Ok(()) => println!("   ✅ Deleted assignment ID: {}", assignment_id),
-            Err(e) => println!("   ⚠️  Failed to delete assignment ID {}: {} (may already be deleted)", assignment_id, e),
+            Err(e) => println!(
+                "   ⚠️  Failed to delete assignment ID {}: {} (may already be deleted)",
+                assignment_id, e
+            ),
         }
     }
 
     // Step 2: Detach users from categories
     println!("👤 Detaching users from categories");
-    match client.remove_registered_user_from_category(test_setup.category_id, test_setup.user_id).await {
-        Ok(_) => println!("   ✅ Detached user {} from category {}", test_setup.user_id, test_setup.category_id),
-        Err(e) => println!("   ⚠️  Failed to detach user from category: {} (may already be detached)", e),
+    match client
+        .remove_registered_user_from_category(test_setup.category_id, test_setup.user_id)
+        .await
+    {
+        Ok(_) => println!(
+            "   ✅ Detached user {} from category {}",
+            test_setup.user_id, test_setup.category_id
+        ),
+        Err(e) => println!(
+            "   ⚠️  Failed to detach user from category: {} (may already be detached)",
+            e
+        ),
     }
 
     // Step 3: Detach assets from categories
     println!("🪙 Detaching assets from categories");
-    match client.remove_asset_from_category(test_setup.category_id, &test_setup.asset_uuid).await {
-        Ok(_) => println!("   ✅ Detached asset {} from category {}", test_setup.asset_uuid, test_setup.category_id),
-        Err(e) => println!("   ⚠️  Failed to detach asset from category: {} (may already be detached)", e),
+    match client
+        .remove_asset_from_category(test_setup.category_id, &test_setup.asset_uuid)
+        .await
+    {
+        Ok(_) => println!(
+            "   ✅ Detached asset {} from category {}",
+            test_setup.asset_uuid, test_setup.category_id
+        ),
+        Err(e) => println!(
+            "   ⚠️  Failed to detach asset from category: {} (may already be detached)",
+            e
+        ),
     }
 
     // Step 4: Delete category
     println!("📂 Deleting test category");
     match client.delete_category(test_setup.category_id).await {
-        Ok(()) => println!("   ✅ Deleted category: {} (ID: {})", test_setup.category_name, test_setup.category_id),
-        Err(e) => println!("   ⚠️  Failed to delete category: {} (may already be deleted)", e),
+        Ok(()) => println!(
+            "   ✅ Deleted category: {} (ID: {})",
+            test_setup.category_name, test_setup.category_id
+        ),
+        Err(e) => println!(
+            "   ⚠️  Failed to delete category: {} (may already be deleted)",
+            e
+        ),
     }
 
     // Step 5: Preserve test user (do not delete for reuse)
     println!("👤 Preserving test user for reuse");
-    println!("   ✅ Preserved user: {} (ID: {}, GAID: {})", test_setup.user_name, test_setup.user_id, test_setup.user_gaid);
+    println!(
+        "   ✅ Preserved user: {} (ID: {}, GAID: {})",
+        test_setup.user_name, test_setup.user_id, test_setup.user_gaid
+    );
 
     println!("✅ Test data cleanup completed successfully");
     Ok(())
@@ -258,7 +330,7 @@ async fn cleanup_test_data(
 /// Parse command line arguments to get the GAID
 fn parse_gaid_from_args() -> String {
     let args: Vec<String> = env::args().collect();
-    
+
     if args.len() > 1 {
         let provided_gaid = &args[1];
         println!("📝 Using GAID from command line: {}", provided_gaid);
@@ -276,14 +348,19 @@ fn print_usage() {
     println!("  cargo run --example end_to_end_distribution_example [GAID]");
     println!();
     println!("Arguments:");
-    println!("  GAID    Optional GAID to use for distribution (default: {})", DEFAULT_USER_GAID);
+    println!(
+        "  GAID    Optional GAID to use for distribution (default: {})",
+        DEFAULT_USER_GAID
+    );
     println!();
     println!("Examples:");
     println!("  # Use default GAID");
     println!("  cargo run --example end_to_end_distribution_example");
     println!();
     println!("  # Use specific GAID");
-    println!("  cargo run --example end_to_end_distribution_example -- GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ");
+    println!(
+        "  cargo run --example end_to_end_distribution_example -- GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ"
+    );
 }
 
 #[tokio::main]
@@ -311,10 +388,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Verify required environment variables
-    let amp_username = env::var("AMP_USERNAME")
-        .map_err(|_| "AMP_USERNAME environment variable not set")?;
-    let _amp_password = env::var("AMP_PASSWORD")
-        .map_err(|_| "AMP_PASSWORD environment variable not set")?;
+    let amp_username =
+        env::var("AMP_USERNAME").map_err(|_| "AMP_USERNAME environment variable not set")?;
+    let _amp_password =
+        env::var("AMP_PASSWORD").map_err(|_| "AMP_PASSWORD environment variable not set")?;
 
     println!("✅ Environment variables loaded");
     println!("   - AMP Username: {}", amp_username);
@@ -324,7 +401,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create API client
     println!("🌐 Creating ApiClient with testnet configuration");
-    let api_client = ApiClient::new().await
+    let api_client = ApiClient::new()
+        .await
         .map_err(|e| format!("Failed to create ApiClient: {}", e))?;
 
     println!("✅ ApiClient created successfully");
@@ -368,7 +446,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify asset exists and get details
     println!("🪙 Verifying asset exists and getting details");
-    let asset_details = api_client.get_asset(ASSET_UUID).await
+    let asset_details = api_client
+        .get_asset(ASSET_UUID)
+        .await
         .map_err(|e| format!("Failed to get asset details: {}", e))?;
 
     println!("✅ Asset verified successfully");
@@ -378,9 +458,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ensure treasury address is configured for asset
     println!("🔧 Ensuring treasury address is configured for asset");
-    match api_client.add_asset_treasury_addresses(ASSET_UUID, &vec![treasury_address.clone()]).await {
+    match api_client
+        .add_asset_treasury_addresses(ASSET_UUID, &vec![treasury_address.clone()])
+        .await
+    {
         Ok(_) => println!("✅ Treasury address added to asset (or was already present)"),
-        Err(e) => println!("⚠️  Treasury address addition result: {} (may already exist)", e),
+        Err(e) => println!(
+            "⚠️  Treasury address addition result: {} (may already exist)",
+            e
+        ),
     }
 
     // Register asset as authorized for distribution
@@ -402,7 +488,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Setup test user
-    let (user_id, user_name, user_address) = setup_test_user(&api_client, &user_gaid).await
+    let (user_id, user_name, user_address) = setup_test_user(&api_client, &user_gaid)
+        .await
         .map_err(|e| format!("Failed to setup test user: {}", e))?;
 
     println!("✅ Test user setup complete");
@@ -412,7 +499,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Address: {}", user_address);
 
     // Create test category and associations
-    let (category_id, category_name) = setup_test_category(&api_client, user_id, ASSET_UUID).await
+    let (category_id, category_name) = setup_test_category(&api_client, user_id, ASSET_UUID)
+        .await
         .map_err(|e| format!("Failed to setup test category: {}", e))?;
 
     println!("✅ Test category created and associations established");
@@ -424,8 +512,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("💰 Setting up initial asset assignments for distribution funding");
     println!("   - Assignment amount: {} satoshis", assignment_amount);
 
-    let assignment_ids = setup_asset_assignments_with_retry(&api_client, ASSET_UUID, user_id, assignment_amount).await
-        .map_err(|e| format!("Failed to setup asset assignments: {}", e))?;
+    let assignment_ids =
+        setup_asset_assignments_with_retry(&api_client, ASSET_UUID, user_id, assignment_amount)
+            .await
+            .map_err(|e| format!("Failed to setup asset assignments: {}", e))?;
 
     println!("✅ Asset assignments created");
     println!("   - Assignment IDs: {:?}", assignment_ids);
@@ -450,13 +540,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let distribution_start = std::time::Instant::now();
 
-    match api_client.distribute_asset(
-        ASSET_UUID,
-        distribution_assignments,
-        &elements_rpc,
-        &wallet_name,
-        &signer,
-    ).await {
+    match api_client
+        .distribute_asset(
+            ASSET_UUID,
+            distribution_assignments,
+            &elements_rpc,
+            &wallet_name,
+            &signer,
+        )
+        .await
+    {
         Ok(()) => {
             let distribution_duration = distribution_start.elapsed();
             println!("🎉 distribute_asset completed successfully!");
@@ -464,7 +557,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             let distribution_duration = distribution_start.elapsed();
-            println!("❌ distribute_asset failed after {:?}: {}", distribution_duration, e);
+            println!(
+                "❌ distribute_asset failed after {:?}: {}",
+                distribution_duration, e
+            );
             println!("   Error details: {:?}", e);
 
             // Handle specific error cases
@@ -477,7 +573,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let test_setup = ExampleSetupData {
                 asset_uuid: ASSET_UUID.to_string(),
                 asset_name: asset_details.name.clone(),
-                asset_ticker: asset_details.ticker.clone().unwrap_or_else(|| "Unknown".to_string()),
+                asset_ticker: asset_details
+                    .ticker
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
                 treasury_address: treasury_address.clone(),
                 user_id,
                 user_name: user_name.clone(),
@@ -510,7 +609,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .filter(|a| !a.ready_for_distribution)
                 .collect();
 
-            println!("   - Distributed assignments: {}", distributed_assignments.len());
+            println!(
+                "   - Distributed assignments: {}",
+                distributed_assignments.len()
+            );
 
             if !distributed_assignments.is_empty() {
                 println!("✅ Assignments were processed and marked as distributed");
@@ -532,7 +634,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let test_setup = ExampleSetupData {
         asset_uuid: ASSET_UUID.to_string(),
         asset_name: asset_details.name.clone(),
-        asset_ticker: asset_details.ticker.clone().unwrap_or_else(|| "Unknown".to_string()),
+        asset_ticker: asset_details
+            .ticker
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string()),
         treasury_address: treasury_address.clone(),
         user_id,
         user_name: user_name.clone(),
