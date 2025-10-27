@@ -10,7 +10,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-amp-rust = "0.0.2"
+amp-rust = "0.0.3"
 ```
 
 ## Examples
@@ -121,6 +121,55 @@ async fn main() {
         .await
         .unwrap();
     println!("Assignment deleted");
+}
+```
+
+### Create and execute asset distributions
+
+```rust
+use amp_rs::{ApiClient, ElementsRpc, signer::LwkSoftwareSigner, model::AssetDistributionAssignment};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup API client and Elements RPC connection
+    let client = ApiClient::new().await?;
+    let elements_rpc = ElementsRpc::from_env()?;
+
+    // Create a signer for transaction signing
+    let (mnemonic, signer) = LwkSoftwareSigner::generate_new_indexed(100)?;
+    println!("Using signer with mnemonic: {}...", &mnemonic[..50]);
+
+    let asset_uuid = "your_asset_uuid";
+    let wallet_name = "distribution_wallet";
+
+    // Define distribution assignments
+    let assignments = vec![
+        AssetDistributionAssignment {
+            user_id: "user123".to_string(),
+            address: "tlq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 0.00000100, // 100 satoshis in BTC units
+        },
+        AssetDistributionAssignment {
+            user_id: "user456".to_string(),
+            address: "tlq1qq9xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq".to_string(),
+            amount: 0.00000050, // 50 satoshis in BTC units
+        },
+    ];
+
+    // Execute the distribution
+    let result = client.distribute_asset(
+        asset_uuid,
+        assignments,
+        &elements_rpc,
+        wallet_name,
+        &signer,
+    ).await?;
+
+    println!("Distribution created successfully!");
+    println!("Distribution UUID: {}", result.distribution_uuid);
+    println!("Transaction ID: {}", result.txid);
+
+    Ok(())
 }
 ```
 

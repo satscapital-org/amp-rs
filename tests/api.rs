@@ -4693,8 +4693,7 @@ async fn test_get_asset_assignment_live() {
     println!("✅ Test completed successfully - get_asset_assignment method works correctly");
 }
 #[tokio::test]
-#[ignore]
-async fn test_get_asset_distribution_live_slow() {
+async fn test_get_asset_distribution_live() {
     dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {
         println!("Skipping live test");

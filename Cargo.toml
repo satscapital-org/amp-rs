@@ -1,6 +1,6 @@
 [package]
 name = "amp-rust"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "A Rust client for the Blockstream AMP API, providing interfaces for asset management, user operations, and token handling on the Liquid Network."
 license = "BSD-3-Clause"
