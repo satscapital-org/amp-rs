@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to get information about a specific distribution
 //! using the AMP API.
-//! 
+//!
 //! Usage:
 //!   cargo run --example get_distribution_info <ASSET_UUID> <DISTRIBUTION_UUID>
 //!
@@ -28,20 +28,23 @@ async fn main() {
 
     let asset_uuid = &args[1];
     let distribution_uuid = &args[2];
-    
+
     println!("Getting distribution info...");
     println!("  Asset UUID: {}", asset_uuid);
     println!("  Distribution UUID: {}", distribution_uuid);
 
     let client = ApiClient::new().await.expect("Failed to create API client");
 
-    match client.get_asset_distribution(asset_uuid, distribution_uuid).await {
+    match client
+        .get_asset_distribution(asset_uuid, distribution_uuid)
+        .await
+    {
         Ok(distribution) => {
             println!("\n✅ Distribution found:");
             println!("  UUID: {}", distribution.distribution_uuid);
             println!("  Status: {:?}", distribution.distribution_status);
             println!("  Transactions: {}", distribution.transactions.len());
-            
+
             if !distribution.transactions.is_empty() {
                 println!("\n📋 Transaction details:");
                 for (i, tx) in distribution.transactions.iter().enumerate() {

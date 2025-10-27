@@ -9864,12 +9864,12 @@ impl ApiClient {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = ApiClient::new().await?;
-    /// 
+    ///
     /// let distribution = client.get_asset_distribution(
     ///     "asset-uuid-123",
     ///     "distribution-uuid-456"
     /// ).await?;
-    /// 
+    ///
     /// println!("Distribution: {} - Status: {:?}",
     ///          distribution.distribution_uuid,
     ///          distribution.distribution_status);

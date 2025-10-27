@@ -4707,29 +4707,50 @@ async fn test_get_asset_distribution_live_slow() {
     }
 
     let client = get_shared_client().await.unwrap();
-    
+
     // Use the specific asset and distribution from our examples
     let asset_uuid = "fff0928b-f78e-4a2c-bfa0-2c70bb72d545";
     let distribution_uuid = "6bf89047-fa56-480b-a623-1c8ca289b22e";
-    
-    let result = client.get_asset_distribution(asset_uuid, distribution_uuid).await;
-    
-    assert!(result.is_ok(), "Failed to get asset distribution: {:?}", result.err());
-    
+
+    let result = client
+        .get_asset_distribution(asset_uuid, distribution_uuid)
+        .await;
+
+    assert!(
+        result.is_ok(),
+        "Failed to get asset distribution: {:?}",
+        result.err()
+    );
+
     let distribution = result.unwrap();
-    
+
     // Verify the exact details we expect from the live API
-    assert_eq!(distribution.distribution_uuid, "6bf89047-fa56-480b-a623-1c8ca289b22e");
-    assert!(matches!(distribution.distribution_status, amp_rs::model::Status::Confirmed));
+    assert_eq!(
+        distribution.distribution_uuid,
+        "6bf89047-fa56-480b-a623-1c8ca289b22e"
+    );
+    assert!(matches!(
+        distribution.distribution_status,
+        amp_rs::model::Status::Confirmed
+    ));
     assert_eq!(distribution.transactions.len(), 1);
-    
+
     let transaction = &distribution.transactions[0];
-    assert_eq!(transaction.txid, "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184");
-    assert!(matches!(transaction.transaction_status, amp_rs::model::Status::Confirmed));
+    assert_eq!(
+        transaction.txid,
+        "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184"
+    );
+    assert!(matches!(
+        transaction.transaction_status,
+        amp_rs::model::Status::Confirmed
+    ));
     assert_eq!(transaction.included_blockheight, 2146947);
-    assert_eq!(transaction.confirmed_datetime, "2025-10-22T20:45:13.879485Z");
+    assert_eq!(
+        transaction.confirmed_datetime,
+        "2025-10-22T20:45:13.879485Z"
+    );
     assert_eq!(transaction.assignments.len(), 1);
-    
+
     let assignment = &transaction.assignments[0];
     assert_eq!(assignment.registered_user, 1936);
     assert_eq!(assignment.amount, 1);
@@ -4758,16 +4779,28 @@ async fn test_get_asset_distribution_mock() {
     assert!(result.is_ok());
     let distribution = result.unwrap();
     assert_eq!(distribution.distribution_uuid, "mock_distribution_uuid");
-    assert!(matches!(distribution.distribution_status, amp_rs::model::Status::Confirmed));
+    assert!(matches!(
+        distribution.distribution_status,
+        amp_rs::model::Status::Confirmed
+    ));
     assert_eq!(distribution.transactions.len(), 1);
-    
+
     let transaction = &distribution.transactions[0];
-    assert_eq!(transaction.txid, "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184");
-    assert!(matches!(transaction.transaction_status, amp_rs::model::Status::Confirmed));
+    assert_eq!(
+        transaction.txid,
+        "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184"
+    );
+    assert!(matches!(
+        transaction.transaction_status,
+        amp_rs::model::Status::Confirmed
+    ));
     assert_eq!(transaction.included_blockheight, 2146947);
-    assert_eq!(transaction.confirmed_datetime, "2025-10-22T20:45:13.879485Z");
+    assert_eq!(
+        transaction.confirmed_datetime,
+        "2025-10-22T20:45:13.879485Z"
+    );
     assert_eq!(transaction.assignments.len(), 1);
-    
+
     let assignment = &transaction.assignments[0];
     assert_eq!(assignment.registered_user, 1936);
     assert_eq!(assignment.amount, 1);
