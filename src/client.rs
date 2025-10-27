@@ -7082,8 +7082,7 @@ impl ApiClient {
         path: &[&str],
         body: Option<impl serde::Serialize>,
     ) -> Result<reqwest::Response, Error> {
-        let debug_logging = std::env::var("AMP_DEBUG").is_ok()
-            || std::env::var("AMP_TESTS").unwrap_or_default() == "live";
+        let debug_logging = std::env::var("AMP_DEBUG").is_ok();
 
         if debug_logging {
             eprintln!("🌐 HTTP Request: {} /{}", method, path.join("/"));
@@ -9831,6 +9830,95 @@ impl ApiClient {
         self.request_json(
             Method::GET,
             &["assets", asset_uuid, "distributions"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Gets a specific distribution by UUID for an asset.
+    ///
+    /// This method retrieves detailed information about a specific distribution,
+    /// including its status, UUID, and associated transactions.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `distribution_uuid` - The UUID of the distribution to retrieve
+    ///
+    /// # Returns
+    /// Returns a `Distribution` struct containing:
+    /// - `distribution_uuid` - The unique identifier for the distribution
+    /// - `distribution_status` - Current status of the distribution
+    /// - `transactions` - List of transactions associated with the distribution
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Authentication fails
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed as JSON
+    /// - The asset UUID or distribution UUID is empty
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    ///
+    /// let distribution = client.get_asset_distribution(
+    ///     "asset-uuid-123",
+    ///     "distribution-uuid-456"
+    /// ).await?;
+    ///
+    /// println!("Distribution: {} - Status: {:?}",
+    ///          distribution.distribution_uuid,
+    ///          distribution.distribution_status);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`get_asset_distributions`](Self::get_asset_distributions) - List all distributions for an asset
+    /// - [`create_distribution`](Self::create_distribution) - Create a new distribution
+    /// - [`confirm_distribution`](Self::confirm_distribution) - Confirm a distribution
+    /// - [`cancel_distribution`](Self::cancel_distribution) - Cancel a distribution
+    #[allow(clippy::cognitive_complexity)]
+    pub async fn get_asset_distribution(
+        &self,
+        asset_uuid: &str,
+        distribution_uuid: &str,
+    ) -> Result<crate::model::Distribution, Error> {
+        let distribution_span = tracing::debug_span!(
+            "get_asset_distribution",
+            asset_uuid = %asset_uuid,
+            distribution_uuid = %distribution_uuid
+        );
+        let _enter = distribution_span.enter();
+
+        tracing::debug!(
+            "Getting distribution {} for asset {}",
+            distribution_uuid,
+            asset_uuid
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Get distribution failed: empty asset UUID");
+            return Err(Error::RequestFailed(
+                "Asset UUID cannot be empty".to_string(),
+            ));
+        }
+
+        if distribution_uuid.is_empty() {
+            tracing::error!("Get distribution failed: empty distribution UUID");
+            return Err(Error::RequestFailed(
+                "Distribution UUID cannot be empty".to_string(),
+            ));
+        }
+
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "distributions", distribution_uuid],
             None::<&()>,
         )
         .await

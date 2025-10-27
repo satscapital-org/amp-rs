@@ -31,6 +31,9 @@ cargo run --example changelog
 # Validate a GAID (Global Asset ID)
 cargo run --example validate_gaid GAbYScu6jkWUND2jo3L4KJxyvo55d
 
+# Get information about a specific distribution
+cargo run --example get_distribution_info asset-uuid-123 distribution-uuid-456
+
 # Create, issue, and authorize a new asset for distribution tests (requires live API)
 AMP_TESTS=live cargo run --example create_issue_authorize_asset
 
@@ -133,11 +136,6 @@ The following AMP API endpoints are not yet implemented in this client library. 
 - `POST /api/assets/{assetUuid}/burn-request` - Request asset burn
 - `POST /api/assets/{assetUuid}/burn-confirm` - Confirm asset burn
 - `GET /api/assets/{assetUuid}/reissuances` - Get asset reissuances
-- `GET /api/assets/{assetUuid}/distributions/create/` - Create asset distribution
-- `POST /api/assets/{assetUuid}/distributions/{distributionUuid}/confirm` - Confirm distribution
-- `DELETE /api/assets/{assetUuid}/distributions/{distributionUuid}/cancel` - Cancel distribution
-- `GET /api/assets/{assetUuid}/distributions` - Get asset distributions
-- `GET /api/assets/{assetUuid}/distributions/{distributionUuid}` - Get specific distribution
 - `GET /api/assets/{assetUuid}/txs` - Get asset transactions
 - `GET /api/assets/{assetUuid}/txs/{txid}` - Get specific asset transaction
 - `GET /api/assets/{assetUuid}/lost-outputs` - Get asset lost outputs
@@ -278,11 +276,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create signer from existing mnemonic
     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     let signer = LwkSoftwareSigner::new(mnemonic)?;
-    
+
     // Verify testnet configuration
     assert!(signer.is_testnet());
     println!("Signer ready for testnet operations");
-    
+
     Ok(())
 }
 ```
@@ -296,13 +294,13 @@ use amp_rs::signer::LwkSoftwareSigner;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate new signer with automatic mnemonic management
     let (mnemonic, signer) = LwkSoftwareSigner::generate_new()?;
-    
+
     println!("Generated mnemonic: {}...", &mnemonic[..50]);
     println!("Mnemonic saved to mnemonic.local.json");
-    
+
     // Signer is ready for use
     assert!(signer.is_testnet());
-    
+
     Ok(())
 }
 ```
@@ -320,10 +318,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_, issuer_signer) = LwkSoftwareSigner::generate_new_indexed(100)?;
     let (_, distributor_signer) = LwkSoftwareSigner::generate_new_indexed(101)?;
     let (_, user_signer) = LwkSoftwareSigner::generate_new_indexed(102)?;
-    
+
     // Each signer uses a different mnemonic for test isolation
     println!("Created role-based signers for testing");
-    
+
     Ok(())
 }
 ```
@@ -339,14 +337,14 @@ use amp_rs::signer::LwkSoftwareSigner;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create or load signer
     let (mnemonic, signer) = LwkSoftwareSigner::generate_new()?;
-    
+
     // Generate a receiving address for asset issuance
     let treasury_address = signer.derive_address(0, 0)?; // First receiving address
     println!("Treasury address: {}", treasury_address);
-    
+
     // This address can be used as the treasury address for asset operations
     // and should be added to your asset's treasury addresses via the API
-    
+
     Ok(())
 }
 ```
@@ -363,21 +361,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup API client and Elements RPC
     let api_client = ApiClient::new().await?;
     let elements_rpc = ElementsRpc::from_env()?;
-    
+
     // Create signer for signing transactions
     let (mnemonic, signer) = LwkSoftwareSigner::generate_new_indexed(300)?;
     println!("Using signer with mnemonic: {}...", &mnemonic[..50]);
-    
+
     // Setup wallet and distribution assignments
     let wallet_name = "amp_distribution_wallet".to_string();
     let asset_uuid = "your-asset-uuid";
-    
+
     let assignments = vec![AssetDistributionAssignment {
         user_id: "user123".to_string(),
         address: "tlq1qq...".to_string(), // User's receiving address
         amount: 0.00000001, // Amount in BTC units
     }];
-    
+
     // Execute distribution with signer
     api_client.distribute_asset(
         asset_uuid,
@@ -386,9 +384,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &wallet_name,
         &signer, // Signer handles transaction signing
     ).await?;
-    
+
     println!("Asset distribution completed successfully");
-    
+
     Ok(())
 }
 ```
@@ -403,14 +401,14 @@ use amp_rs::signer::LwkSoftwareSigner;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_, signer) = LwkSoftwareSigner::generate_new()?;
-    
+
     // Generate descriptor for wallet import
     let descriptor = signer.get_wpkh_slip77_descriptor()?;
     println!("Descriptor for wallet import: {}", descriptor);
-    
+
     // This descriptor can be imported into Elements using importdescriptors RPC
     // to enable the wallet to recognize addresses and UTXOs from this signer
-    
+
     Ok(())
 }
 ```
