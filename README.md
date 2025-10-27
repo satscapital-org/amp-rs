@@ -28,6 +28,9 @@ cargo run --example asset_summary
 # View the API changelog
 cargo run --example changelog
 
+# Validate a GAID (Global Asset ID)
+cargo run --example validate_gaid GAbYScu6jkWUND2jo3L4KJxyvo55d
+
 # Create, issue, and authorize a new asset for distribution tests (requires live API)
 AMP_TESTS=live cargo run --example create_issue_authorize_asset
 
@@ -254,6 +257,173 @@ export AMP_TESTS=live
 # Enable token persistence (optional)
 export AMP_TOKEN_PERSISTENCE=true
 ```
+
+## Signer Setup and Usage
+
+The AMP client includes a comprehensive signer implementation for handling asset operations like distribution, reissuance, and burning. The `LwkSoftwareSigner` provides testnet-focused transaction signing using Blockstream's Liquid Wallet Kit (LWK).
+
+### ⚠️ Security Warning
+
+**TESTNET/REGTEST ONLY**: The `LwkSoftwareSigner` is designed exclusively for testnet and regtest environments. It stores mnemonic phrases in plain text and should NEVER be used in production or with real funds.
+
+### Basic Signer Setup
+
+#### Creating a Signer from Existing Mnemonic
+
+```rust
+use amp_rs::signer::{LwkSoftwareSigner, Signer};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create signer from existing mnemonic
+    let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    let signer = LwkSoftwareSigner::new(mnemonic)?;
+    
+    // Verify testnet configuration
+    assert!(signer.is_testnet());
+    println!("Signer ready for testnet operations");
+    
+    Ok(())
+}
+```
+
+#### Generating a New Signer
+
+```rust
+use amp_rs::signer::LwkSoftwareSigner;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Generate new signer with automatic mnemonic management
+    let (mnemonic, signer) = LwkSoftwareSigner::generate_new()?;
+    
+    println!("Generated mnemonic: {}...", &mnemonic[..50]);
+    println!("Mnemonic saved to mnemonic.local.json");
+    
+    // Signer is ready for use
+    assert!(signer.is_testnet());
+    
+    Ok(())
+}
+```
+
+#### Indexed Mnemonic Access for Testing
+
+For test isolation and consistent test environments, use indexed mnemonic access:
+
+```rust
+use amp_rs::signer::LwkSoftwareSigner;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Generate signers with specific indices for different test roles
+    let (_, issuer_signer) = LwkSoftwareSigner::generate_new_indexed(100)?;
+    let (_, distributor_signer) = LwkSoftwareSigner::generate_new_indexed(101)?;
+    let (_, user_signer) = LwkSoftwareSigner::generate_new_indexed(102)?;
+    
+    // Each signer uses a different mnemonic for test isolation
+    println!("Created role-based signers for testing");
+    
+    Ok(())
+}
+```
+
+### Generating Addresses for Asset Issuance
+
+Before issuing assets, you need to generate addresses that can receive the issued assets:
+
+```rust
+use amp_rs::signer::LwkSoftwareSigner;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create or load signer
+    let (mnemonic, signer) = LwkSoftwareSigner::generate_new()?;
+    
+    // Generate a receiving address for asset issuance
+    let treasury_address = signer.derive_address(0, 0)?; // First receiving address
+    println!("Treasury address: {}", treasury_address);
+    
+    // This address can be used as the treasury address for asset operations
+    // and should be added to your asset's treasury addresses via the API
+    
+    Ok(())
+}
+```
+
+### Using Signer with Asset Distribution
+
+The signer integrates seamlessly with the `distribute_asset` method and will be essential for future burn and reissuance operations:
+
+```rust
+use amp_rs::{ApiClient, ElementsRpc, signer::LwkSoftwareSigner, model::AssetDistributionAssignment};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup API client and Elements RPC
+    let api_client = ApiClient::new().await?;
+    let elements_rpc = ElementsRpc::from_env()?;
+    
+    // Create signer for signing transactions
+    let (mnemonic, signer) = LwkSoftwareSigner::generate_new_indexed(300)?;
+    println!("Using signer with mnemonic: {}...", &mnemonic[..50]);
+    
+    // Setup wallet and distribution assignments
+    let wallet_name = "amp_distribution_wallet".to_string();
+    let asset_uuid = "your-asset-uuid";
+    
+    let assignments = vec![AssetDistributionAssignment {
+        user_id: "user123".to_string(),
+        address: "tlq1qq...".to_string(), // User's receiving address
+        amount: 0.00000001, // Amount in BTC units
+    }];
+    
+    // Execute distribution with signer
+    api_client.distribute_asset(
+        asset_uuid,
+        assignments,
+        &elements_rpc,
+        &wallet_name,
+        &signer, // Signer handles transaction signing
+    ).await?;
+    
+    println!("Asset distribution completed successfully");
+    
+    Ok(())
+}
+```
+
+### Wallet Integration
+
+For Elements wallet integration, you can generate descriptors from the signer:
+
+```rust
+use amp_rs::signer::LwkSoftwareSigner;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let (_, signer) = LwkSoftwareSigner::generate_new()?;
+    
+    // Generate descriptor for wallet import
+    let descriptor = signer.get_wpkh_slip77_descriptor()?;
+    println!("Descriptor for wallet import: {}", descriptor);
+    
+    // This descriptor can be imported into Elements using importdescriptors RPC
+    // to enable the wallet to recognize addresses and UTXOs from this signer
+    
+    Ok(())
+}
+```
+
+### Future Operations
+
+The same signer setup and passing pattern will be used for upcoming operations:
+
+- **Asset Reissuance**: `reissue_asset(asset_uuid, amount, &signer)`
+- **Asset Burning**: `burn_asset(asset_uuid, amount, &signer)`
+- **Advanced Distribution**: Enhanced distribution workflows with complex signing requirements
+
+The signer abstraction ensures consistent transaction signing across all asset operations while maintaining security best practices for testnet development.
 
 ## Testing
 

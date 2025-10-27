@@ -670,7 +670,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ⏱️  Total duration: {:?}", total_duration);
     println!();
     println!("🚀 The end-to-end asset distribution workflow is working correctly!");
-    println!("   - Mnemonic used: {}...", &mnemonic[..50]);
 
     Ok(())
 }
