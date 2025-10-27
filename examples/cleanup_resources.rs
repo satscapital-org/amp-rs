@@ -12,11 +12,14 @@ const TEST_USER_GAIDS: &[&str] = &[
     "GAQzmXM7jVaKAwtHGXHENgn5KUUmL",
     "GA42D48VRVzW8MxMEuWtRdJzDq4LBF",
     "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ",
+    "GA3haAs7uhdrbHNdZvuiXtuD1HCSAG",
+    "GA4MAzHdepvHUxNQ4Z2a5F5nuNe1Dv",
 ];
 const TEST_ASSET_NAME: &str = "Test Environment Asset";
 const PROTECTED_ASSET_UUIDS: &[&str] = &[
     "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset
     "9bcd9987-9544-439f-80b3-6d76b072fd9b", // Asset ID: 02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87
+    "2982e097-918e-4113-a4f9-afb86bd038", // Asset ID: 98912dd98abf410320ad2e6b4b2e9537f702d0d04ca575b22a7387233c0af9a2
 ];
 
 #[tokio::main]

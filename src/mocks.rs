@@ -1100,3 +1100,30 @@ pub fn mock_get_asset_assignment_server_error(server: &MockServer) {
             }));
     });
 }
+pub fn mock_get_asset_distribution(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/distributions/mock_distribution_uuid");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "distribution_uuid": "mock_distribution_uuid",
+                "distribution_status": "CONFIRMED",
+                "transactions": [
+                    {
+                        "txid": "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184",
+                        "transaction_status": "CONFIRMED",
+                        "included_blockheight": 2146947,
+                        "confirmed_datetime": "2025-10-22T20:45:13.879485Z",
+                        "assignments": [
+                            {
+                                "registered_user": 1936,
+                                "amount": 1,
+                                "vout": 2
+                            }
+                        ]
+                    }
+                ]
+            }));
+    });
+}
