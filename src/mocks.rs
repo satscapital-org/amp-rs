@@ -1113,7 +1113,7 @@ pub fn mock_get_asset_distribution(server: &MockServer) {
                     {
                         "txid": "7ceabde8d7c1596b8b4af27286681dbde9c1551614b9788b6f84b9a3789d3184",
                         "transaction_status": "CONFIRMED",
-                        "included_blockheight": 2146947,
+                        "included_blockheight": 2_146_947,
                         "confirmed_datetime": "2025-10-22T20:45:13.879485Z",
                         "assignments": [
                             {

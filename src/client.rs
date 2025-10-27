@@ -9882,6 +9882,7 @@ impl ApiClient {
     /// - [`create_distribution`](Self::create_distribution) - Create a new distribution
     /// - [`confirm_distribution`](Self::confirm_distribution) - Confirm a distribution
     /// - [`cancel_distribution`](Self::cancel_distribution) - Cancel a distribution
+    #[allow(clippy::cognitive_complexity)]
     pub async fn get_asset_distribution(
         &self,
         asset_uuid: &str,
