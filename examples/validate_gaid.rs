@@ -1,7 +1,7 @@
 //! GAID Validation Example
 //!
 //! This example demonstrates how to validate a GAID (Global Asset ID) using the AMP API.
-//! 
+//!
 //! Usage:
 //!   cargo run --example validate_gaid <GAID>
 //!
@@ -35,7 +35,7 @@ async fn main() {
             println!("GAID validation result:");
             println!("  GAID: {}", gaid);
             println!("  Valid: {}", validation.is_valid);
-            
+
             if let Some(error) = &validation.error {
                 println!("  Error: {}", error);
             }
