@@ -51,7 +51,7 @@ pub struct ChangePasswordResponse {
     pub token: Secret<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Asset {
     pub name: String,
@@ -116,6 +116,19 @@ pub struct IssuanceResponse {
     pub transfer_restricted: bool,
     pub issuance_assetblinder: String,
     pub issuance_tokenblinder: Option<String>,
+}
+
+/// Response from asset registration with the Blockstream Asset Registry
+/// Response from asset registration with the Blockstream Asset Registry
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RegisterAssetResponse {
+    /// Indicates whether the registration was successful
+    pub success: bool,
+    /// Optional message providing additional context
+    pub message: Option<String>,
+    /// The full asset data if registration was successful (HTTP 200 with asset data)
+    #[serde(flatten)]
+    pub asset_data: Option<Asset>,
 }
 
 #[derive(Debug, Serialize)]
@@ -679,6 +692,21 @@ pub struct DistributionResponse {
     pub map_address_amount: std::collections::HashMap<String, f64>,
     pub map_address_asset: std::collections::HashMap<String, String>,
     pub asset_id: String,
+}
+
+/// Address information from listreceivedbyaddress RPC
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceivedByAddress {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<std::collections::HashMap<String, f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmations: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub txids: Option<Vec<String>>,
 }
 
 /// Transaction data for distribution confirmation

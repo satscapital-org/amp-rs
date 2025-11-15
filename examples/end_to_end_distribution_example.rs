@@ -23,8 +23,8 @@
 //!
 //! ## Asset and User Details
 //!
-//! - **Asset UUID**: 9bcd9987-9544-439f-80b3-6d76b072fd9b
-//! - **Asset ID**: 02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87
+//! - **Asset UUID**: 1d7245d2-7cbb-4092-9256-d9674c95684a
+//! - **Asset ID**: 651f2acf48bd02d905e463cb1b57677e6459c0afc72c267114b28fc67a86c381
 //! - **Default User GAID**: GAbzSbgCZ6M6WU85rseKTrfehPsjt (can be overridden via command line)
 //!
 //! ## Requirements
@@ -39,8 +39,8 @@ use dotenvy;
 use std::env;
 
 /// Asset configuration for this example
-const ASSET_UUID: &str = "9bcd9987-9544-439f-80b3-6d76b072fd9b";
-const ASSET_ID: &str = "02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87";
+const ASSET_UUID: &str = "1d7245d2-7cbb-4092-9256-d9674c95684a";
+const ASSET_ID: &str = "651f2acf48bd02d905e463cb1b57677e6459c0afc72c267114b28fc67a86c381";
 /// Default user GAID (can be overridden via command line)
 const DEFAULT_USER_GAID: &str = "GAbzSbgCZ6M6WU85rseKTrfehPsjt";
 
@@ -438,7 +438,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup wallet configuration
     println!("🏦 Setting up wallet configuration");
     let wallet_name = "amp_elements_wallet_static_for_funding".to_string();
-    let treasury_address = "tlq1qqdvl3f3ahl9q9vtvacwvn40jp583d9e0zr2fj2yncut7j76mual09djxn5zgzkvy4eytdtkaav2q6scna3cj2zaytuzu43ztd".to_string();
+    let treasury_address = "tlq1qqgj3gdz9fzldddnmez0ymy3y5ac0a7qcx4aah73s2r8g7wsu9eayfnpxk45yjjfllvgafqq5pxtrvxt9qrjr7cnt0m8u2r89q".to_string();
 
     println!("✅ Wallet configuration set");
     println!("   - Wallet name: {}", wallet_name);

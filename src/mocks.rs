@@ -465,6 +465,120 @@ pub fn mock_edit_asset(server: &MockServer) {
     });
 }
 
+/// Sets up a mock for the POST `/assets/{asset_uuid}/register` endpoint.
+///
+/// This mock returns a successful asset registration response with the Blockstream Asset Registry.
+///
+/// # Examples
+/// ```
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_register_asset;
+/// let server = MockServer::start();
+/// mock_register_asset(&server);
+///
+/// // Now asset registration requests will return the mocked response
+/// ```
+pub fn mock_register_asset(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/register");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "name": "Mock Asset",
+                "asset_uuid": "mock_asset_uuid",
+                "issuer": 1,
+                "asset_id": "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d",
+                "reissuance_token_id": null,
+                "requirements": [],
+                "ticker": "MOCK",
+                "precision": 8,
+                "domain": "liquidtestnet.com",
+                "pubkey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "is_registered": true,
+                "is_authorized": true,
+                "is_locked": false,
+                "issuer_authorization_endpoint": null,
+                "transfer_restricted": false
+            }));
+    });
+}
+
+/// Sets up a mock for the GET `/assets/{asset_uuid}/register` endpoint that returns a 404 error.
+///
+/// This mock simulates the scenario where the asset UUID does not exist.
+pub fn mock_register_asset_not_found(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/non_existent_asset_uuid/register");
+        then.status(404)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Asset not found"
+            }));
+    });
+}
+
+/// Sets up a mock for the GET `/assets/{asset_uuid}/register` endpoint that returns a 500 error.
+///
+/// This mock simulates a server error during asset registration.
+pub fn mock_register_asset_server_error(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/server_error_asset_uuid/register");
+        then.status(500)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "error": "Internal server error"
+            }));
+    });
+}
+
+/// Sets up a mock for the GET `/assets/{asset_uuid}/register` endpoint for already registered assets.
+///
+/// This mock simulates the scenario where an asset is already registered with the registry.
+pub fn mock_register_asset_already_registered(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/already_registered_asset_uuid/register");
+        then.status(400)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "Error": "The asset is already registered."
+            }));
+    });
+}
+
+/// Sets up a mock for the GET `/assets/{asset_uuid}/register` endpoint that verifies authentication.
+///
+/// This mock verifies that the Authorization header is correctly included in the request.
+pub fn mock_register_asset_with_auth(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/register")
+            .header("authorization", "token mock_token");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "name": "Mock Asset",
+                "asset_uuid": "mock_asset_uuid",
+                "issuer": 1,
+                "asset_id": "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d",
+                "reissuance_token_id": null,
+                "requirements": [],
+                "ticker": "MOCK",
+                "precision": 8,
+                "domain": "liquidtestnet.com",
+                "pubkey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+                "is_registered": true,
+                "is_authorized": true,
+                "is_locked": false,
+                "issuer_authorization_endpoint": null,
+                "transfer_restricted": false
+            }));
+    });
+}
+
 /// Sets up a mock for the POST /assets/issue endpoint.
 ///
 /// This mock returns a successful asset issuance response with mock data.

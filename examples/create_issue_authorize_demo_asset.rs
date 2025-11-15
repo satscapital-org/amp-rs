@@ -95,8 +95,8 @@ async fn main() -> Result<(), AmpError> {
 
     // Create unique asset name with timestamp
     let timestamp = chrono::Utc::now().timestamp();
-    let asset_name = format!("DistributionTestAsset_{}", timestamp);
-    let asset_ticker = format!("DTA{}", timestamp % 10000);
+    let asset_name = format!("SatsCapital_Asset{}", timestamp);
+    let asset_ticker = format!("SCX{}", timestamp % 10000);
 
     let issuance_request = IssuanceRequest {
         name: asset_name.clone(),

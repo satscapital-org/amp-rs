@@ -798,6 +798,151 @@ async fn test_delete_asset_mock() {
 }
 
 #[tokio::test]
+async fn test_register_asset_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_register_asset(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.register_asset("mock_asset_uuid").await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.success);
+    assert!(response.asset_data.is_some());
+    let asset = response.asset_data.unwrap();
+    assert_eq!(
+        asset.asset_id,
+        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
+    );
+    assert_eq!(asset.name, "Mock Asset");
+    assert!(asset.is_registered);
+
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_register_asset_not_found_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_register_asset_not_found(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.register_asset("non_existent_asset_uuid").await;
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let error_str = format!("{:?}", error);
+    assert!(error_str.contains("404") || error_str.contains("Asset not found"));
+
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_register_asset_server_error_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_register_asset_server_error(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.register_asset("server_error_asset_uuid").await;
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    let error_str = format!("{:?}", error);
+    assert!(error_str.contains("500") || error_str.contains("Internal server error"));
+
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_register_asset_already_registered_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_register_asset_already_registered(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.register_asset("already_registered_asset_uuid").await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.success);
+    assert!(response.message.is_some());
+    assert!(response
+        .message
+        .as_ref()
+        .unwrap()
+        .contains("already registered"));
+    // For already registered, we don't get asset_data back
+    assert!(response.asset_data.is_none());
+
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
+async fn test_register_asset_authentication_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_register_asset_with_auth(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.register_asset("mock_asset_uuid").await;
+
+    // The mock will only succeed if the Authorization header is present and correct
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert!(response.success);
+    assert!(response.asset_data.is_some());
+    let asset = response.asset_data.unwrap();
+    assert_eq!(
+        asset.asset_id,
+        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
+    );
+
+    // Cleanup: reload .env file
+    dotenvy::from_filename_override(".env").ok();
+}
+
+#[tokio::test]
 async fn test_get_registered_users_live() {
     dotenvy::from_filename_override(".env").ok();
     if env::var("AMP_TESTS").unwrap_or_default() != "live" {

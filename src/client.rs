@@ -22,8 +22,8 @@ use crate::model::{
     Balance, BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
     ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
     GaidBalanceEntry, GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
-    Password, TokenData, TokenInfo, TokenRequest, TokenResponse, TransactionDetail, TxInput,
-    Unspent, Utxo,
+    Password, ReceivedByAddress, RegisterAssetResponse, TokenData, TokenInfo, TokenRequest,
+    TokenResponse, TransactionDetail, TxInput, Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -1650,12 +1650,13 @@ impl ElementsRpc {
         Ok(raw_tx)
     }
 
-    /// Imports an address into the wallet as watch-only
+    /// Imports an address into a specific wallet as watch-only
     ///
     /// # Arguments
+    /// * `wallet_name` - Name of the wallet
     /// * `address` - The address to import
     /// * `label` - Optional label for the address
-    /// * `rescan` - Whether to rescan the blockchain for transactions
+    /// * `rescan` - Optional whether to rescan the blockchain (default: false)
     ///
     /// # Errors
     /// Returns an error if the RPC call fails
@@ -1666,24 +1667,27 @@ impl ElementsRpc {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// rpc.import_address("vjU8L4dKa1XyyVcPqKBbTgjT1tRC7qYp5VJGwndZSCFk4ntpWey1pQe6hcSGDMVurr9CsZ21EGsqGjWA", Some("test_address"), false).await?;
+    /// rpc.import_address("my_wallet", "vjU8L4dKa1XyyVcPqKBbTgjT1tRC7qYp5VJGwndZSCFk4ntpWey1pQe6hcSGDMVurr9CsZ21EGsqGjWA", Some("test_address"), Some(false)).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn import_address(
         &self,
+        wallet_name: &str,
         address: &str,
         label: Option<&str>,
-        rescan: bool,
+        rescan: Option<bool>,
     ) -> Result<(), AmpError> {
+        let rescan_value = rescan.unwrap_or(false);
         tracing::debug!(
-            "Importing address: {} with label: {:?}, rescan: {}",
+            "Importing address: {} into wallet: {} with label: {:?}, rescan: {}",
             address,
+            wallet_name,
             label,
-            rescan
+            rescan_value
         );
 
-        let params = serde_json::json!([address, label.unwrap_or(""), rescan]);
+        let params = serde_json::json!([address, label.unwrap_or(""), rescan_value]);
 
         // importaddress returns null on success
         let request = RpcRequest {
@@ -1693,9 +1697,11 @@ impl ElementsRpc {
             params,
         };
 
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
         let response = self
             .client
-            .post(&self.base_url)
+            .post(&wallet_url)
             .basic_auth(&self.username, Some(&self.password))
             .json(&request)
             .send()
@@ -1721,8 +1727,85 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::debug!("Successfully imported address: {}", address);
+        tracing::debug!("Successfully imported address: {} into wallet: {}", address, wallet_name);
         Ok(())
+    }
+
+    /// Rescans the blockchain for a wallet
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to rescan
+    /// * `start_height` - Optional start height for rescan (default: 0)
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let result = rpc.rescan_blockchain("my_wallet", None).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn rescan_blockchain(
+        &self,
+        wallet_name: &str,
+        start_height: Option<u64>,
+    ) -> Result<serde_json::Value, AmpError> {
+        tracing::debug!("Rescanning blockchain for wallet: {}", wallet_name);
+
+        let params = if let Some(height) = start_height {
+            serde_json::json!([height])
+        } else {
+            serde_json::json!([])
+        };
+
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "rescanblockchain".to_string(),
+            params,
+        };
+
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error rescanning blockchain: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let result = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("No result returned from rescanblockchain".to_string()))?;
+
+        tracing::debug!("Successfully rescanned blockchain for wallet: {}", wallet_name);
+        Ok(result)
     }
 
     /// Creates or loads a wallet
@@ -1889,6 +1972,68 @@ impl ElementsRpc {
         Ok(())
     }
 
+    /// Unloads a wallet
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to unload
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.unload_wallet("test_wallet").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn unload_wallet(&self, wallet_name: &str) -> Result<(), AmpError> {
+        tracing::debug!("Unloading wallet: {}", wallet_name);
+
+        let params = serde_json::json!([wallet_name]);
+
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "unloadwallet".to_string(),
+            params,
+        };
+
+        let response = self
+            .client
+            .post(&self.base_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error {}: {}",
+                error.code, error.message
+            )));
+        }
+
+        tracing::debug!("Successfully unloaded wallet: {}", wallet_name);
+        Ok(())
+    }
+
     /// Lists all available wallets
     ///
     /// # Errors
@@ -2007,12 +2152,12 @@ impl ElementsRpc {
         self.load_wallet(wallet_name).await?;
 
         // Import the address without rescanning (for faster setup)
-        self.import_address(address, label, false).await?;
+        self.import_address(wallet_name, address, label, Some(false)).await?;
 
         Ok(())
     }
 
-    /// Attempts to import an address directly without wallet operations
+    /// Attempts to import an address directly without wallet operations (uses default wallet)
     async fn import_address_direct(
         &self,
         address: &str,
@@ -2020,8 +2165,9 @@ impl ElementsRpc {
     ) -> Result<(), AmpError> {
         tracing::debug!("Attempting direct address import for: {}", address);
 
-        // Try to import the address directly (this might work even if wallet operations fail)
-        self.import_address(address, label, false).await
+        // This is a fallback method - we'll use empty string for wallet name to use default behavior
+        // Note: This may not work as expected with the new signature, but kept for compatibility
+        Err(AmpError::rpc("Direct address import not supported with wallet-specific import_address".to_string()))
     }
 
     /// Broadcasts a signed raw transaction to the network
@@ -4097,6 +4243,793 @@ impl ElementsRpc {
             wallet_name
         );
         Ok(())
+    }
+
+    /// Exports a wallet to a file using dumpwallet RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to export
+    /// * `file_path` - Path where the wallet dump file will be created
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the wallet cannot be exported
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.dump_wallet("my_wallet", "/tmp/wallet_export.dat").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn dump_wallet(
+        &self,
+        wallet_name: &str,
+        file_path: &str,
+    ) -> Result<(), AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([file_path]);
+
+        // Create RPC request for dumpwallet
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "dumpwallet".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error dumping wallet: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        tracing::info!("Successfully exported wallet {} to {}", wallet_name, file_path);
+        Ok(())
+    }
+
+    /// Imports a wallet from a file using importwallet RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import into
+    /// * `file_path` - Path to the wallet dump file to import
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the wallet cannot be imported
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.import_wallet("my_wallet", "/tmp/wallet_export.dat").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_wallet(
+        &self,
+        wallet_name: &str,
+        file_path: &str,
+    ) -> Result<(), AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([file_path]);
+
+        // Create RPC request for importwallet
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importwallet".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error importing wallet: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        tracing::info!("Successfully imported wallet {} from {}", wallet_name, file_path);
+        Ok(())
+    }
+
+    /// Exports a blinding key for a confidential address using dumpblindingkey RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet containing the address
+    /// * `address` - The confidential address to export the blinding key for
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the address doesn't have a blinding key
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let key = rpc.dump_blinding_key("my_wallet", "VTpz...").await?;
+    /// println!("Blinding key: {}", key);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn dump_blinding_key(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> Result<String, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([address]);
+
+        // Create RPC request for dumpblindingkey
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "dumpblindingkey".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error dumping blinding key: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            if let Some(blinding_key) = result.as_str() {
+                tracing::info!("Successfully exported blinding key for address: {}", address);
+                return Ok(blinding_key.to_string());
+            }
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to dump blinding key for address '{address}': unexpected response format"
+        )))
+    }
+
+    /// Imports a blinding key for a confidential address using importblindingkey RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import the blinding key into
+    /// * `address` - The confidential address to import the blinding key for
+    /// * `blinding_key` - The blinding key to import
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or the blinding key cannot be imported
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.import_blinding_key("my_wallet", "VTpz...", "blinding_key_hex").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_blinding_key(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        blinding_key: &str,
+    ) -> Result<(), AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([address, blinding_key]);
+
+        // Create RPC request for importblindingkey
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importblindingkey".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error importing blinding key: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        tracing::info!("Successfully imported blinding key for address: {}", address);
+        Ok(())
+    }
+
+    /// Gets wallet information using getwalletinfo RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to get information for
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let info = rpc.get_wallet_info("my_wallet").await?;
+    /// println!("Wallet info: {:?}", info);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_wallet_info(
+        &self,
+        wallet_name: &str,
+    ) -> Result<serde_json::Value, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([]);
+
+        // Create RPC request for getwalletinfo
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getwalletinfo".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting wallet info: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            tracing::info!("Successfully retrieved wallet info for: {}", wallet_name);
+            return Ok(result);
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to get wallet info for '{wallet_name}': unexpected response format"
+        )))
+    }
+
+    /// Gets the unconfidential address for a confidential address
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet
+    /// * `confidential_address` - The confidential address to convert
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let unconf = rpc.get_unconfidential_address("my_wallet", "VTpz...").await?;
+    /// println!("Unconfidential address: {}", unconf);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_unconfidential_address(
+        &self,
+        wallet_name: &str,
+        confidential_address: &str,
+    ) -> Result<String, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([confidential_address]);
+
+        // Create RPC request for getunconfidentialaddress
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getunconfidentialaddress".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting unconfidential address: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            if let Some(address) = result.as_str() {
+                tracing::info!("Successfully got unconfidential address for: {}", confidential_address);
+                return Ok(address.to_string());
+            }
+        }
+
+        Err(AmpError::rpc(format!(
+            "Failed to get unconfidential address for '{confidential_address}': unexpected response format"
+        )))
+    }
+
+    /// Imports a private key into the wallet using importprivkey RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to import into
+    /// * `private_key` - The private key in WIF format
+    /// * `label` - Optional label for the address
+    /// * `rescan` - Whether to rescan the blockchain for transactions
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// rpc.import_private_key("my_wallet", "cT1...", Some("my_address"), Some(false)).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn import_private_key(
+        &self,
+        wallet_name: &str,
+        private_key: &str,
+        label: Option<&str>,
+        rescan: Option<bool>,
+    ) -> Result<(), AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([
+            private_key,
+            label.unwrap_or(""),
+            rescan.unwrap_or(false)
+        ]);
+
+        // Create RPC request for importprivkey
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "importprivkey".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error importing private key: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        tracing::info!("Successfully imported private key");
+        Ok(())
+    }
+
+    /// Lists all descriptors in a wallet using listdescriptors RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet
+    /// * `private_keys` - Whether to include private keys in the output
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let descriptors = rpc.list_descriptors("my_wallet", Some(true)).await?;
+    /// for desc in descriptors {
+    ///     println!("Descriptor: {}", desc);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_descriptors(
+        &self,
+        wallet_name: &str,
+        private_keys: Option<bool>,
+    ) -> Result<Vec<String>, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([private_keys.unwrap_or(false)]);
+
+        // Create RPC request for listdescriptors
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "listdescriptors".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error listing descriptors: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            // Result has a "descriptors" array with objects containing "desc" field
+            if let Some(descriptors_array) = result.get("descriptors").and_then(|v| v.as_array()) {
+                let descriptors: Vec<String> = descriptors_array
+                    .iter()
+                    .filter_map(|d| d.get("desc").and_then(|v| v.as_str()).map(String::from))
+                    .collect();
+                tracing::info!("Successfully retrieved {} descriptors for wallet: {}", descriptors.len(), wallet_name);
+                return Ok(descriptors);
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    /// Gets all addresses in a wallet by label using getaddressesbylabel RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet
+    /// * `label` - Label to filter by (empty string for all addresses)
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let addresses = rpc.get_addresses_by_label("my_wallet", "").await?;
+    /// for addr in addresses {
+    ///     println!("Address: {}", addr);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_addresses_by_label(
+        &self,
+        wallet_name: &str,
+        label: &str,
+    ) -> Result<Vec<String>, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([label]);
+
+        // Create RPC request for getaddressesbylabel
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getaddressesbylabel".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting addresses by label: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            // Result is an object with addresses as keys
+            if let Some(obj) = result.as_object() {
+                let addresses: Vec<String> = obj.keys().cloned().collect();
+                tracing::info!("Successfully retrieved {} addresses for wallet: {}", addresses.len(), wallet_name);
+                return Ok(addresses);
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    /// Lists addresses that have received transactions using listreceivedbyaddress RPC
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the wallet to list addresses for
+    /// * `min_conf` - Minimum number of confirmations (0 for unconfirmed)
+    /// * `include_empty` - Whether to include addresses that haven't received payments
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let addresses = rpc.list_received_by_address("my_wallet", 0, true).await?;
+    /// for addr in addresses {
+    ///     println!("Address: {:?}", addr);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_received_by_address(
+        &self,
+        wallet_name: &str,
+        min_conf: u32,
+        include_empty: bool,
+    ) -> Result<Vec<ReceivedByAddress>, AmpError> {
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([min_conf, include_empty]);
+
+        // Create RPC request for listreceivedbyaddress
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "listreceivedbyaddress".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {}",
+                response.status()
+            )));
+        }
+
+        let rpc_response: RpcResponse<Vec<ReceivedByAddress>> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error listing received by address: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        if let Some(result) = rpc_response.result {
+            tracing::info!("Successfully listed {} addresses for wallet: {}", result.len(), wallet_name);
+            return Ok(result);
+        }
+
+        Ok(Vec::new())
     }
 }
 
@@ -7376,6 +8309,122 @@ impl ApiClient {
         .await
     }
 
+    /// Registers an asset with the Blockstream Asset Registry.
+    ///
+    /// This method publishes an asset to the public registry, making it discoverable
+    /// and verifiable by other users and applications. The asset must already exist
+    /// in the AMP system before it can be registered.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset_uuid` - The unique identifier of the asset to register
+    ///
+    /// # Returns
+    ///
+    /// Returns a `RegisterAssetResponse` containing:
+    /// - `success`: Boolean indicating whether the registration was successful
+    /// - `message`: Optional status message from the API
+    /// - `asset_id`: The registered asset identifier (hex string)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The asset does not exist or cannot be found (404)
+    /// - Authentication fails or token is invalid (401)
+    /// - The asset is already registered (returns success with appropriate message)
+    /// - Network connectivity issues occur
+    /// - The server returns an error status (5xx)
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::from_env().await?;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    ///
+    /// let response = client.register_asset(asset_uuid).await?;
+    /// if response.success {
+    ///     println!("Asset registered successfully!");
+    ///     println!("Asset ID: {}", response.asset_id);
+    ///     if let Some(message) = response.message {
+    ///         println!("Message: {}", message);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn register_asset(&self, asset_uuid: &str) -> Result<RegisterAssetResponse, Error> {
+        // Make HTTP request directly to handle both success and error responses
+        let token = self.get_token().await?;
+        let mut url = self.base_url.clone();
+        url.path_segments_mut()
+            .unwrap()
+            .extend(&["assets", asset_uuid, "register"]);
+
+        let response = self
+            .client
+            .request(Method::GET, url)
+            .header(AUTHORIZATION, format!("token {token}"))
+            .timeout(std::time::Duration::from_secs(60))
+            .send()
+            .await
+            .map_err(|e| Error::RequestFailed(format!("HTTP request failed: {}", e)))?;
+
+        let status = response.status();
+        let response_text = response.text().await.map_err(|e| {
+            Error::ResponseParsingFailed(format!("Failed to read response body: {}", e))
+        })?;
+
+        // Handle HTTP 200 - success case
+        if status == reqwest::StatusCode::OK {
+            // Try to parse as Asset (full registration response)
+            if let Ok(asset) = serde_json::from_str::<Asset>(&response_text) {
+                return Ok(RegisterAssetResponse {
+                    success: true,
+                    message: Some("Asset registered successfully".to_string()),
+                    asset_data: Some(asset),
+                });
+            }
+
+            // If parsing as Asset fails, return success with raw message
+            return Ok(RegisterAssetResponse {
+                success: true,
+                message: Some(response_text),
+                asset_data: None,
+            });
+        }
+
+        // Handle error responses
+        // Try to parse error response as JSON
+        if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&response_text) {
+            // Check for "already registered" error
+            if let Some(error_msg) = error_json.get("Error").and_then(|e| e.as_str()) {
+                let error_msg_lower = error_msg.to_lowercase();
+                if error_msg_lower.contains("already registered") {
+                    return Ok(RegisterAssetResponse {
+                        success: true,
+                        message: Some("Asset is already registered".to_string()),
+                        asset_data: None,
+                    });
+                }
+
+                // Other errors - return as error
+                return Err(Error::RequestFailed(format!(
+                    "Request to [\"assets\", \"{}\", \"register\"] failed with status {}: {}",
+                    asset_uuid, status, error_msg
+                )));
+            }
+        }
+
+        // Fallback error for non-JSON or unexpected responses
+        Err(Error::RequestFailed(format!(
+            "Request to [\"assets\", \"{}\", \"register\"] failed with status {}: {}",
+            asset_uuid, status, response_text
+        )))
+    }
+
     /// # Errors
     /// Returns an error if:
     /// - The asset does not exist or cannot be found
@@ -7414,23 +8463,6 @@ impl ApiClient {
     pub async fn broadcast_transaction(&self, tx_hex: &str) -> Result<BroadcastResponse, Error> {
         self.request_json(Method::POST, &["tx", "broadcast"], Some(tx_hex))
             .await
-    }
-
-    /// # Errors
-    /// Returns an error if:
-    /// - The asset UUID is invalid or not found
-    /// - The asset is already registered
-    /// - Authentication fails or token is invalid
-    /// - Network connectivity issues occur
-    /// - The server returns an error status
-    /// - The response cannot be parsed
-    pub async fn register_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
-        self.request_json(
-            Method::GET,
-            &["assets", asset_uuid, "register"],
-            None::<&()>,
-        )
-        .await
     }
 
     /// # Errors

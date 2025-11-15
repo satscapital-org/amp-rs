@@ -20,6 +20,9 @@ const PROTECTED_ASSET_UUIDS: &[&str] = &[
     "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset
     "9bcd9987-9544-439f-80b3-6d76b072fd9b", // Asset ID: 02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87
     "2982e097-918e-4113-a4f9-afb86bd038", // Asset ID: 98912dd98abf410320ad2e6b4b2e9537f702d0d04ca575b22a7387233c0af9a2
+    "b47d7afd-bc03-4850-83e4-e6a3428a13a0", // Asset ID: 04eebba5d2710d1e86aa6f12ef3ac8c2b20ba780d0d111c2358de2cbc89edcf6 Registered with Ticker
+    "d9c37019-1287-4dbf-bcd9-f6a747f28fd6", // Asset ID: fbd776438be416a47a963d324b3f96b3239c88ed8814f8b4e5027b2e66c3fd78 Registered with Ticker
+    "1d7245d2-7cbb-4092-9256-d9674c95684a", // New distribution asset (ID: 651f2acf48bd02d905e463cb1b57677e6459c0afc72c267114b28fc67a86c381)
 ];
 
 #[tokio::main]

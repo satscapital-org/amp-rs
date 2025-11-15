@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Target the asset with UTXOs that we found
-    let asset_uuid = "fff0928b-f78e-4a2c-bfa0-2c70bb72d545";
+    let asset_uuid = "1d7245d2-7cbb-4092-9256-d9674c95684a";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset
@@ -185,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cancelled_count = 0;
     let mut failed_count = 0;
 
-    for distribution_uuid in all_distribution_uuids {
+    for distribution_uuid in &all_distribution_uuids {
         print!("  Cancelling {}... ", distribution_uuid);
 
         match client
@@ -201,6 +201,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 failed_count += 1;
             }
         }
+    }
+    
+    // Wait a moment for cancellations to propagate
+    if cancelled_count > 0 {
+        println!("\n⏳ Waiting 2 seconds for cancellations to propagate...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
 
     // Delete assignments that were linked to distributions or are ready for distribution
@@ -430,8 +436,8 @@ async fn analyze_asset_utxos(
             }
         }
         Err(e) => {
-            println!("❌ Failed to get asset balance: {}", e);
-            println!("   This is expected if the asset is not registered in AMP.");
+            println!("   ⚠️  Balance check not available: {}", e.to_string().lines().next().unwrap_or("Unknown error"));
+            println!("   (This is expected for assets that aren't registered or have complex balance states)");
         }
     }
 
@@ -476,9 +482,13 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
     println!("🔍 Analyzing UTXOs via Elements RPC...");
 
     // Create a simple HTTP client to call Elements RPC
-    let rpc_url = std::env::var("ELEMENTS_RPC_URL")?;
-    let rpc_user = std::env::var("ELEMENTS_RPC_USER")?;
-    let rpc_password = std::env::var("ELEMENTS_RPC_PASSWORD")?;
+    // Prefer CLOUD_* vars when available, fallback to local ELEMENTS_*
+    let rpc_url = std::env::var("CLOUD_ELEMENTS_RPC_URL")
+        .or_else(|_| std::env::var("ELEMENTS_RPC_URL"))?;
+    let rpc_user = std::env::var("CLOUD_ELEMENTS_RPC_USER")
+        .or_else(|_| std::env::var("ELEMENTS_RPC_USER"))?;
+    let rpc_password = std::env::var("CLOUD_ELEMENTS_RPC_PASSWORD")
+        .or_else(|_| std::env::var("ELEMENTS_RPC_PASSWORD"))?;
 
     let client = reqwest::Client::new();
 
