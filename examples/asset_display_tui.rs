@@ -28,12 +28,13 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
+use std::sync::mpsc::{self, Receiver, Sender};
 use tokio::runtime::Runtime;
 use amp_rs::signer::LwkSoftwareSigner;
 use amp_rs::ElementsRpc;
 
 // Demo asset information
-const ASSET_UUID: &str = "a1c6656c-b6ec-41e0-9b2e-8951d7f38227";
+const ASSET_UUID: &str = "bc2d31af-60d0-4346-bfba-11b045f92dff";
 const DEMO_CATEGORY_NAME: &str = "SatsCapital Demo Category";
 
 struct AssetDisplayData {
@@ -92,6 +93,13 @@ struct DistributionProgress {
     complete: bool,
 }
 
+enum DistributionMessage {
+    Info(String),
+    Success(String),
+    Error(String),
+    Complete,
+}
+
 impl DistributionProgress {
     fn new() -> Self {
         Self {
@@ -123,6 +131,7 @@ struct AppState {
     asset_data: AssetDisplayData,
     distribution_input: DistributionInput,
     distribution_progress: DistributionProgress,
+    distribution_rx: Option<Receiver<DistributionMessage>>,
 }
 
 impl AssetDisplayData {
@@ -551,7 +560,7 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     // Render each holder in its own block with gauge
     for (idx, (i, (owner, amount, gaid))) in data.holders.iter().enumerate().take(holders_to_show).enumerate() {
         let percentage_of_supply = (*amount as f64 / total_circulation as f64) * 100.0;
-        
+
         // Format owner address (truncate if too long)
         let owner_display = if owner.len() > 45 {
             format!("{}...{}", &owner[..20], &owner[owner.len()-20..])
@@ -627,7 +636,7 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
             .gauge_style(Style::default().fg(gauge_color).bg(Color::DarkGray))
             .ratio(gauge_ratio)
             .label(format!("{:.2}%", percentage_of_supply));
-        
+
         f.render_widget(gauge, holder_layout[1]);
     }
 
@@ -718,7 +727,7 @@ fn render_distribution_input(f: &mut Frame, area: Rect, form: &DistributionInput
             Span::styled("Esc", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw(" to cancel"),
         ]));
-        
+
         if let Some(err) = &form.error {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
@@ -808,6 +817,26 @@ fn run_app(
     rt: &Runtime,
 ) -> io::Result<()> {
     loop {
+        // Check for distribution progress updates
+        let mut should_clear_rx = false;
+        if let Some(rx) = &app.distribution_rx {
+            while let Ok(msg) = rx.try_recv() {
+                match msg {
+                    DistributionMessage::Info(s) => app.distribution_progress.add_info(&s),
+                    DistributionMessage::Success(s) => app.distribution_progress.add_success(&s),
+                    DistributionMessage::Error(s) => app.distribution_progress.add_error(&s),
+                    DistributionMessage::Complete => {
+                        app.distribution_progress.in_progress = false;
+                        app.distribution_progress.complete = true;
+                        should_clear_rx = true;
+                    }
+                }
+            }
+        }
+        if should_clear_rx {
+            app.distribution_rx = None;
+        }
+
         terminal.draw(|f| ui(f, app))?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -830,10 +859,10 @@ fn run_app(
                     }
                     KeyCode::Backspace if app.screen == AppScreen::DistributionInput => {
                         let field = app.distribution_input.cursor_pos;
-                        if field == 0 { 
-                            app.distribution_input.gaid.pop(); 
-                        } else { 
-                            app.distribution_input.amount.pop(); 
+                        if field == 0 {
+                            app.distribution_input.gaid.pop();
+                        } else {
+                            app.distribution_input.amount.pop();
                         }
                     }
                     KeyCode::Enter if app.screen == AppScreen::DistributionInput && !app.distribution_progress.in_progress => {
@@ -849,17 +878,18 @@ fn run_app(
                             app.distribution_progress = DistributionProgress::new();
                             app.distribution_progress.in_progress = true;
 
-                            // Run distribution flow synchronously
+                            // Create channel for progress updates
+                            let (tx, rx) = mpsc::channel();
+                            app.distribution_rx = Some(rx);
+
+                            // Spawn distribution in background task
                             let gaid_clone = gaid.clone();
                             let amount_btc = amount_str.parse::<f64>().unwrap();
                             let asset_uuid = app.asset_data.asset_uuid.clone();
 
-                            rt.block_on(async {
-                                run_distribution_flow(&asset_uuid, gaid_clone, amount_btc, &mut app.distribution_progress).await;
+                            rt.spawn(async move {
+                                run_distribution_flow_with_channel(&asset_uuid, gaid_clone, amount_btc, tx).await;
                             });
-                            
-                            app.distribution_progress.in_progress = false;
-                            app.distribution_progress.complete = true;
                         }
                     }
                     KeyCode::Char(c) if app.screen == AppScreen::DistributionInput => {
@@ -878,183 +908,201 @@ fn run_app(
     }
 }
 
-async fn run_distribution_flow(
+async fn run_distribution_flow_with_channel(
     asset_uuid: &str,
     gaid: String,
     amount_btc: f64,
-    progress: &mut DistributionProgress,
+    tx: Sender<DistributionMessage>,
 ) {
     // Load env
     dotenvy::dotenv().ok();
 
-    progress.add_info("Initializing API client...");
+    let _ = tx.send(DistributionMessage::Info("Initializing API client...".to_string()));
     let client = match ApiClient::new().await {
         Ok(c) => {
-            progress.add_success("API client initialized");
+            let _ = tx.send(DistributionMessage::Success("API client initialized".to_string()));
             c
         }
         Err(e) => {
-            progress.add_error(&format!("ApiClient error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("ApiClient error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
-    progress.add_info("Connecting to Elements RPC...");
-    let _elements = match ElementsRpc::from_env() {
+    let _ = tx.send(DistributionMessage::Info("Connecting to Elements RPC...".to_string()));
+    let elements_rpc = match ElementsRpc::from_env() {
         Ok(e) => {
-            progress.add_success("Elements RPC connected");
+            let _ = tx.send(DistributionMessage::Success("Elements RPC connected".to_string()));
             e
         }
         Err(e) => {
-            progress.add_error(&format!("Elements RPC error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Elements RPC error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
-    progress.add_info("Generating signer...");
-    let _signer = match LwkSoftwareSigner::generate_new_indexed(300) {
+    let _ = tx.send(DistributionMessage::Info("Generating signer...".to_string()));
+    let signer = match LwkSoftwareSigner::generate_new_indexed(300) {
         Ok((_mn, s)) => {
-            progress.add_success("Signer generated");
+            let _ = tx.send(DistributionMessage::Success("Signer generated".to_string()));
             s
         }
         Err(e) => {
-            progress.add_error(&format!("Signer error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Signer error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 1. Validate GAID
-    progress.add_info(&format!("Validating GAID: {}...", gaid));
+    let _ = tx.send(DistributionMessage::Info(format!("Validating GAID: {}...", gaid)));
     match client.validate_gaid(&gaid).await {
         Ok(v) if v.is_valid => {
-            progress.add_success("GAID is valid");
+            let _ = tx.send(DistributionMessage::Success("GAID is valid".to_string()));
         }
         Ok(_) => {
-            progress.add_error("GAID is invalid");
+            let _ = tx.send(DistributionMessage::Error("GAID is invalid".to_string()));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
         Err(e) => {
-            progress.add_error(&format!("GAID validation error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("GAID validation error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
     // 2. Get GAID address
-    progress.add_info("Fetching GAID address...");
+    let _ = tx.send(DistributionMessage::Info("Fetching GAID address...".to_string()));
     let user_address = match client.get_gaid_address(&gaid).await {
         Ok(resp) if !resp.address.is_empty() => {
-            progress.add_success(&format!("Address: {}...{}", &resp.address[..10], &resp.address[resp.address.len()-6..]));
+            let _ = tx.send(DistributionMessage::Success(format!("Address: {}...{}", &resp.address[..10], &resp.address[resp.address.len()-6..])));
             resp.address
         }
         Ok(_) => {
-            progress.add_error("No address associated with GAID");
+            let _ = tx.send(DistributionMessage::Error("No address associated with GAID".to_string()));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
         Err(e) => {
-            progress.add_error(&format!("Address lookup error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Address lookup error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 3. Ensure registered user exists
-    progress.add_info("Checking for registered user...");
+    let _ = tx.send(DistributionMessage::Info("Checking for registered user...".to_string()));
     let (user_id, _user_name) = match client.get_registered_users().await {
         Ok(users) => {
             if let Some(user) = users.iter().find(|u| u.gaid.as_ref() == Some(&gaid)) {
-                progress.add_success(&format!("Found user '{}' (ID: {})", user.name, user.id));
+                let _ = tx.send(DistributionMessage::Success(format!("Found user '{}' (ID: {})", user.name, user.id)));
                 (user.id, user.name.clone())
             } else {
-                progress.add_info("User not found, creating...");
+                let _ = tx.send(DistributionMessage::Info("User not found, creating...".to_string()));
                 let name = format!("TUI Distribution User {}", chrono::Utc::now().timestamp());
                 let req = amp_rs::model::RegisteredUserAdd { name: name.clone(), gaid: Some(gaid.clone()), is_company: false };
                 match client.add_registered_user(&req).await {
                     Ok(u) => {
-                        progress.add_success(&format!("Created user '{}' (ID: {})", name, u.id));
+                        let _ = tx.send(DistributionMessage::Success(format!("Created user '{}' (ID: {})", name, u.id)));
                         (u.id, name)
                     }
                     Err(e) => {
-                        progress.add_error(&format!("Register user error: {}", e));
+                        let _ = tx.send(DistributionMessage::Error(format!("Register user error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
                         return;
                     }
                 }
             }
         }
         Err(e) => {
-            progress.add_error(&format!("Failed to list users: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Failed to list users: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 4. Ensure category exists and associations
-    progress.add_info("Setting up category...");
+    let _ = tx.send(DistributionMessage::Info("Setting up category...".to_string()));
     let category_id = match client.get_categories().await {
         Ok(list) => {
             if let Some(c) = list.into_iter().find(|c| c.name == DEMO_CATEGORY_NAME) {
-                progress.add_success(&format!("Category '{}' exists", DEMO_CATEGORY_NAME));
+                let _ = tx.send(DistributionMessage::Success(format!("Category '{}' exists", DEMO_CATEGORY_NAME)));
                 c.id
             } else {
-                progress.add_info("Creating category...");
-                match client.add_category(&amp_rs::model::CategoryAdd { 
-                    name: DEMO_CATEGORY_NAME.to_string(), 
-                    description: Some("Demo category".to_string()) 
+                let _ = tx.send(DistributionMessage::Info("Creating category...".to_string()));
+                match client.add_category(&amp_rs::model::CategoryAdd {
+                    name: DEMO_CATEGORY_NAME.to_string(),
+                    description: Some("Demo category".to_string())
                 }).await {
                     Ok(c) => {
-                        progress.add_success(&format!("Created category (ID: {})", c.id));
+                        let _ = tx.send(DistributionMessage::Success(format!("Created category (ID: {})", c.id)));
                         c.id
                     }
                     Err(e) => {
-                        progress.add_error(&format!("Create category error: {}", e));
+                        let _ = tx.send(DistributionMessage::Error(format!("Create category error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
                         return;
                     }
                 }
             }
         }
         Err(e) => {
-            progress.add_error(&format!("Get categories error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Get categories error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // Associate user and asset with category
-    progress.add_info("Adding user to category...");
+    let _ = tx.send(DistributionMessage::Info("Adding user to category...".to_string()));
     match client.add_registered_user_to_category(category_id, user_id).await {
-        Ok(_) => progress.add_success("User added to category"),
+        Ok(_) => {
+            let _ = tx.send(DistributionMessage::Success("User added to category".to_string()));
+        }
         Err(e) if format!("{}", e).contains("already") => {
-            progress.add_success("User already in category");
+            let _ = tx.send(DistributionMessage::Success("User already in category".to_string()));
         }
         Err(e) => {
-            progress.add_error(&format!("Add user to category error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Add user to category error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
-    progress.add_info("Adding asset to category...");
+    let _ = tx.send(DistributionMessage::Info("Adding asset to category...".to_string()));
     match client.add_asset_to_category(category_id, asset_uuid).await {
-        Ok(_) => progress.add_success("Asset added to category"),
+        Ok(_) => {
+            let _ = tx.send(DistributionMessage::Success("Asset added to category".to_string()));
+        }
         Err(e) if format!("{}", e).contains("already") => {
-            progress.add_success("Asset already in category");
+            let _ = tx.send(DistributionMessage::Success("Asset already in category".to_string()));
         }
         Err(e) => {
-            progress.add_error(&format!("Add asset to category error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Add asset to category error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
     // 5. Get asset details for precision
-    progress.add_info("Fetching asset precision...");
+    let _ = tx.send(DistributionMessage::Info("Fetching asset precision...".to_string()));
     let asset = match client.get_asset(asset_uuid).await {
         Ok(a) => {
-            progress.add_success(&format!("Asset precision: {}", a.precision));
+            let _ = tx.send(DistributionMessage::Success(format!("Asset precision: {}", a.precision)));
             a
         }
         Err(e) => {
-            progress.add_error(&format!("Failed to fetch asset: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Failed to fetch asset: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 6. Create assignment
-    progress.add_info("Creating assignment...");
+    let _ = tx.send(DistributionMessage::Info("Creating assignment...".to_string()));
     let smallest_units = (amount_btc * 10f64.powi(asset.precision as i32)).round() as i64;
     let assignment_req = amp_rs::model::CreateAssetAssignmentRequest {
         registered_user: user_id,
@@ -1065,44 +1113,91 @@ async fn run_distribution_flow(
 
     match client.create_asset_assignments(asset_uuid, &vec![assignment_req]).await {
         Ok(assignments) => {
-            progress.add_success(&format!("Created assignment for {} units", smallest_units));
+            let _ = tx.send(DistributionMessage::Success(format!("Created assignment for {} units", smallest_units)));
             if let Some(first) = assignments.first() {
-                progress.add_info(&format!("Assignment ID: {}", first.id));
+                let _ = tx.send(DistributionMessage::Info(format!("Assignment ID: {}", first.id)));
             }
         }
         Err(e) => {
-            progress.add_error(&format!("Create assignment error: {}", e));
+            let _ = tx.send(DistributionMessage::Error(format!("Create assignment error: {}", e)));
+            let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
-    // 7. DRY RUN: Show what would be called (not executing)
-    progress.add_info("=== DRY RUN MODE ===");
-    progress.add_info("Would call: client.distribute_asset(...)");
-    progress.add_info(&format!("  asset_uuid: '{}'", asset_uuid));
-    progress.add_info(&format!("  assignments: ["));
-    progress.add_info(&format!("    AssetDistributionAssignment {{"));
-    progress.add_info(&format!("      user_id: '{}',", user_id));
-    progress.add_info(&format!("      address: '{}',", user_address));
-    progress.add_info(&format!("      amount: {} (BTC units)", amount_btc));
-    progress.add_info(&format!("    }}"));
-    progress.add_info(&format!("  ]"));
-    progress.add_info(&format!("  elements_rpc: <connected>"));
-    progress.add_info(&format!("  wallet_name: 'amp_elements_wallet_static_for_funding'"));
-    progress.add_info(&format!("  signer: <LwkSoftwareSigner generated>"));
-    progress.add_success("DRY RUN: All checks passed, ready for distribution!");
-    progress.add_info("(Distribution not executed - this is a dry run)");
+    // 7. DRY RUN: Distribution (commented out to prevent UI freeze)
+    // Convert smallest_units back to base unit (like BTC) using asset precision
+    let amount_for_distribution = smallest_units as f64 / 10f64.powi(asset.precision as i32);
+
+    // 7. Execute distribution (LIVE) - Now working with async background task!
+    let distribution_assignments = vec![amp_rs::model::AssetDistributionAssignment {
+        user_id: user_id.to_string(),
+        address: user_address.clone(),
+        amount: amount_for_distribution,
+    }];
+
+    let _ = tx.send(DistributionMessage::Info(format!("Distributing {} base units ({} smallest units)...", amount_for_distribution, smallest_units)));
+    let wallet_name = "amp_elements_wallet_static_for_funding";
+
+    match client.distribute_asset(
+        asset_uuid,
+        distribution_assignments,
+        &elements_rpc,
+        wallet_name,
+        &signer,
+    ).await {
+        Ok(()) => {
+            let _ = tx.send(DistributionMessage::Success("Distribution completed successfully!".to_string()));
+            let _ = tx.send(DistributionMessage::Info("Asset has been distributed to the user".to_string()));
+        }
+        Err(e) => {
+            let _ = tx.send(DistributionMessage::Error(format!("Distribution failed: {}", e)));
+            let _ = tx.send(DistributionMessage::Info("Check the error details above".to_string()));
+        }
+    }
+
+    // Signal completion
+    let _ = tx.send(DistributionMessage::Complete);
+
+    // COMMENTED OUT - This blocks the UI thread waiting for blockchain confirmations
+    // Uncomment only if you implement proper async handling with channels
+    /*
+    let distribution_assignments = vec![amp_rs::model::AssetDistributionAssignment {
+        user_id: user_id.to_string(),
+        address: user_address.clone(),
+        amount: amount_for_distribution,
+    }];
+
+    let wallet_name = "amp_elements_wallet_static_for_funding";
+
+    match client.distribute_asset(
+        asset_uuid,
+        distribution_assignments,
+        &elements_rpc,
+        wallet_name,
+        &signer,
+    ).await {
+        Ok(()) => {
+            let _ = tx.send(DistributionMessage::Success("Distribution completed successfully!".to_string()));
+            let _ = tx.send(DistributionMessage::Info("Asset has been distributed to the user".to_string()));
+        }
+        Err(e) => {
+            let _ = tx.send(DistributionMessage::Error(format!("Distribution failed: {}", e)));
+            let _ = tx.send(DistributionMessage::Info("Check the error details above".to_string()));
+        }
+    }
+    */
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a runtime to fetch async data
     let rt = Runtime::new()?;
-    
+
     println!("Fetching asset data from AMP API...");
     let data = rt.block_on(async {
         fetch_asset_data().await
     })?;
-    
+
     println!("Data fetched successfully! Launching TUI...");
 
     // Setup terminal
@@ -1118,6 +1213,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         asset_data: data,
         distribution_input: DistributionInput::new(),
         distribution_progress: DistributionProgress::new(),
+        distribution_rx: None,
     };
 
     // Run app

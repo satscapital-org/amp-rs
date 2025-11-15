@@ -39,8 +39,8 @@ use dotenvy;
 use std::env;
 
 /// Asset configuration for this example
-const ASSET_UUID: &str = "a1c6656c-b6ec-41e0-9b2e-8951d7f38227";
-const ASSET_ID: &str = "390e57d4a5b355ab8c02a514bd2640268f5d775ed3959cb8b3c8c2fc94da60aa";
+const ASSET_UUID: &str = "df6eaf0c-89c1-46b6-b688-84f2c1d3c4b";
+const ASSET_ID: &str = "ea47faf23b2e8b73a4dc5a3b32df4558dba6e76f9ca69942b4f85e05a4f43863";
 /// Default user GAID (can be overridden via command line)
 const DEFAULT_USER_GAID: &str = "GAbzSbgCZ6M6WU85rseKTrfehPsjt";
 
