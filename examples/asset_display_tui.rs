@@ -280,18 +280,35 @@ fn ui(f: &mut Frame, app: &AppState) {
         }
     }
 
-    // Footer with instructions
-    let footer_text = vec![Line::from(vec![
-        Span::styled("Press ", Style::default().fg(Color::Gray)),
-        Span::styled("'d'", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::styled(" to distribute  ", Style::default().fg(Color::Gray)),
-        Span::styled("'r'", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" to reload  ", Style::default().fg(Color::Gray)),
-        Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::styled(" or ", Style::default().fg(Color::Gray)),
-        Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::styled(" to exit", Style::default().fg(Color::Gray)),
-    ])];
+    // Footer with instructions - vary based on screen and distribution state
+    let footer_text = if app.screen == AppScreen::Main {
+        vec![Line::from(vec![
+            Span::styled("Press ", Style::default().fg(Color::Gray)),
+            Span::styled("'d'", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(" to distribute  ", Style::default().fg(Color::Gray)),
+            Span::styled("'r'", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" to reload  ", Style::default().fg(Color::Gray)),
+            Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" or ", Style::default().fg(Color::Gray)),
+            Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" to exit", Style::default().fg(Color::Gray)),
+        ])]
+    } else if app.distribution_progress.in_progress {
+        // During distribution, show that keys are disabled
+        vec![Line::from(vec![
+            Span::styled("Distribution in progress... ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled("Please wait", Style::default().fg(Color::Gray)),
+        ])]
+    } else {
+        // On distribution input screen, no reload option
+        vec![Line::from(vec![
+            Span::styled("Press ", Style::default().fg(Color::Gray)),
+            Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" or ", Style::default().fg(Color::Gray)),
+            Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" to exit", Style::default().fg(Color::Gray)),
+        ])]
+    };
 
     let footer = Paragraph::new(footer_text)
         .block(
@@ -930,6 +947,11 @@ fn run_app(
 
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                // Block all key inputs during distribution
+                if app.distribution_progress.in_progress {
+                    continue;
+                }
+                
                 match key.code {
                     KeyCode::Char('q') => {
                         return Ok(());
