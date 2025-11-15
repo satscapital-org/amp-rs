@@ -28,10 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Get environment variables
-    let local_url = env::var("ELEMENTS_RPC_URL")
-        .map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
-    let local_user = env::var("ELEMENTS_RPC_USER")
-        .map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
+    let local_url =
+        env::var("ELEMENTS_RPC_URL").map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
+    let local_user =
+        env::var("ELEMENTS_RPC_USER").map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
     let local_password = env::var("ELEMENTS_RPC_PASSWORD")
         .map_err(|_| "ELEMENTS_RPC_PASSWORD not set in environment")?;
 
@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_secs();
     let export_filename = format!("{}_export_{}.dat", WALLET_NAME, timestamp);
     let export_path = format!("/tmp/{}", export_filename);
-    
+
     local_rpc.dump_wallet(WALLET_NAME, &export_path).await?;
     println!("✅ Wallet exported to: {}", export_path);
     println!();
@@ -96,7 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🗑️  Step 3: Deleting old wallet directory on cloud server...");
     let ssh_delete = Command::new("ssh")
         .arg(format!("ubuntu@{}", cloud_ip))
-        .arg(format!("sudo docker exec elements-testnet rm -rf /root/.elements/liquidtestnet/wallets/{}", WALLET_NAME))
+        .arg(format!(
+            "sudo docker exec elements-testnet rm -rf /root/.elements/liquidtestnet/wallets/{}",
+            WALLET_NAME
+        ))
         .output();
 
     match ssh_delete {
@@ -111,7 +114,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("⚠️  SSH delete failed: {}", e);
-            println!("   You may need to manually delete: ~/.elements/liquidv1/wallets/{}", WALLET_NAME);
+            println!(
+                "   You may need to manually delete: ~/.elements/liquidv1/wallets/{}",
+                WALLET_NAME
+            );
             println!("   Or the wallet may not exist yet, which is fine.");
         }
     }
@@ -119,7 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: Copy wallet file to cloud via SCP, then into Docker container
     println!("📦 Step 4: Copying wallet file to cloud server...");
-    
+
     // First copy to host
     let scp_output = Command::new("scp")
         .arg(&export_path)
@@ -138,13 +144,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!("✅ Wallet file copied to host");
-    
+
     // Then copy into Docker container
     let docker_cp = Command::new("ssh")
         .arg(format!("ubuntu@{}", cloud_ip))
-        .arg(format!("sudo docker cp /tmp/{} elements-testnet:/tmp/{}", export_filename, export_filename))
+        .arg(format!(
+            "sudo docker cp /tmp/{} elements-testnet:/tmp/{}",
+            export_filename, export_filename
+        ))
         .output();
-    
+
     match docker_cp {
         Ok(output) => {
             if !output.status.success() {
@@ -174,14 +183,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 6: Import wallet with private keys
     println!("📥 Step 6: Importing wallet with private keys...");
     let cloud_import_path = format!("/tmp/{}", export_filename);
-    cloud_rpc.import_wallet(WALLET_NAME, &cloud_import_path).await?;
+    cloud_rpc
+        .import_wallet(WALLET_NAME, &cloud_import_path)
+        .await?;
     println!("✅ Wallet imported successfully");
     println!("   All private keys and blinding keys are now on cloud node");
     println!();
 
     // Step 7: Clean up files
     println!("🧹 Step 7: Cleaning up temporary files...");
-    
+
     // Delete local export file
     match std::fs::remove_file(&export_path) {
         Ok(()) => println!("✅ Removed local export file"),
@@ -191,7 +202,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Delete cloud export file via Docker
     let ssh_cleanup = Command::new("ssh")
         .arg(format!("ubuntu@{}", cloud_ip))
-        .arg(format!("sudo docker exec elements-testnet rm -f {}", cloud_import_path))
+        .arg(format!(
+            "sudo docker exec elements-testnet rm -f {}",
+            cloud_import_path
+        ))
         .output();
 
     match ssh_cleanup {
@@ -211,18 +225,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 8: Verify signing capability
     println!("✔️  Step 8: Verifying signing capability...");
     match cloud_rpc.get_new_address(WALLET_NAME, None).await {
-        Ok(address) => {
-            match cloud_rpc.dump_private_key(WALLET_NAME, &address).await {
-                Ok(_) => {
-                    println!("✅ SUCCESS! Cloud wallet can sign transactions");
-                }
-                Err(e) => {
-                    println!("❌ FAILED: Cloud wallet cannot access private keys");
-                    println!("   Error: {}", e);
-                    return Err(e.into());
-                }
+        Ok(address) => match cloud_rpc.dump_private_key(WALLET_NAME, &address).await {
+            Ok(_) => {
+                println!("✅ SUCCESS! Cloud wallet can sign transactions");
             }
-        }
+            Err(e) => {
+                println!("❌ FAILED: Cloud wallet cannot access private keys");
+                println!("   Error: {}", e);
+                return Err(e.into());
+            }
+        },
         Err(e) => {
             println!("❌ Failed to generate test address: {}", e);
             return Err(e.into());
@@ -232,7 +244,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🎉 Migration Complete!");
     println!("======================");
-    println!("✅ Cloud wallet '{}' can now sign transactions", WALLET_NAME);
+    println!(
+        "✅ Cloud wallet '{}' can now sign transactions",
+        WALLET_NAME
+    );
     println!();
     println!("💡 Next steps:");
     println!("  1. Rescan blockchain on cloud node:");

@@ -55,14 +55,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 Fetching all assets from AMP...");
     let assets = amp_client.get_assets().await?;
     println!("✅ Found {} assets total", assets.len());
-    
+
     // Filter for assets that have treasury addresses (issued assets)
     let issued_assets: Vec<_> = assets
         .into_iter()
         .filter(|asset| asset.pubkey.is_some() && !asset.pubkey.as_ref().unwrap().is_empty())
         .collect();
-    
-    println!("✅ Found {} issued assets with treasury addresses", issued_assets.len());
+
+    println!(
+        "✅ Found {} issued assets with treasury addresses",
+        issued_assets.len()
+    );
     println!();
 
     // Import each treasury address
@@ -72,10 +75,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut skipped_count = 0;
 
     for (i, asset) in issued_assets.iter().enumerate() {
-        println!("  [{}/{}] Processing asset: {} ({})", 
-            i + 1, 
-            issued_assets.len(), 
-            asset.name, 
+        println!(
+            "  [{}/{}] Processing asset: {} ({})",
+            i + 1,
+            issued_assets.len(),
+            asset.name,
             asset.asset_uuid
         );
 
@@ -90,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Import the address as watch-only with a label
         let label = format!("AMP_Treasury_{}", asset.name);
-        
+
         match cloud_rpc
             .import_address(WALLET_NAME, treasury_address, Some(&label), Some(false))
             .await
@@ -126,13 +130,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Rescan the blockchain
     println!("🔄 Rescanning blockchain to detect UTXOs...");
     println!("   This may take several minutes...");
-    
+
     match cloud_rpc.rescan_blockchain(WALLET_NAME, None).await {
         Ok(result) => {
             println!("✅ Rescan complete!");
-            println!("   Scanned from block {} to {}", 
-                result.get("start_height").and_then(|v| v.as_u64()).unwrap_or(0),
-                result.get("stop_height").and_then(|v| v.as_u64()).unwrap_or(0)
+            println!(
+                "   Scanned from block {} to {}",
+                result
+                    .get("start_height")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                result
+                    .get("stop_height")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
             );
         }
         Err(e) => {

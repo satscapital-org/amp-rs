@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // List all wallets
     println!("📋 Listing all wallets...");
     let wallets = cloud_rpc.list_wallets().await?;
-    
+
     if wallets.is_empty() {
         println!("✅ No wallets found on cloud node");
         return Ok(());
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Unload and delete each wallet
     for wallet_name in &wallets {
         println!("🗑️  Processing wallet: {}", wallet_name);
-        
+
         // Unload wallet
         match cloud_rpc.unload_wallet(wallet_name).await {
             Ok(()) => println!("  ✓ Unloaded"),

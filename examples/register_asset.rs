@@ -29,7 +29,9 @@ fn print_usage() {
     println!("  cargo run --example register_asset -- <ASSET_UUID>");
     println!();
     println!("Arguments:");
-    println!("  ASSET_UUID    The UUID of the asset to register with the Blockstream Asset Registry");
+    println!(
+        "  ASSET_UUID    The UUID of the asset to register with the Blockstream Asset Registry"
+    );
     println!();
     println!("Examples:");
     println!("  cargo run --example register_asset -- 9bcd9987-9544-439f-80b3-6d76b072fd9b");

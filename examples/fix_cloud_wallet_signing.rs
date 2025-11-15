@@ -21,10 +21,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Get environment variables
-    let local_url = env::var("ELEMENTS_RPC_URL")
-        .map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
-    let local_user = env::var("ELEMENTS_RPC_USER")
-        .map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
+    let local_url =
+        env::var("ELEMENTS_RPC_URL").map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
+    let local_user =
+        env::var("ELEMENTS_RPC_USER").map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
     let local_password = env::var("ELEMENTS_RPC_PASSWORD")
         .map_err(|_| "ELEMENTS_RPC_PASSWORD not set in environment")?;
 
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_secs();
     let export_filename = format!("{}_export_{}.dat", WALLET_NAME, timestamp);
     let export_path = format!("/tmp/{}", export_filename);
-    
+
     local_rpc.dump_wallet(WALLET_NAME, &export_path).await?;
     println!("✅ Wallet exported to: {}", export_path);
     println!();
@@ -91,13 +91,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   The wallet will be recreated with proper private keys from the local backup.");
     println!();
     println!("   You need to manually delete the wallet directory on the cloud server:");
-    println!("   ssh cloud-server 'rm -rf ~/.elements/liquidv1/wallets/{}'", WALLET_NAME);
+    println!(
+        "   ssh cloud-server 'rm -rf ~/.elements/liquidv1/wallets/{}'",
+        WALLET_NAME
+    );
     println!();
     println!("   Press Enter when you've deleted the cloud wallet directory...");
-    
+
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
-    
+
     println!();
 
     // Step 5: Create fresh wallet on cloud
@@ -115,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 6: Import wallet to cloud node
     println!("📥 Step 6: Importing wallet with private keys to cloud node...");
     println!("   This will import ALL private keys and blinding keys");
-    
+
     // Check if file needs to be copied
     if !cloud_url.contains("localhost") && !cloud_url.contains("127.0.0.1") {
         println!();
@@ -142,21 +145,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 8: Verify
     println!("✔️  Step 8: Verifying signing capability...");
-    
+
     // Try to generate an address and dump its private key
     match cloud_rpc.get_new_address(WALLET_NAME, None).await {
-        Ok(address) => {
-            match cloud_rpc.dump_private_key(WALLET_NAME, &address).await {
-                Ok(_) => {
-                    println!("✅ SUCCESS! Cloud wallet can now sign transactions");
-                }
-                Err(e) => {
-                    println!("❌ FAILED: Cloud wallet still cannot access private keys");
-                    println!("   Error: {}", e);
-                    return Err(e.into());
-                }
+        Ok(address) => match cloud_rpc.dump_private_key(WALLET_NAME, &address).await {
+            Ok(_) => {
+                println!("✅ SUCCESS! Cloud wallet can now sign transactions");
             }
-        }
+            Err(e) => {
+                println!("❌ FAILED: Cloud wallet still cannot access private keys");
+                println!("   Error: {}", e);
+                return Err(e.into());
+            }
+        },
         Err(e) => {
             println!("❌ Failed to generate test address: {}", e);
             return Err(e.into());
@@ -169,7 +170,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Cloud wallet can now sign transactions");
     println!();
     println!("💡 Next steps:");
-    println!("  - Rescan blockchain: elements-cli -rpcwallet={} rescanblockchain", WALLET_NAME);
+    println!(
+        "  - Rescan blockchain: elements-cli -rpcwallet={} rescanblockchain",
+        WALLET_NAME
+    );
     println!("  - Test sending a transaction from the cloud wallet");
 
     Ok(())

@@ -480,8 +480,7 @@ pub fn mock_edit_asset(server: &MockServer) {
 /// ```
 pub fn mock_register_asset(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET)
-            .path("/assets/mock_asset_uuid/register");
+        when.method(GET).path("/assets/mock_asset_uuid/register");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({

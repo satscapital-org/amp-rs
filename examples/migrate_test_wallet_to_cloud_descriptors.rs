@@ -37,10 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Get environment variables
-    let local_url = env::var("ELEMENTS_RPC_URL")
-        .map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
-    let local_user = env::var("ELEMENTS_RPC_USER")
-        .map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
+    let local_url =
+        env::var("ELEMENTS_RPC_URL").map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
+    let local_user =
+        env::var("ELEMENTS_RPC_USER").map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
     let local_password = env::var("ELEMENTS_RPC_PASSWORD")
         .map_err(|_| "ELEMENTS_RPC_PASSWORD not set in environment")?;
 
@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 2: Export descriptors from local wallet
     println!("📤 Step 2: Exporting wallet descriptors from local node...");
     let descriptors = local_rpc.list_descriptors(WALLET_NAME, Some(true)).await?;
-    
+
     println!("✅ Exported {} descriptors:", descriptors.len());
     for (i, desc) in descriptors.iter().enumerate() {
         let desc_type = if desc.contains("wpkh") {
@@ -121,7 +121,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    println!("✅ Imported {}/{} descriptors", imported_count, descriptors.len());
+    println!(
+        "✅ Imported {}/{} descriptors",
+        imported_count,
+        descriptors.len()
+    );
     println!();
 
     // Step 5: Verify migration
@@ -131,24 +135,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Local wallet:");
     println!("  Tx count: {:?}", local_info.get("txcount"));
-    
+
     println!("Cloud wallet:");
     println!("  Tx count: {:?}", cloud_info.get("txcount"));
     println!();
 
     println!("🎉 Migration Complete!");
     println!("===================");
-    println!("✅ Wallet '{}' descriptors migrated to cloud node", WALLET_NAME);
+    println!(
+        "✅ Wallet '{}' descriptors migrated to cloud node",
+        WALLET_NAME
+    );
     println!("✅ All HD keys (including blinding keys) are now available on cloud node");
     println!();
-    
+
     if cloud_info.get("txcount").and_then(|v| v.as_u64()) == Some(0) {
         println!("⚠️  Note: Cloud wallet shows 0 transactions");
         println!("   The cloud node needs to rescan the blockchain.");
-        println!("   Run: elements-cli -rpcwallet={} rescanblockchain", WALLET_NAME);
+        println!(
+            "   Run: elements-cli -rpcwallet={} rescanblockchain",
+            WALLET_NAME
+        );
         println!();
     }
-    
+
     println!("💡 Next steps:");
     println!("  - Rescan blockchain on cloud node to see existing transactions");
     println!("  - Verify addresses match between local and cloud");

@@ -202,7 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     // Wait a moment for cancellations to propagate
     if cancelled_count > 0 {
         println!("\n⏳ Waiting 2 seconds for cancellations to propagate...");
@@ -436,7 +436,10 @@ async fn analyze_asset_utxos(
             }
         }
         Err(e) => {
-            println!("   ⚠️  Balance check not available: {}", e.to_string().lines().next().unwrap_or("Unknown error"));
+            println!(
+                "   ⚠️  Balance check not available: {}",
+                e.to_string().lines().next().unwrap_or("Unknown error")
+            );
             println!("   (This is expected for assets that aren't registered or have complex balance states)");
         }
     }
@@ -483,10 +486,10 @@ async fn analyze_elements_utxos(asset_id: &str) -> Result<(), Box<dyn std::error
 
     // Create a simple HTTP client to call Elements RPC
     // Prefer CLOUD_* vars when available, fallback to local ELEMENTS_*
-    let rpc_url = std::env::var("CLOUD_ELEMENTS_RPC_URL")
-        .or_else(|_| std::env::var("ELEMENTS_RPC_URL"))?;
-    let rpc_user = std::env::var("CLOUD_ELEMENTS_RPC_USER")
-        .or_else(|_| std::env::var("ELEMENTS_RPC_USER"))?;
+    let rpc_url =
+        std::env::var("CLOUD_ELEMENTS_RPC_URL").or_else(|_| std::env::var("ELEMENTS_RPC_URL"))?;
+    let rpc_user =
+        std::env::var("CLOUD_ELEMENTS_RPC_USER").or_else(|_| std::env::var("ELEMENTS_RPC_USER"))?;
     let rpc_password = std::env::var("CLOUD_ELEMENTS_RPC_PASSWORD")
         .or_else(|_| std::env::var("ELEMENTS_RPC_PASSWORD"))?;
 

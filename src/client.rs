@@ -1727,7 +1727,11 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::debug!("Successfully imported address: {} into wallet: {}", address, wallet_name);
+        tracing::debug!(
+            "Successfully imported address: {} into wallet: {}",
+            address,
+            wallet_name
+        );
         Ok(())
     }
 
@@ -1804,7 +1808,10 @@ impl ElementsRpc {
             .result
             .ok_or_else(|| AmpError::rpc("No result returned from rescanblockchain".to_string()))?;
 
-        tracing::debug!("Successfully rescanned blockchain for wallet: {}", wallet_name);
+        tracing::debug!(
+            "Successfully rescanned blockchain for wallet: {}",
+            wallet_name
+        );
         Ok(result)
     }
 
@@ -2152,7 +2159,8 @@ impl ElementsRpc {
         self.load_wallet(wallet_name).await?;
 
         // Import the address without rescanning (for faster setup)
-        self.import_address(wallet_name, address, label, Some(false)).await?;
+        self.import_address(wallet_name, address, label, Some(false))
+            .await?;
 
         Ok(())
     }
@@ -2167,7 +2175,9 @@ impl ElementsRpc {
 
         // This is a fallback method - we'll use empty string for wallet name to use default behavior
         // Note: This may not work as expected with the new signature, but kept for compatibility
-        Err(AmpError::rpc("Direct address import not supported with wallet-specific import_address".to_string()))
+        Err(AmpError::rpc(
+            "Direct address import not supported with wallet-specific import_address".to_string(),
+        ))
     }
 
     /// Broadcasts a signed raw transaction to the network
@@ -4264,11 +4274,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn dump_wallet(
-        &self,
-        wallet_name: &str,
-        file_path: &str,
-    ) -> Result<(), AmpError> {
+    pub async fn dump_wallet(&self, wallet_name: &str, file_path: &str) -> Result<(), AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
 
@@ -4313,7 +4319,11 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::info!("Successfully exported wallet {} to {}", wallet_name, file_path);
+        tracing::info!(
+            "Successfully exported wallet {} to {}",
+            wallet_name,
+            file_path
+        );
         Ok(())
     }
 
@@ -4336,11 +4346,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn import_wallet(
-        &self,
-        wallet_name: &str,
-        file_path: &str,
-    ) -> Result<(), AmpError> {
+    pub async fn import_wallet(&self, wallet_name: &str, file_path: &str) -> Result<(), AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
 
@@ -4385,7 +4391,11 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::info!("Successfully imported wallet {} from {}", wallet_name, file_path);
+        tracing::info!(
+            "Successfully imported wallet {} from {}",
+            wallet_name,
+            file_path
+        );
         Ok(())
     }
 
@@ -4460,7 +4470,10 @@ impl ElementsRpc {
 
         if let Some(result) = rpc_response.result {
             if let Some(blinding_key) = result.as_str() {
-                tracing::info!("Successfully exported blinding key for address: {}", address);
+                tracing::info!(
+                    "Successfully exported blinding key for address: {}",
+                    address
+                );
                 return Ok(blinding_key.to_string());
             }
         }
@@ -4540,7 +4553,10 @@ impl ElementsRpc {
             )));
         }
 
-        tracing::info!("Successfully imported blinding key for address: {}", address);
+        tracing::info!(
+            "Successfully imported blinding key for address: {}",
+            address
+        );
         Ok(())
     }
 
@@ -4563,10 +4579,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_wallet_info(
-        &self,
-        wallet_name: &str,
-    ) -> Result<serde_json::Value, AmpError> {
+    pub async fn get_wallet_info(&self, wallet_name: &str) -> Result<serde_json::Value, AmpError> {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
 
@@ -4692,7 +4705,10 @@ impl ElementsRpc {
 
         if let Some(result) = rpc_response.result {
             if let Some(address) = result.as_str() {
-                tracing::info!("Successfully got unconfidential address for: {}", confidential_address);
+                tracing::info!(
+                    "Successfully got unconfidential address for: {}",
+                    confidential_address
+                );
                 return Ok(address.to_string());
             }
         }
@@ -4733,11 +4749,7 @@ impl ElementsRpc {
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
 
-        let params = serde_json::json!([
-            private_key,
-            label.unwrap_or(""),
-            rescan.unwrap_or(false)
-        ]);
+        let params = serde_json::json!([private_key, label.unwrap_or(""), rescan.unwrap_or(false)]);
 
         // Create RPC request for importprivkey
         let request = RpcRequest {
@@ -4860,7 +4872,11 @@ impl ElementsRpc {
                     .iter()
                     .filter_map(|d| d.get("desc").and_then(|v| v.as_str()).map(String::from))
                     .collect();
-                tracing::info!("Successfully retrieved {} descriptors for wallet: {}", descriptors.len(), wallet_name);
+                tracing::info!(
+                    "Successfully retrieved {} descriptors for wallet: {}",
+                    descriptors.len(),
+                    wallet_name
+                );
                 return Ok(descriptors);
             }
         }
@@ -4943,7 +4959,11 @@ impl ElementsRpc {
             // Result is an object with addresses as keys
             if let Some(obj) = result.as_object() {
                 let addresses: Vec<String> = obj.keys().cloned().collect();
-                tracing::info!("Successfully retrieved {} addresses for wallet: {}", addresses.len(), wallet_name);
+                tracing::info!(
+                    "Successfully retrieved {} addresses for wallet: {}",
+                    addresses.len(),
+                    wallet_name
+                );
                 return Ok(addresses);
             }
         }
@@ -5025,7 +5045,11 @@ impl ElementsRpc {
         }
 
         if let Some(result) = rpc_response.result {
-            tracing::info!("Successfully listed {} addresses for wallet: {}", result.len(), wallet_name);
+            tracing::info!(
+                "Successfully listed {} addresses for wallet: {}",
+                result.len(),
+                wallet_name
+            );
             return Ok(result);
         }
 

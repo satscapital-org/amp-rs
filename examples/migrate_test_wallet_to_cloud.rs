@@ -43,10 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
     // Get environment variables for local node
-    let local_url = env::var("ELEMENTS_RPC_URL")
-        .map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
-    let local_user = env::var("ELEMENTS_RPC_USER")
-        .map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
+    let local_url =
+        env::var("ELEMENTS_RPC_URL").map_err(|_| "ELEMENTS_RPC_URL not set in environment")?;
+    let local_user =
+        env::var("ELEMENTS_RPC_USER").map_err(|_| "ELEMENTS_RPC_USER not set in environment")?;
     let local_password = env::var("ELEMENTS_RPC_PASSWORD")
         .map_err(|_| "ELEMENTS_RPC_PASSWORD not set in environment")?;
 
@@ -115,15 +115,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .get("descriptors")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    
+
     if is_descriptor_wallet {
         println!("✅ Descriptor wallet detected");
-        println!("   For descriptor wallets, use migrate_test_wallet_to_cloud_descriptors.rs instead");
+        println!(
+            "   For descriptor wallets, use migrate_test_wallet_to_cloud_descriptors.rs instead"
+        );
         println!("   That script will properly migrate the HD wallet structure and blinding keys.");
         return Ok(());
     } else {
         println!("✅ Legacy wallet detected");
-        println!("   Will use dumpwallet/importwallet for complete migration including blinding keys");
+        println!(
+            "   Will use dumpwallet/importwallet for complete migration including blinding keys"
+        );
     }
     println!();
 
@@ -134,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_secs();
     let export_filename = format!("{}_export_{}.dat", WALLET_NAME, timestamp);
     let export_path = format!("/tmp/{}", export_filename);
-    
+
     match local_rpc.dump_wallet(WALLET_NAME, &export_path).await {
         Ok(()) => {
             println!("✅ Wallet exported to: {}", export_path);
@@ -147,16 +151,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-
-
     // Step 4: Handle file transfer for cloud import
     println!("📦 Step 4: Preparing wallet file for cloud import...");
     println!("   Local export file: {}", export_path);
     println!();
-    
+
     // Check if local and cloud are the same server
     let same_server = local_url.contains("127.0.0.1") || local_url.contains("localhost");
-    
+
     if same_server {
         println!("   ⚠️  Local and cloud appear to be different servers");
         println!("   The wallet file needs to be accessible to the cloud Elements node");
@@ -166,10 +168,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("      scp {} user@cloud-server:/tmp/", export_path);
         println!();
         println!("   2. Then run importwallet on the cloud node:");
-        println!("      elements-cli -rpcwallet={} importwallet /tmp/{}", WALLET_NAME, export_filename);
+        println!(
+            "      elements-cli -rpcwallet={} importwallet /tmp/{}",
+            WALLET_NAME, export_filename
+        );
         println!();
         println!("   3. After import, rescan the blockchain:");
-        println!("      elements-cli -rpcwallet={} rescanblockchain", WALLET_NAME);
+        println!(
+            "      elements-cli -rpcwallet={} rescanblockchain",
+            WALLET_NAME
+        );
         println!();
         println!("Migration export complete. Manual import steps required on cloud server.");
         return Ok(());
@@ -186,7 +194,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("already exists") || error_msg.contains("Database already exists") {
+            if error_msg.contains("already exists") || error_msg.contains("Database already exists")
+            {
                 println!("⚠️  Wallet already exists on cloud node");
                 println!("   The import will add keys to the existing wallet");
             } else {
@@ -234,35 +243,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 8: Verify migration
     println!("✔️  Step 8: Verifying migration...");
-    
+
     let local_info = local_rpc.get_wallet_info(WALLET_NAME).await?;
     let cloud_info = cloud_rpc.get_wallet_info(WALLET_NAME).await?;
 
     println!("Local wallet:");
     println!("  Tx count: {:?}", local_info.get("txcount"));
-    
+
     println!("Cloud wallet:");
     println!("  Tx count: {:?}", cloud_info.get("txcount"));
     println!();
 
     println!("🎉 Migration Complete!");
     println!("===================");
-    println!("✅ Wallet '{}' has been migrated from local to cloud node", WALLET_NAME);
+    println!(
+        "✅ Wallet '{}' has been migrated from local to cloud node",
+        WALLET_NAME
+    );
     println!("✅ All private keys and master blinding key have been imported");
     println!("✅ Blinding keys are automatically derived from the master blinding key");
     println!();
-    
+
     if cloud_info.get("txcount").and_then(|v| v.as_u64()) == Some(0) {
         println!("⚠️  Note: Cloud wallet shows 0 transactions");
         println!("   The cloud node needs to rescan the blockchain to see existing transactions.");
         println!();
         println!("   Run this command on the cloud node:");
-        println!("   elements-cli -rpcwallet={} rescanblockchain", WALLET_NAME);
+        println!(
+            "   elements-cli -rpcwallet={} rescanblockchain",
+            WALLET_NAME
+        );
         println!();
     }
-    
+
     println!("💡 Next steps:");
-    println!("  - Rescan blockchain on cloud node: elements-cli -rpcwallet={} rescanblockchain", WALLET_NAME);
+    println!(
+        "  - Rescan blockchain on cloud node: elements-cli -rpcwallet={} rescanblockchain",
+        WALLET_NAME
+    );
     println!("  - Verify addresses match between local and cloud");
     println!("  - Test generating a confidential address on cloud node");
     println!("  - Test transaction signing on cloud node");
