@@ -220,7 +220,7 @@ fn ui(f: &mut Frame, app: &AppState) {
         ),
         Span::raw(" - "),
         Span::styled(
-            "Blockstream AMP Asset Display",
+            "SatsCapital Asset Display",
             Style::default().fg(Color::Gray),
         ),
     ])];
