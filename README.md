@@ -25,6 +25,9 @@ You can run the included examples using cargo:
 # Show a summary of all assets issued by your credentials
 cargo run --example asset_summary
 
+# Display beautiful TUI dashboard for a specific asset (requires ratatui)
+cargo run --example asset_display_tui
+
 # View the API changelog
 cargo run --example changelog
 
