@@ -133,6 +133,7 @@ struct AppState {
     distribution_input: DistributionInput,
     distribution_progress: DistributionProgress,
     distribution_rx: Option<Receiver<DistributionMessage>>,
+    is_reloading: bool,
 }
 
 impl AssetDisplayData {
@@ -284,6 +285,8 @@ fn ui(f: &mut Frame, app: &AppState) {
         Span::styled("Press ", Style::default().fg(Color::Gray)),
         Span::styled("'d'", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
         Span::styled(" to distribute  ", Style::default().fg(Color::Gray)),
+        Span::styled("'r'", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" to reload  ", Style::default().fg(Color::Gray)),
         Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::styled(" or ", Style::default().fg(Color::Gray)),
         Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
@@ -298,6 +301,42 @@ fn ui(f: &mut Frame, app: &AppState) {
         )
         .alignment(Alignment::Center);
     f.render_widget(footer, chunks[2]);
+    
+    // Render reload indicator overlay if reloading (on top of everything)
+    if app.is_reloading {
+        use ratatui::widgets::Clear;
+        let overlay_area = centered_rect(30, 15, size);
+        f.render_widget(Clear, overlay_area);
+        
+        let reload_text = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("⟳ ", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    "Reloading...",
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled(
+                    "Fetching latest asset data",
+                    Style::default().fg(Color::Gray),
+                ),
+            ]),
+        ];
+        
+        let reload_widget = Paragraph::new(reload_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan))
+                    .title(" Reload ")
+                    .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            )
+            .alignment(Alignment::Center);
+        f.render_widget(reload_widget, overlay_area);
+    }
 }
 
 fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
@@ -392,6 +431,27 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         )
         .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
+}
+
+/// Helper function to create a centered rectangle for overlays
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
 
 fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
@@ -883,6 +943,28 @@ fn run_app(
                         app.distribution_input = DistributionInput::new();
                         app.distribution_progress = DistributionProgress::new();
                     }
+                    KeyCode::Char('r') if app.screen == AppScreen::Main && !app.is_reloading => {
+                        // Set reloading flag
+                        app.is_reloading = true;
+                        
+                        // Trigger a redraw to show the indicator
+                        terminal.draw(|f| ui(f, app))?;
+                        
+                        // Reload asset data in the background
+                        match rt.block_on(async {
+                            fetch_asset_data().await
+                        }) {
+                            Ok(new_data) => {
+                                app.asset_data = new_data;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to reload asset data: {}", e);
+                            }
+                        }
+                        
+                        // Clear reloading flag
+                        app.is_reloading = false;
+                    }
                     KeyCode::Tab if app.screen == AppScreen::DistributionInput => {
                         app.distribution_input.cursor_pos = (app.distribution_input.cursor_pos + 1) % 2;
                     }
@@ -1243,6 +1325,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         distribution_input: DistributionInput::new(),
         distribution_progress: DistributionProgress::new(),
         distribution_rx: None,
+        is_reloading: false,
     };
 
     // Run app
