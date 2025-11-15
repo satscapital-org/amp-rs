@@ -958,7 +958,26 @@ fn run_app(
                     }
                     KeyCode::Esc => {
                         // Esc returns to main screen if in a sub-screen
-                        app.screen = AppScreen::Main;
+                        if app.screen != AppScreen::Main {
+                            app.screen = AppScreen::Main;
+                            
+                            // Auto-reload data when returning to main screen
+                            app.is_reloading = true;
+                            terminal.draw(|f| ui(f, app))?;
+                            
+                            match rt.block_on(async {
+                                fetch_asset_data().await
+                            }) {
+                                Ok(new_data) => {
+                                    app.asset_data = new_data;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to reload asset data: {}", e);
+                                }
+                            }
+                            
+                            app.is_reloading = false;
+                        }
                     }
                     KeyCode::Char('d') if app.screen == AppScreen::Main => {
                         app.screen = AppScreen::DistributionInput;
