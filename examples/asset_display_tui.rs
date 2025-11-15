@@ -954,7 +954,29 @@ fn run_app(
                 
                 match key.code {
                     KeyCode::Char('q') => {
-                        return Ok(());
+                        // If on main screen, quit; otherwise return to main
+                        if app.screen == AppScreen::Main {
+                            return Ok(());
+                        } else {
+                            // Act like Esc - return to main and reload
+                            app.screen = AppScreen::Main;
+                            
+                            app.is_reloading = true;
+                            terminal.draw(|f| ui(f, app))?;
+                            
+                            match rt.block_on(async {
+                                fetch_asset_data().await
+                            }) {
+                                Ok(new_data) => {
+                                    app.asset_data = new_data;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to reload asset data: {}", e);
+                                }
+                            }
+                            
+                            app.is_reloading = false;
+                        }
                     }
                     KeyCode::Esc => {
                         // Esc returns to main screen if in a sub-screen
