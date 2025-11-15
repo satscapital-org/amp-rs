@@ -958,45 +958,30 @@ async fn run_distribution_flow(
 
     // 3. Ensure registered user exists
     progress.add_info("Checking for registered user...");
-    let (user_id, _user_name) = match client.get_gaid_registered_user(&gaid).await {
-        Ok(u) => {
-            progress.add_success(&format!("User '{}' (ID: {}) already exists", u.name, u.id));
-            (u.id, u.name)
-        }
-        Err(_) => {
-            progress.add_info("User not found, creating...");
-            let name = format!("TUI Distribution User {}", chrono::Utc::now().timestamp());
-            let req = amp_rs::model::RegisteredUserAdd { name: name.clone(), gaid: Some(gaid.clone()), is_company: false };
-            match client.add_registered_user(&req).await {
-                Ok(u) => {
-                    progress.add_success(&format!("Created user '{}' (ID: {})", name, u.id));
-                    (u.id, name)
-                }
-                Err(e) => {
-                    let err_msg = format!("{}", e);
-                    if err_msg.contains("already created") || err_msg.contains("already exists") {
-                        progress.add_info("User already exists, searching...");
-                        match client.get_registered_users().await {
-                            Ok(users) => {
-                                if let Some(user) = users.iter().find(|u| u.gaid.as_ref() == Some(&gaid)) {
-                                    progress.add_success(&format!("Found user '{}' (ID: {})", user.name, user.id));
-                                    (user.id, user.name.clone())
-                                } else {
-                                    progress.add_error(&format!("User with GAID {} not found", gaid));
-                                    return;
-                                }
-                            }
-                            Err(e) => {
-                                progress.add_error(&format!("Failed to list users: {}", e));
-                                return;
-                            }
-                        }
-                    } else {
+    let (user_id, _user_name) = match client.get_registered_users().await {
+        Ok(users) => {
+            if let Some(user) = users.iter().find(|u| u.gaid.as_ref() == Some(&gaid)) {
+                progress.add_success(&format!("Found user '{}' (ID: {})", user.name, user.id));
+                (user.id, user.name.clone())
+            } else {
+                progress.add_info("User not found, creating...");
+                let name = format!("TUI Distribution User {}", chrono::Utc::now().timestamp());
+                let req = amp_rs::model::RegisteredUserAdd { name: name.clone(), gaid: Some(gaid.clone()), is_company: false };
+                match client.add_registered_user(&req).await {
+                    Ok(u) => {
+                        progress.add_success(&format!("Created user '{}' (ID: {})", name, u.id));
+                        (u.id, name)
+                    }
+                    Err(e) => {
                         progress.add_error(&format!("Register user error: {}", e));
                         return;
                     }
                 }
             }
+        }
+        Err(e) => {
+            progress.add_error(&format!("Failed to list users: {}", e));
+            return;
         }
     };
 
