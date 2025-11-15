@@ -173,12 +173,12 @@ async fn fetch_asset_data() -> Result<AssetDisplayData, Box<dyn std::error::Erro
         .into_iter()
         .map(|o| (o.owner, o.amount, o.gaid))
         .collect();
-    
+
     // Sort holders to put issuer first, then by balance descending
     holders.sort_by(|a, b| {
         let a_is_issuer = a.0 == issuer_id_str;
         let b_is_issuer = b.0 == issuer_id_str;
-        
+
         match (a_is_issuer, b_is_issuer) {
             (true, false) => std::cmp::Ordering::Less,    // Issuer comes first
             (false, true) => std::cmp::Ordering::Greater, // Issuer comes first
@@ -513,7 +513,7 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
             ),
         ])),
         ListItem::new(Line::from(vec![
-            Span::styled("Total Held: ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::styled("Total Circulation: ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
             Span::styled(
                 data.format_amount(total_held),
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
@@ -581,7 +581,7 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     for (idx, (i, (owner, amount, gaid))) in data.holders.iter().enumerate().take(holders_to_show).enumerate() {
         let percentage_of_supply = (*amount as f64 / total_circulation as f64) * 100.0;
         let is_issuer = owner == &data.issuer_id.to_string();
-        
+
         // Format owner display (truncate if too long)
         let owner_display = if owner.len() > 45 {
             format!("{}...{}", &owner[..20], &owner[owner.len()-20..])
