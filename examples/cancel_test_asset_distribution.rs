@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Target the asset with UTXOs that we found
-    let asset_uuid = "1d7245d2-7cbb-4092-9256-d9674c95684a";
+    let asset_uuid = "174965a7-a975-42a1-8b14-a8e714c8a8d6";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset
