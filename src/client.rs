@@ -1761,11 +1761,10 @@ impl ElementsRpc {
     ) -> Result<serde_json::Value, AmpError> {
         tracing::debug!("Rescanning blockchain for wallet: {}", wallet_name);
 
-        let params = if let Some(height) = start_height {
-            serde_json::json!([height])
-        } else {
-            serde_json::json!([])
-        };
+        let params = start_height.map_or_else(
+            || serde_json::json!([]),
+            |height| serde_json::json!([height]),
+        );
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -2128,7 +2127,7 @@ impl ElementsRpc {
         }
 
         // Fallback: Try to import the address directly without wallet operations
-        match self.import_address_direct(address, label).await {
+        match self.import_address_direct(address, label) {
             Ok(()) => {
                 tracing::info!("Successfully imported address directly: {}", address);
                 Ok(())
@@ -2166,11 +2165,8 @@ impl ElementsRpc {
     }
 
     /// Attempts to import an address directly without wallet operations (uses default wallet)
-    async fn import_address_direct(
-        &self,
-        address: &str,
-        label: Option<&str>,
-    ) -> Result<(), AmpError> {
+    #[allow(clippy::unused_self)]
+    fn import_address_direct(&self, address: &str, _label: Option<&str>) -> Result<(), AmpError> {
         tracing::debug!("Attempting direct address import for: {}", address);
 
         // This is a fallback method - we'll use empty string for wallet name to use default behavior
@@ -8394,11 +8390,11 @@ impl ApiClient {
             .timeout(std::time::Duration::from_secs(60))
             .send()
             .await
-            .map_err(|e| Error::RequestFailed(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| Error::RequestFailed(format!("HTTP request failed: {e}")))?;
 
         let status = response.status();
         let response_text = response.text().await.map_err(|e| {
-            Error::ResponseParsingFailed(format!("Failed to read response body: {}", e))
+            Error::ResponseParsingFailed(format!("Failed to read response body: {e}"))
         })?;
 
         // Handle HTTP 200 - success case
@@ -8436,16 +8432,14 @@ impl ApiClient {
 
                 // Other errors - return as error
                 return Err(Error::RequestFailed(format!(
-                    "Request to [\"assets\", \"{}\", \"register\"] failed with status {}: {}",
-                    asset_uuid, status, error_msg
+                    "Request to [\"assets\", \"{asset_uuid}\", \"register\"] failed with status {status}: {error_msg}"
                 )));
             }
         }
 
         // Fallback error for non-JSON or unexpected responses
         Err(Error::RequestFailed(format!(
-            "Request to [\"assets\", \"{}\", \"register\"] failed with status {}: {}",
-            asset_uuid, status, response_text
+            "Request to [\"assets\", \"{asset_uuid}\", \"register\"] failed with status {status}: {response_text}"
         )))
     }
 
