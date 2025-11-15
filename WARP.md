@@ -104,6 +104,29 @@ When adding new endpoints:
 
 ## Key Implementation Details
 
+### Asset Registration
+Registering an asset with the Blockstream Asset Registry ensures the asset's name and ticker appear in user wallets when the asset is issued and distributed.
+
+- Method: `ApiClient::register_asset(asset_uuid)`
+- When to use: After creating an asset in AMP and before distributing it to users
+- Effect: Publishes the asset metadata so wallets can display human‑readable name/ticker alongside the asset ID
+- Notes:
+  - Requires valid AMP credentials (dotenvy is used to load `.env`)
+  - Idempotent: calling on an already-registered asset returns a success message
+
+Example:
+```rust
+use amp_rs::ApiClient;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let asset_uuid = "your_asset_uuid";
+    let response = client.register_asset(asset_uuid).await.unwrap();
+    assert!(response.success);
+}
+```
+
 ### Terminology Note
 The codebase uses "manager" terminology in alignment with the AMP API. In the context of this project:
 - `manager_id` field remains unchanged

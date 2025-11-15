@@ -90,6 +90,41 @@ async fn main() {
 }
 ```
 
+### Register an asset with the Blockstream Asset Registry
+
+Registering an asset with the Blockstream Asset Registry makes the asset name and ticker visible in user wallets when the asset is issued and distributed. This improves the user experience by displaying human-readable asset information instead of just the asset ID.
+
+```rust
+use amp_rs::ApiClient;
+
+#[tokio::main]
+async fn main() {
+    let client = ApiClient::new().unwrap();
+    let asset_uuid = "your_asset_uuid";
+
+    // Register the asset with the public registry
+    let response = client.register_asset(asset_uuid).await.unwrap();
+    
+    if response.success {
+        println!("Asset registered successfully!");
+        if let Some(message) = response.message {
+            println!("Message: {}", message);
+        }
+        if let Some(asset) = response.asset_data {
+            println!("Asset name: {}", asset.name);
+            println!("Asset ticker: {:?}", asset.ticker);
+            println!("Is registered: {}", asset.is_registered);
+        }
+    }
+}
+```
+
+You can also use the included example:
+
+```bash
+cargo run --example register_asset -- <ASSET_UUID>
+```
+
 ### Manage asset assignments
 
 ```rust
