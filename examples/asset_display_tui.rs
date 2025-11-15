@@ -1053,21 +1053,28 @@ async fn run_distribution_flow(
         }
     };
 
-    // 6. DRY RUN: Show what assignment would be created (not executing)
-    progress.add_info("=== DRY RUN: Assignment Creation ===");
+    // 6. Create assignment
+    progress.add_info("Creating assignment...");
     let smallest_units = (amount_btc * 10f64.powi(asset.precision as i32)).round() as i64;
-    progress.add_info("Would call: client.create_asset_assignments(...)");
-    progress.add_info(&format!("  asset_uuid: '{}'", asset_uuid));
-    progress.add_info(&format!("  assignments: ["));
-    progress.add_info(&format!("    CreateAssetAssignmentRequest {{"));
-    progress.add_info(&format!("      registered_user: {},", user_id));
-    progress.add_info(&format!("      amount: {} (smallest units),", smallest_units));
-    progress.add_info(&format!("      vesting_timestamp: None,"));
-    progress.add_info(&format!("      ready_for_distribution: true"));
-    progress.add_info(&format!("    }}"));
-    progress.add_info(&format!("  ]"));
-    progress.add_success(&format!("DRY RUN: Would create assignment for {} units", smallest_units));
-    progress.add_info("(Assignment not created - this is a dry run)");
+    let assignment_req = amp_rs::model::CreateAssetAssignmentRequest {
+        registered_user: user_id,
+        amount: smallest_units,
+        vesting_timestamp: None,
+        ready_for_distribution: true,
+    };
+
+    match client.create_asset_assignments(asset_uuid, &vec![assignment_req]).await {
+        Ok(assignments) => {
+            progress.add_success(&format!("Created assignment for {} units", smallest_units));
+            if let Some(first) = assignments.first() {
+                progress.add_info(&format!("Assignment ID: {}", first.id));
+            }
+        }
+        Err(e) => {
+            progress.add_error(&format!("Create assignment error: {}", e));
+            return;
+        }
+    }
 
     // 7. DRY RUN: Show what would be called (not executing)
     progress.add_info("=== DRY RUN MODE ===");
