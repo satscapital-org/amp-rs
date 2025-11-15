@@ -48,6 +48,7 @@ struct AssetDisplayData {
     is_authorized: bool,
     is_locked: bool,
     transfer_restricted: bool,
+    issuer_id: i64,
     // Summary data
     issued: i64,
     reissued: i64,
@@ -58,7 +59,7 @@ struct AssetDisplayData {
     registered_users: i64,
     active_registered_users: i64,
     // Ownership data
-    holders: Vec<(String, i64, Option<String>)>, // (owner address, amount, optional GAID)
+    holders: Vec<(String, i64, Option<String>)>, // (owner user_id, amount, optional GAID)
 }
 
 #[derive(Clone, PartialEq)]
@@ -166,11 +167,24 @@ async fn fetch_asset_data() -> Result<AssetDisplayData, Box<dyn std::error::Erro
     // Fetch ownership data
     let ownerships = client.get_asset_ownerships(ASSET_UUID, None).await?;
 
-    // Convert ownership data to holders list
-    let holders: Vec<(String, i64, Option<String>)> = ownerships
+    // Convert ownership data to holders list and sort with issuer first
+    let issuer_id_str = asset.issuer.to_string();
+    let mut holders: Vec<(String, i64, Option<String>)> = ownerships
         .into_iter()
         .map(|o| (o.owner, o.amount, o.gaid))
         .collect();
+    
+    // Sort holders to put issuer first, then by balance descending
+    holders.sort_by(|a, b| {
+        let a_is_issuer = a.0 == issuer_id_str;
+        let b_is_issuer = b.0 == issuer_id_str;
+        
+        match (a_is_issuer, b_is_issuer) {
+            (true, false) => std::cmp::Ordering::Less,    // Issuer comes first
+            (false, true) => std::cmp::Ordering::Greater, // Issuer comes first
+            _ => b.1.cmp(&a.1),                          // Otherwise sort by balance descending
+        }
+    });
 
     Ok(AssetDisplayData {
         name: asset.name,
@@ -183,6 +197,7 @@ async fn fetch_asset_data() -> Result<AssetDisplayData, Box<dyn std::error::Erro
         is_authorized: asset.is_authorized,
         is_locked: asset.is_locked,
         transfer_restricted: asset.transfer_restricted,
+        issuer_id: asset.issuer,
         issued: summary.issued,
         reissued: summary.reissued,
         assigned: summary.assigned,
@@ -287,6 +302,11 @@ fn ui(f: &mut Frame, app: &AppState) {
 
 fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     let details = vec![
+        Line::from(vec![
+            Span::styled("Name: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(&data.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(""),
         Line::from(vec![
             Span::styled("UUID: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::raw(&data.asset_uuid),
@@ -560,8 +580,9 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     // Render each holder in its own block with gauge
     for (idx, (i, (owner, amount, gaid))) in data.holders.iter().enumerate().take(holders_to_show).enumerate() {
         let percentage_of_supply = (*amount as f64 / total_circulation as f64) * 100.0;
-
-        // Format owner address (truncate if too long)
+        let is_issuer = owner == &data.issuer_id.to_string();
+        
+        // Format owner display (truncate if too long)
         let owner_display = if owner.len() > 45 {
             format!("{}...{}", &owner[..20], &owner[owner.len()-20..])
         } else {
@@ -575,6 +596,14 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
                     format!("#{} ", i + 1),
                     Style::default().fg(Color::Gray),
                 ),
+                if is_issuer {
+                    Span::styled(
+                        "ISSUER ",
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    )
+                } else {
+                    Span::raw("")
+                },
                 Span::styled(
                     format!("{:.2}% of supply", percentage_of_supply),
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
@@ -582,9 +611,9 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
             ]),
         ];
 
-        // Add address line
+        // Add user ID line
         holder_lines.push(Line::from(vec![
-            Span::styled("Address: ", Style::default().fg(Color::Cyan)),
+            Span::styled("User ID: ", Style::default().fg(Color::Cyan)),
             Span::raw(owner_display.clone()),
         ]));
 
