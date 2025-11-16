@@ -13,7 +13,9 @@
 //!
 //! Make sure to set up your .env file with AMP_USERNAME and AMP_PASSWORD
 
+use amp_rs::signer::LwkSoftwareSigner;
 use amp_rs::ApiClient;
+use amp_rs::ElementsRpc;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -30,8 +32,6 @@ use ratatui::{
 use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use tokio::runtime::Runtime;
-use amp_rs::signer::LwkSoftwareSigner;
-use amp_rs::ElementsRpc;
 
 // Demo asset information
 const ASSET_UUID: &str = "bc2d31af-60d0-4346-bfba-11b045f92dff";
@@ -149,7 +149,12 @@ impl AssetDisplayData {
         let divisor = 10_i64.pow(self.precision as u32);
         let whole = amount / divisor;
         let fractional = amount % divisor;
-        format!("{}.{:0width$}", whole, fractional, width = self.precision as usize)
+        format!(
+            "{}.{:0width$}",
+            whole,
+            fractional,
+            width = self.precision as usize
+        )
     }
 }
 
@@ -181,9 +186,9 @@ async fn fetch_asset_data() -> Result<AssetDisplayData, Box<dyn std::error::Erro
         let b_is_issuer = b.0 == issuer_id_str;
 
         match (a_is_issuer, b_is_issuer) {
-            (true, false) => std::cmp::Ordering::Less,    // Issuer comes first
+            (true, false) => std::cmp::Ordering::Less, // Issuer comes first
             (false, true) => std::cmp::Ordering::Greater, // Issuer comes first
-            _ => b.1.cmp(&a.1),                          // Otherwise sort by balance descending
+            _ => b.1.cmp(&a.1),                        // Otherwise sort by balance descending
         }
     });
 
@@ -247,7 +252,11 @@ fn ui(f: &mut Frame, app: &AppState) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
                 .title(" Asset Information ")
-                .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .alignment(Alignment::Center);
     f.render_widget(header, chunks[0]);
@@ -276,7 +285,12 @@ fn ui(f: &mut Frame, app: &AppState) {
             render_holders_list(f, content_chunks[1], data);
         }
         AppScreen::DistributionInput => {
-            render_distribution_screen(f, chunks[1], &app.distribution_input, &app.distribution_progress);
+            render_distribution_screen(
+                f,
+                chunks[1],
+                &app.distribution_input,
+                &app.distribution_progress,
+            );
         }
     }
 
@@ -284,28 +298,63 @@ fn ui(f: &mut Frame, app: &AppState) {
     let footer_text = if app.screen == AppScreen::Main {
         vec![Line::from(vec![
             Span::styled("Press ", Style::default().fg(Color::Gray)),
-            Span::styled("'d'", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'d'",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to distribute  ", Style::default().fg(Color::Gray)),
-            Span::styled("'r'", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'r'",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to reload  ", Style::default().fg(Color::Gray)),
-            Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'q'",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" or ", Style::default().fg(Color::Gray)),
-            Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'Esc'",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to exit", Style::default().fg(Color::Gray)),
         ])]
     } else if app.distribution_progress.in_progress {
         // During distribution, show that keys are disabled
         vec![Line::from(vec![
-            Span::styled("Distribution in progress... ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Distribution in progress... ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("Please wait", Style::default().fg(Color::Gray)),
         ])]
     } else {
         // On distribution input screen, no reload option
         vec![Line::from(vec![
             Span::styled("Press ", Style::default().fg(Color::Gray)),
-            Span::styled("'q'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'q'",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" or ", Style::default().fg(Color::Gray)),
-            Span::styled("'Esc'", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "'Esc'",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to exit", Style::default().fg(Color::Gray)),
         ])]
     };
@@ -318,38 +367,42 @@ fn ui(f: &mut Frame, app: &AppState) {
         )
         .alignment(Alignment::Center);
     f.render_widget(footer, chunks[2]);
-    
+
     // Render reload indicator overlay if reloading (on top of everything)
     if app.is_reloading {
         use ratatui::widgets::Clear;
         let overlay_area = centered_rect(30, 15, size);
         f.render_widget(Clear, overlay_area);
-        
+
         let reload_text = vec![
             Line::from(""),
             Line::from(vec![
                 Span::styled("⟳ ", Style::default().fg(Color::Cyan)),
                 Span::styled(
                     "Reloading...",
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]),
             Line::from(""),
-            Line::from(vec![
-                Span::styled(
-                    "Fetching latest asset data",
-                    Style::default().fg(Color::Gray),
-                ),
-            ]),
+            Line::from(vec![Span::styled(
+                "Fetching latest asset data",
+                Style::default().fg(Color::Gray),
+            )]),
         ];
-        
+
         let reload_widget = Paragraph::new(reload_text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Cyan))
                     .title(" Reload ")
-                    .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
             )
             .alignment(Alignment::Center);
         f.render_widget(reload_widget, overlay_area);
@@ -359,16 +412,36 @@ fn ui(f: &mut Frame, app: &AppState) {
 fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     let details = vec![
         Line::from(vec![
-            Span::styled("Name: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled(&data.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Name: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                &data.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("UUID: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "UUID: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(&data.asset_uuid),
         ]),
         Line::from(vec![
-            Span::styled("Asset ID: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Asset ID: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(&data.asset_id[..32]),
         ]),
         Line::from(vec![
@@ -377,25 +450,52 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Ticker: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled(&data.ticker, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Ticker: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                &data.ticker,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
-            Span::styled("Precision: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Precision: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(data.precision.to_string()),
         ]),
         Line::from(vec![
-            Span::styled("Domain: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Domain: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(&data.domain),
         ]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Status: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Status: ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
             Span::raw("  ● Registered: "),
             Span::styled(
-                if data.is_registered { "Yes ✓" } else { "No ✗" },
+                if data.is_registered {
+                    "Yes ✓"
+                } else {
+                    "No ✗"
+                },
                 if data.is_registered {
                     Style::default().fg(Color::Green)
                 } else {
@@ -406,7 +506,11 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         Line::from(vec![
             Span::raw("  ● Authorized: "),
             Span::styled(
-                if data.is_authorized { "Yes ✓" } else { "No ✗" },
+                if data.is_authorized {
+                    "Yes ✓"
+                } else {
+                    "No ✗"
+                },
                 if data.is_authorized {
                     Style::default().fg(Color::Green)
                 } else {
@@ -417,7 +521,11 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         Line::from(vec![
             Span::raw("  ● Locked: "),
             Span::styled(
-                if data.is_locked { "Yes 🔒" } else { "No 🔓" },
+                if data.is_locked {
+                    "Yes 🔒"
+                } else {
+                    "No 🔓"
+                },
                 if data.is_locked {
                     Style::default().fg(Color::Yellow)
                 } else {
@@ -428,7 +536,11 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         Line::from(vec![
             Span::raw("  ● Transfer Restricted: "),
             Span::styled(
-                if data.transfer_restricted { "Yes" } else { "No" },
+                if data.transfer_restricted {
+                    "Yes"
+                } else {
+                    "No"
+                },
                 if data.transfer_restricted {
                     Style::default().fg(Color::Yellow)
                 } else {
@@ -444,7 +556,11 @@ fn render_asset_details(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Green))
                 .title(" Asset Details ")
-                .title_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
@@ -477,10 +593,17 @@ fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) 
 
     let stats = vec![
         Line::from(vec![
-            Span::styled("Total Circulation: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Total Circulation: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 data.format_amount(circulation),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(""),
@@ -493,9 +616,12 @@ fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) 
             Span::raw(data.format_amount(data.reissued)),
         ]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Distribution: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Distribution: ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
             Span::styled("  Assigned: ", Style::default().fg(Color::White)),
             Span::raw(data.format_amount(data.assigned)),
@@ -515,9 +641,12 @@ fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) 
             ),
         ]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Special: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Special: ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
             Span::styled("  Burned: ", Style::default().fg(Color::White)),
             Span::styled(
@@ -541,9 +670,12 @@ fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) 
             ),
         ]),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Users: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Users: ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
         Line::from(vec![
             Span::styled("  Registered: ", Style::default().fg(Color::White)),
             Span::raw(data.registered_users.to_string()),
@@ -560,7 +692,11 @@ fn render_circulation_stats(f: &mut Frame, area: Rect, data: &AssetDisplayData) 
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Blue))
                 .title(" Circulation Statistics ")
-                .title_style(Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(paragraph, area);
@@ -583,33 +719,51 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     // Render header summary
     let header_items = vec![
         ListItem::new(Line::from(vec![
-            Span::styled("Total Holders: ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Total Holders: ",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 total_holders.to_string(),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
         ])),
         ListItem::new(Line::from(vec![
-            Span::styled("Total Circulation: ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Total Circulation: ",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(
                 data.format_amount(total_held),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
         ])),
         ListItem::new(Line::from("")),
-        ListItem::new(Line::from(vec![
-            Span::styled("━".repeat(50), Style::default().fg(Color::Gray)),
-        ])),
+        ListItem::new(Line::from(vec![Span::styled(
+            "━".repeat(50),
+            Style::default().fg(Color::Gray),
+        )])),
     ];
 
-    let header_list = List::new(header_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Magenta))
-                .title(format!(" Asset Holders ({}) ", total_holders))
-                .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-        );
+    let header_list = List::new(header_items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Magenta))
+            .title(format!(" Asset Holders ({}) ", total_holders))
+            .title_style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+    );
     f.render_widget(header_list, chunks[0]);
 
     // Calculate how many lines each holder entry needs
@@ -624,12 +778,12 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     let holders_to_show = (available_height as usize / lines_per_holder).min(data.holders.len());
 
     if data.holders.is_empty() {
-        let empty_msg = Paragraph::new(Line::from(vec![
-            Span::styled(
-                "No holders found",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
-            ),
-        ]))
+        let empty_msg = Paragraph::new(Line::from(vec![Span::styled(
+            "No holders found",
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
+        )]))
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -655,38 +809,43 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         .split(chunks[1]);
 
     // Render each holder in its own block with gauge
-    for (idx, (i, (owner, amount, gaid))) in data.holders.iter().enumerate().take(holders_to_show).enumerate() {
+    for (idx, (i, (owner, amount, gaid))) in data
+        .holders
+        .iter()
+        .enumerate()
+        .take(holders_to_show)
+        .enumerate()
+    {
         let percentage_of_supply = (*amount as f64 / total_circulation as f64) * 100.0;
         let is_issuer = owner == &data.issuer_id.to_string();
 
         // Format owner display (truncate if too long)
         let owner_display = if owner.len() > 45 {
-            format!("{}...{}", &owner[..20], &owner[owner.len()-20..])
+            format!("{}...{}", &owner[..20], &owner[owner.len() - 20..])
         } else {
             owner.clone()
         };
 
         // Create holder info lines
-        let mut holder_lines = vec![
-            Line::from(vec![
+        let mut holder_lines = vec![Line::from(vec![
+            Span::styled(format!("#{} ", i + 1), Style::default().fg(Color::Gray)),
+            if is_issuer {
                 Span::styled(
-                    format!("#{} ", i + 1),
-                    Style::default().fg(Color::Gray),
-                ),
-                if is_issuer {
-                    Span::styled(
-                        "ISSUER ",
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    )
-                } else {
-                    Span::raw("")
-                },
-                Span::styled(
-                    format!("{:.2}% of supply", percentage_of_supply),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-        ];
+                    "ISSUER ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("")
+            },
+            Span::styled(
+                format!("{:.2}% of supply", percentage_of_supply),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])];
 
         // Add user ID line
         holder_lines.push(Line::from(vec![
@@ -707,20 +866,21 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
             Span::styled("Balance: ", Style::default().fg(Color::Cyan)),
             Span::styled(
                 data.format_amount(*amount),
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]));
 
-        let holder_info = Paragraph::new(holder_lines)
-            .block(Block::default());
+        let holder_info = Paragraph::new(holder_lines).block(Block::default());
 
         // Split holder chunk into info and gauge
         let holder_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(if gaid.is_some() { 4 } else { 3 }), // Info lines
-                Constraint::Length(1), // Gauge
-                Constraint::Length(1), // Spacing
+                Constraint::Length(1),                                  // Gauge
+                Constraint::Length(1),                                  // Spacing
             ])
             .split(holder_chunks[idx]);
 
@@ -749,12 +909,12 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     // Show indicator if there are more holders
     if holders_to_show < data.holders.len() {
         let remaining = data.holders.len() - holders_to_show;
-        let more_msg = Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("... and {} more holder(s)", remaining),
-                Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
-            ),
-        ]))
+        let more_msg = Paragraph::new(Line::from(vec![Span::styled(
+            format!("... and {} more holder(s)", remaining),
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
+        )]))
         .alignment(Alignment::Center);
         if let Some(last_chunk) = holder_chunks.last() {
             f.render_widget(more_msg, *last_chunk);
@@ -762,7 +922,12 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
     }
 }
 
-fn render_distribution_screen(f: &mut Frame, area: Rect, form: &DistributionInput, progress: &DistributionProgress) {
+fn render_distribution_screen(
+    f: &mut Frame,
+    area: Rect,
+    form: &DistributionInput,
+    progress: &DistributionProgress,
+) {
     // Split left (form) and right (progress)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -773,44 +938,91 @@ fn render_distribution_screen(f: &mut Frame, area: Rect, form: &DistributionInpu
     render_distribution_status(f, chunks[1], progress);
 }
 
-fn render_distribution_input(f: &mut Frame, area: Rect, form: &DistributionInput, progress: &DistributionProgress) {
+fn render_distribution_input(
+    f: &mut Frame,
+    area: Rect,
+    form: &DistributionInput,
+    progress: &DistributionProgress,
+) {
     let mut lines = vec![
         Line::from(vec![Span::styled(
             "Distribute Asset",
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("GAID: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw(if form.gaid.is_empty() { "<enter GAID>".to_string() } else { form.gaid.clone() }),
+            Span::styled(
+                "GAID: ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(if form.gaid.is_empty() {
+                "<enter GAID>".to_string()
+            } else {
+                form.gaid.clone()
+            }),
         ]),
         Line::from(vec![
-            Span::styled("Amount (BTC): ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::raw(if form.amount.is_empty() { "<e.g. 0.00000001>".to_string() } else { form.amount.clone() }),
+            Span::styled(
+                "Amount (BTC): ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(if form.amount.is_empty() {
+                "<e.g. 0.00000001>".to_string()
+            } else {
+                form.amount.clone()
+            }),
         ]),
         Line::from(""),
     ];
 
     if progress.in_progress {
         lines.push(Line::from(vec![
-            Span::styled("Status: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::styled("Distribution in progress...", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "Status: ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Distribution in progress...",
+                Style::default().fg(Color::Yellow),
+            ),
         ]));
-        lines.push(Line::from(vec![
-            Span::styled("See right panel for live updates", Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "See right panel for live updates",
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
+        )]));
     } else if progress.complete {
         lines.push(Line::from(vec![
-            Span::styled("Status: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Status: ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("✓ Complete!", Style::default().fg(Color::Green)),
         ]));
-        lines.push(Line::from(vec![
-            Span::styled("Press Esc to return to main screen", Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "Press Esc to return to main screen",
+            Style::default()
+                .fg(Color::Gray)
+                .add_modifier(Modifier::ITALIC),
+        )]));
     } else {
-        lines.push(Line::from(vec![
-            Span::styled("Instructions:", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-        ]));
+        lines.push(Line::from(vec![Span::styled(
+            "Instructions:",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        )]));
         lines.push(Line::from(vec![
             Span::styled("• ", Style::default().fg(Color::Gray)),
             Span::raw("Type GAID and amount"),
@@ -818,26 +1030,44 @@ fn render_distribution_input(f: &mut Frame, area: Rect, form: &DistributionInput
         lines.push(Line::from(vec![
             Span::styled("• ", Style::default().fg(Color::Gray)),
             Span::raw("Press "),
-            Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Enter",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" to start distribution"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("• ", Style::default().fg(Color::Gray)),
             Span::raw("Press "),
-            Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Tab",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" to switch fields"),
         ]));
         lines.push(Line::from(vec![
             Span::styled("• ", Style::default().fg(Color::Gray)),
             Span::raw("Press "),
-            Span::styled("Esc", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Esc",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" to cancel"),
         ]));
 
         if let Some(err) = &form.error {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
-                Span::styled("✗ Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "✗ Error: ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(err.clone(), Style::default().fg(Color::Red)),
             ]));
         }
@@ -846,10 +1076,19 @@ fn render_distribution_input(f: &mut Frame, area: Rect, form: &DistributionInput
     // Add cursor indicator
     if !progress.in_progress && !progress.complete {
         lines.push(Line::from(""));
-        let cursor_text = if form.cursor_pos == 0 { "GAID" } else { "Amount" };
+        let cursor_text = if form.cursor_pos == 0 {
+            "GAID"
+        } else {
+            "Amount"
+        };
         lines.push(Line::from(vec![
             Span::styled("▶ ", Style::default().fg(Color::Green)),
-            Span::styled(format!("Editing: {}", cursor_text), Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)),
+            Span::styled(
+                format!("Editing: {}", cursor_text),
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
+            ),
         ]));
     }
 
@@ -859,7 +1098,11 @@ fn render_distribution_input(f: &mut Frame, area: Rect, form: &DistributionInput
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Green))
                 .title(" Distribution Form ")
-                .title_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .wrap(Wrap { trim: false });
 
@@ -885,7 +1128,8 @@ fn render_distribution_status(f: &mut Frame, area: Rect, progress: &Distribution
 
     // Take last messages that fit in the display area
     let available_lines = (area.height.saturating_sub(3)) as usize; // Account for borders and title
-    let display_messages: Vec<Line> = progress.messages
+    let display_messages: Vec<Line> = progress
+        .messages
         .iter()
         .rev()
         .take(available_lines)
@@ -910,7 +1154,11 @@ fn render_distribution_status(f: &mut Frame, area: Rect, progress: &Distribution
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
                 .title(title)
-                .title_style(Style::default().fg(border_color).add_modifier(Modifier::BOLD)),
+                .title_style(
+                    Style::default()
+                        .fg(border_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
         )
         .wrap(Wrap { trim: false });
 
@@ -951,7 +1199,7 @@ fn run_app(
                 if app.distribution_progress.in_progress {
                     continue;
                 }
-                
+
                 match key.code {
                     KeyCode::Char('q') => {
                         // If on main screen, quit; otherwise return to main
@@ -960,13 +1208,11 @@ fn run_app(
                         } else {
                             // Act like Esc - return to main and reload
                             app.screen = AppScreen::Main;
-                            
+
                             app.is_reloading = true;
                             terminal.draw(|f| ui(f, app))?;
-                            
-                            match rt.block_on(async {
-                                fetch_asset_data().await
-                            }) {
+
+                            match rt.block_on(async { fetch_asset_data().await }) {
                                 Ok(new_data) => {
                                     app.asset_data = new_data;
                                 }
@@ -974,7 +1220,7 @@ fn run_app(
                                     eprintln!("Failed to reload asset data: {}", e);
                                 }
                             }
-                            
+
                             app.is_reloading = false;
                         }
                     }
@@ -982,14 +1228,12 @@ fn run_app(
                         // Esc returns to main screen if in a sub-screen
                         if app.screen != AppScreen::Main {
                             app.screen = AppScreen::Main;
-                            
+
                             // Auto-reload data when returning to main screen
                             app.is_reloading = true;
                             terminal.draw(|f| ui(f, app))?;
-                            
-                            match rt.block_on(async {
-                                fetch_asset_data().await
-                            }) {
+
+                            match rt.block_on(async { fetch_asset_data().await }) {
                                 Ok(new_data) => {
                                     app.asset_data = new_data;
                                 }
@@ -997,7 +1241,7 @@ fn run_app(
                                     eprintln!("Failed to reload asset data: {}", e);
                                 }
                             }
-                            
+
                             app.is_reloading = false;
                         }
                     }
@@ -1009,14 +1253,12 @@ fn run_app(
                     KeyCode::Char('r') if app.screen == AppScreen::Main && !app.is_reloading => {
                         // Set reloading flag
                         app.is_reloading = true;
-                        
+
                         // Trigger a redraw to show the indicator
                         terminal.draw(|f| ui(f, app))?;
-                        
+
                         // Reload asset data in the background
-                        match rt.block_on(async {
-                            fetch_asset_data().await
-                        }) {
+                        match rt.block_on(async { fetch_asset_data().await }) {
                             Ok(new_data) => {
                                 app.asset_data = new_data;
                             }
@@ -1024,12 +1266,13 @@ fn run_app(
                                 eprintln!("Failed to reload asset data: {}", e);
                             }
                         }
-                        
+
                         // Clear reloading flag
                         app.is_reloading = false;
                     }
                     KeyCode::Tab if app.screen == AppScreen::DistributionInput => {
-                        app.distribution_input.cursor_pos = (app.distribution_input.cursor_pos + 1) % 2;
+                        app.distribution_input.cursor_pos =
+                            (app.distribution_input.cursor_pos + 1) % 2;
                     }
                     KeyCode::Backspace if app.screen == AppScreen::DistributionInput => {
                         let field = app.distribution_input.cursor_pos;
@@ -1039,14 +1282,24 @@ fn run_app(
                             app.distribution_input.amount.pop();
                         }
                     }
-                    KeyCode::Enter if app.screen == AppScreen::DistributionInput && !app.distribution_progress.in_progress => {
+                    KeyCode::Enter
+                        if app.screen == AppScreen::DistributionInput
+                            && !app.distribution_progress.in_progress =>
+                    {
                         // Validate inputs
                         let gaid = app.distribution_input.gaid.trim().to_string();
                         let amount_str = app.distribution_input.amount.trim().to_string();
                         if gaid.is_empty() || amount_str.is_empty() {
-                            app.distribution_input.error = Some("GAID and amount are required".to_string());
-                        } else if amount_str.parse::<f64>().ok().filter(|v| *v > 0.0).is_none() {
-                            app.distribution_input.error = Some("Amount must be a positive number in BTC units".to_string());
+                            app.distribution_input.error =
+                                Some("GAID and amount are required".to_string());
+                        } else if amount_str
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|v| *v > 0.0)
+                            .is_none()
+                        {
+                            app.distribution_input.error =
+                                Some("Amount must be a positive number in BTC units".to_string());
                         } else {
                             app.distribution_input.error = None;
                             app.distribution_progress = DistributionProgress::new();
@@ -1062,7 +1315,13 @@ fn run_app(
                             let asset_uuid = app.asset_data.asset_uuid.clone();
 
                             rt.spawn(async move {
-                                run_distribution_flow_with_channel(&asset_uuid, gaid_clone, amount_btc, tx).await;
+                                run_distribution_flow_with_channel(
+                                    &asset_uuid,
+                                    gaid_clone,
+                                    amount_btc,
+                                    tx,
+                                )
+                                .await;
                             });
                         }
                     }
@@ -1091,33 +1350,49 @@ async fn run_distribution_flow_with_channel(
     // Load env
     dotenvy::dotenv().ok();
 
-    let _ = tx.send(DistributionMessage::Info("Initializing API client...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Initializing API client...".to_string(),
+    ));
     let client = match ApiClient::new().await {
         Ok(c) => {
-            let _ = tx.send(DistributionMessage::Success("API client initialized".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "API client initialized".to_string(),
+            ));
             c
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("ApiClient error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "ApiClient error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
-    let _ = tx.send(DistributionMessage::Info("Connecting to Elements RPC...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Connecting to Elements RPC...".to_string(),
+    ));
     let elements_rpc = match ElementsRpc::from_env() {
         Ok(e) => {
-            let _ = tx.send(DistributionMessage::Success("Elements RPC connected".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "Elements RPC connected".to_string(),
+            ));
             e
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Elements RPC error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Elements RPC error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
-    let _ = tx.send(DistributionMessage::Info("Generating signer...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Generating signer...".to_string(),
+    ));
     let signer = match LwkSoftwareSigner::generate_new_indexed(300) {
         Ok((_mn, s)) => {
             let _ = tx.send(DistributionMessage::Success("Signer generated".to_string()));
@@ -1131,7 +1406,10 @@ async fn run_distribution_flow_with_channel(
     };
 
     // 1. Validate GAID
-    let _ = tx.send(DistributionMessage::Info(format!("Validating GAID: {}...", gaid)));
+    let _ = tx.send(DistributionMessage::Info(format!(
+        "Validating GAID: {}...",
+        gaid
+    )));
     match client.validate_gaid(&gaid).await {
         Ok(v) if v.is_valid => {
             let _ = tx.send(DistributionMessage::Success("GAID is valid".to_string()));
@@ -1142,141 +1420,225 @@ async fn run_distribution_flow_with_channel(
             return;
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("GAID validation error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "GAID validation error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
     // 2. Get GAID address
-    let _ = tx.send(DistributionMessage::Info("Fetching GAID address...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Fetching GAID address...".to_string(),
+    ));
     let user_address = match client.get_gaid_address(&gaid).await {
         Ok(resp) if !resp.address.is_empty() => {
-            let _ = tx.send(DistributionMessage::Success(format!("Address: {}...{}", &resp.address[..10], &resp.address[resp.address.len()-6..])));
+            let _ = tx.send(DistributionMessage::Success(format!(
+                "Address: {}...{}",
+                &resp.address[..10],
+                &resp.address[resp.address.len() - 6..]
+            )));
             resp.address
         }
         Ok(_) => {
-            let _ = tx.send(DistributionMessage::Error("No address associated with GAID".to_string()));
+            let _ = tx.send(DistributionMessage::Error(
+                "No address associated with GAID".to_string(),
+            ));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Address lookup error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Address lookup error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 3. Ensure registered user exists
-    let _ = tx.send(DistributionMessage::Info("Checking for registered user...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Checking for registered user...".to_string(),
+    ));
     let (user_id, _user_name) = match client.get_registered_users().await {
         Ok(users) => {
             if let Some(user) = users.iter().find(|u| u.gaid.as_ref() == Some(&gaid)) {
-                let _ = tx.send(DistributionMessage::Success(format!("Found user '{}' (ID: {})", user.name, user.id)));
+                let _ = tx.send(DistributionMessage::Success(format!(
+                    "Found user '{}' (ID: {})",
+                    user.name, user.id
+                )));
                 (user.id, user.name.clone())
             } else {
-                let _ = tx.send(DistributionMessage::Info("User not found, creating...".to_string()));
+                let _ = tx.send(DistributionMessage::Info(
+                    "User not found, creating...".to_string(),
+                ));
                 let name = format!("TUI Distribution User {}", chrono::Utc::now().timestamp());
-                let req = amp_rs::model::RegisteredUserAdd { name: name.clone(), gaid: Some(gaid.clone()), is_company: false };
+                let req = amp_rs::model::RegisteredUserAdd {
+                    name: name.clone(),
+                    gaid: Some(gaid.clone()),
+                    is_company: false,
+                };
                 match client.add_registered_user(&req).await {
                     Ok(u) => {
-                        let _ = tx.send(DistributionMessage::Success(format!("Created user '{}' (ID: {})", name, u.id)));
+                        let _ = tx.send(DistributionMessage::Success(format!(
+                            "Created user '{}' (ID: {})",
+                            name, u.id
+                        )));
                         (u.id, name)
                     }
                     Err(e) => {
-                        let _ = tx.send(DistributionMessage::Error(format!("Register user error: {}", e)));
-            let _ = tx.send(DistributionMessage::Complete);
+                        let _ = tx.send(DistributionMessage::Error(format!(
+                            "Register user error: {}",
+                            e
+                        )));
+                        let _ = tx.send(DistributionMessage::Complete);
                         return;
                     }
                 }
             }
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Failed to list users: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Failed to list users: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 4. Ensure category exists and associations
-    let _ = tx.send(DistributionMessage::Info("Setting up category...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Setting up category...".to_string(),
+    ));
     let category_id = match client.get_categories().await {
         Ok(list) => {
             if let Some(c) = list.into_iter().find(|c| c.name == DEMO_CATEGORY_NAME) {
-                let _ = tx.send(DistributionMessage::Success(format!("Category '{}' exists", DEMO_CATEGORY_NAME)));
+                let _ = tx.send(DistributionMessage::Success(format!(
+                    "Category '{}' exists",
+                    DEMO_CATEGORY_NAME
+                )));
                 c.id
             } else {
-                let _ = tx.send(DistributionMessage::Info("Creating category...".to_string()));
-                match client.add_category(&amp_rs::model::CategoryAdd {
-                    name: DEMO_CATEGORY_NAME.to_string(),
-                    description: Some("Demo category".to_string())
-                }).await {
+                let _ = tx.send(DistributionMessage::Info(
+                    "Creating category...".to_string(),
+                ));
+                match client
+                    .add_category(&amp_rs::model::CategoryAdd {
+                        name: DEMO_CATEGORY_NAME.to_string(),
+                        description: Some("Demo category".to_string()),
+                    })
+                    .await
+                {
                     Ok(c) => {
-                        let _ = tx.send(DistributionMessage::Success(format!("Created category (ID: {})", c.id)));
+                        let _ = tx.send(DistributionMessage::Success(format!(
+                            "Created category (ID: {})",
+                            c.id
+                        )));
                         c.id
                     }
                     Err(e) => {
-                        let _ = tx.send(DistributionMessage::Error(format!("Create category error: {}", e)));
-            let _ = tx.send(DistributionMessage::Complete);
+                        let _ = tx.send(DistributionMessage::Error(format!(
+                            "Create category error: {}",
+                            e
+                        )));
+                        let _ = tx.send(DistributionMessage::Complete);
                         return;
                     }
                 }
             }
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Get categories error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Get categories error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // Associate user and asset with category
-    let _ = tx.send(DistributionMessage::Info("Adding user to category...".to_string()));
-    match client.add_registered_user_to_category(category_id, user_id).await {
+    let _ = tx.send(DistributionMessage::Info(
+        "Adding user to category...".to_string(),
+    ));
+    match client
+        .add_registered_user_to_category(category_id, user_id)
+        .await
+    {
         Ok(_) => {
-            let _ = tx.send(DistributionMessage::Success("User added to category".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "User added to category".to_string(),
+            ));
         }
         Err(e) if format!("{}", e).contains("already") => {
-            let _ = tx.send(DistributionMessage::Success("User already in category".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "User already in category".to_string(),
+            ));
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Add user to category error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Add user to category error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
-    let _ = tx.send(DistributionMessage::Info("Adding asset to category...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Adding asset to category...".to_string(),
+    ));
     match client.add_asset_to_category(category_id, asset_uuid).await {
         Ok(_) => {
-            let _ = tx.send(DistributionMessage::Success("Asset added to category".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "Asset added to category".to_string(),
+            ));
         }
         Err(e) if format!("{}", e).contains("already") => {
-            let _ = tx.send(DistributionMessage::Success("Asset already in category".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "Asset already in category".to_string(),
+            ));
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Add asset to category error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Add asset to category error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     }
 
     // 5. Get asset details for precision
-    let _ = tx.send(DistributionMessage::Info("Fetching asset precision...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Fetching asset precision...".to_string(),
+    ));
     let asset = match client.get_asset(asset_uuid).await {
         Ok(a) => {
-            let _ = tx.send(DistributionMessage::Success(format!("Asset precision: {}", a.precision)));
+            let _ = tx.send(DistributionMessage::Success(format!(
+                "Asset precision: {}",
+                a.precision
+            )));
             a
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Failed to fetch asset: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Failed to fetch asset: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
     };
 
     // 6. Create assignment
-    let _ = tx.send(DistributionMessage::Info("Creating assignment...".to_string()));
+    let _ = tx.send(DistributionMessage::Info(
+        "Creating assignment...".to_string(),
+    ));
     let smallest_units = (amount_btc * 10f64.powi(asset.precision as i32)).round() as i64;
     let assignment_req = amp_rs::model::CreateAssetAssignmentRequest {
         registered_user: user_id,
@@ -1285,15 +1647,27 @@ async fn run_distribution_flow_with_channel(
         ready_for_distribution: true,
     };
 
-    match client.create_asset_assignments(asset_uuid, &vec![assignment_req]).await {
+    match client
+        .create_asset_assignments(asset_uuid, &vec![assignment_req])
+        .await
+    {
         Ok(assignments) => {
-            let _ = tx.send(DistributionMessage::Success(format!("Created assignment for {} units", smallest_units)));
+            let _ = tx.send(DistributionMessage::Success(format!(
+                "Created assignment for {} units",
+                smallest_units
+            )));
             if let Some(first) = assignments.first() {
-                let _ = tx.send(DistributionMessage::Info(format!("Assignment ID: {}", first.id)));
+                let _ = tx.send(DistributionMessage::Info(format!(
+                    "Assignment ID: {}",
+                    first.id
+                )));
             }
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Create assignment error: {}", e)));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Create assignment error: {}",
+                e
+            )));
             let _ = tx.send(DistributionMessage::Complete);
             return;
         }
@@ -1310,23 +1684,38 @@ async fn run_distribution_flow_with_channel(
         amount: amount_for_distribution,
     }];
 
-    let _ = tx.send(DistributionMessage::Info(format!("Distributing {} base units ({} smallest units)...", amount_for_distribution, smallest_units)));
+    let _ = tx.send(DistributionMessage::Info(format!(
+        "Distributing {} base units ({} smallest units)...",
+        amount_for_distribution, smallest_units
+    )));
     let wallet_name = "amp_elements_wallet_static_for_funding";
 
-    match client.distribute_asset(
-        asset_uuid,
-        distribution_assignments,
-        &elements_rpc,
-        wallet_name,
-        &signer,
-    ).await {
+    match client
+        .distribute_asset(
+            asset_uuid,
+            distribution_assignments,
+            &elements_rpc,
+            wallet_name,
+            &signer,
+        )
+        .await
+    {
         Ok(()) => {
-            let _ = tx.send(DistributionMessage::Success("Distribution completed successfully!".to_string()));
-            let _ = tx.send(DistributionMessage::Info("Asset has been distributed to the user".to_string()));
+            let _ = tx.send(DistributionMessage::Success(
+                "Distribution completed successfully!".to_string(),
+            ));
+            let _ = tx.send(DistributionMessage::Info(
+                "Asset has been distributed to the user".to_string(),
+            ));
         }
         Err(e) => {
-            let _ = tx.send(DistributionMessage::Error(format!("Distribution failed: {}", e)));
-            let _ = tx.send(DistributionMessage::Info("Check the error details above".to_string()));
+            let _ = tx.send(DistributionMessage::Error(format!(
+                "Distribution failed: {}",
+                e
+            )));
+            let _ = tx.send(DistributionMessage::Info(
+                "Check the error details above".to_string(),
+            ));
         }
     }
 
@@ -1368,9 +1757,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = Runtime::new()?;
 
     println!("Fetching asset data from AMP API...");
-    let data = rt.block_on(async {
-        fetch_asset_data().await
-    })?;
+    let data = rt.block_on(async { fetch_asset_data().await })?;
 
     println!("Data fetched successfully! Launching TUI...");
 
