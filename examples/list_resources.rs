@@ -90,15 +90,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(assets) => {
             println!("{} found", assets.len());
             if !assets.is_empty() {
-                println!("   Recent assets:");
-                for asset in assets.iter().take(5) {
+                println!("   All assets:");
+                for asset in assets.iter() {
                     println!(
-                        "   • {} ({:?}) - Domain: {:?}",
-                        asset.name, asset.ticker, asset.domain
+                        "   • {} - {}",
+                        asset.name, asset.asset_uuid
                     );
-                }
-                if assets.len() > 5 {
-                    println!("   ... and {} more", assets.len() - 5);
                 }
             }
         }

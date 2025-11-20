@@ -21,9 +21,9 @@ use crate::model::{
     Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary, Assignment,
     Balance, BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
     ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
-    GaidBalanceEntry, GaidRequest, IssuanceRequest, IssuanceResponse, Outpoint, Ownership,
-    Password, ReceivedByAddress, RegisterAssetResponse, TokenData, TokenInfo, TokenRequest,
-    TokenResponse, TransactionDetail, TxInput, Unspent, Utxo,
+    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
+    ReceivedByAddress, RegisterAssetResponse, TokenData, TokenInfo, TokenRequest, TokenResponse,
+    TransactionDetail, TxInput, Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -9274,10 +9274,7 @@ impl ApiClient {
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error> {
-        let request = GaidRequest {
-            gaid: gaid.to_string(),
-        };
-
+        // Send GAID as a plain string, not wrapped in an object
         self.request_empty(
             Method::POST,
             &[
@@ -9286,7 +9283,7 @@ impl ApiClient {
                 "gaids",
                 "add",
             ],
-            Some(request),
+            Some(gaid),
         )
         .await
     }
@@ -9315,10 +9312,7 @@ impl ApiClient {
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error> {
-        let request = GaidRequest {
-            gaid: gaid.to_string(),
-        };
-
+        // Send GAID as a plain string, not wrapped in an object
         self.request_empty(
             Method::POST,
             &[
@@ -9327,7 +9321,7 @@ impl ApiClient {
                 "gaids",
                 "set-default",
             ],
-            Some(request),
+            Some(gaid),
         )
         .await
     }

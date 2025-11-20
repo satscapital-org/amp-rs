@@ -162,6 +162,7 @@ pub struct RegisteredUserEdit {
 
 #[derive(Debug, Serialize)]
 pub struct GaidRequest {
+    #[serde(rename = "GAID")]
     pub gaid: String,
 }
 

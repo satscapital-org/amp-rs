@@ -110,14 +110,25 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
         Ok(assets) => {
             println!("📊 Total assets: {}", assets.len());
             for (i, asset) in assets.iter().enumerate() {
-                println!(
-                    "  {}. UUID: {}, Name: {}, Ticker: {:?}, Domain: {:?}",
-                    i + 1,
-                    asset.asset_uuid,
-                    asset.name,
-                    asset.ticker,
-                    asset.domain
-                );
+                println!("  {}. Asset Details:", i + 1);
+                println!("     Name: {}", asset.name);
+                println!("     UUID: {}", asset.asset_uuid);
+                println!("     Asset ID: {}", asset.asset_id);
+                println!("     Issuer: {}", asset.issuer);
+                println!("     Ticker: {:?}", asset.ticker);
+                println!("     Precision: {}", asset.precision);
+                println!("     Domain: {:?}", asset.domain);
+                println!("     Pubkey: {:?}", asset.pubkey);
+                println!("     Reissuance Token ID: {:?}", asset.reissuance_token_id);
+                println!("     Requirements: {:?}", asset.requirements);
+                println!("     Is Registered: {}", asset.is_registered);
+                println!("     Is Authorized: {}", asset.is_authorized);
+                println!("     Is Locked: {}", asset.is_locked);
+                println!("     Transfer Restricted: {}", asset.transfer_restricted);
+                println!("     Issuer Authorization Endpoint: {:?}", asset.issuer_authorization_endpoint);
+                if i < assets.len() - 1 {
+                    println!();
+                }
             }
         }
         Err(e) => println!("❌ Failed to list assets: {}", e),
