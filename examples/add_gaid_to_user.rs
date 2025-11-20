@@ -87,7 +87,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Check if the GAID is already associated
             if gaids.contains(&gaid_to_add.to_string()) {
-                println!("⚠ GAID \"{}\" is already associated with this user", gaid_to_add);
+                println!(
+                    "⚠ GAID \"{}\" is already associated with this user",
+                    gaid_to_add
+                );
                 println!("  Attempting to add it again (this may succeed or fail depending on API behavior)");
             }
         }
@@ -122,8 +125,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Step 4: Add the GAID to the user
-    println!("Step 4: Adding GAID \"{}\" to user {}...", gaid_to_add, USER_ID);
-    match client.add_gaid_to_registered_user(USER_ID, gaid_to_add).await {
+    println!(
+        "Step 4: Adding GAID \"{}\" to user {}...",
+        gaid_to_add, USER_ID
+    );
+    match client
+        .add_gaid_to_registered_user(USER_ID, gaid_to_add)
+        .await
+    {
         Ok(_) => {
             println!("✓ Successfully added GAID to user!");
         }
@@ -140,12 +149,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(gaids) => {
             println!("✓ User now has {} GAID(s):", gaids.len());
             for (idx, gaid) in gaids.iter().enumerate() {
-                let marker = if gaid == gaid_to_add { " ← newly added" } else { "" };
+                let marker = if gaid == gaid_to_add {
+                    " ← newly added"
+                } else {
+                    ""
+                };
                 println!("  {}. {}{}", idx + 1, gaid, marker);
             }
 
             if gaids.contains(&gaid_to_add.to_string()) {
-                println!("\n✓ Confirmed: GAID \"{}\" is now associated with user {}", gaid_to_add, USER_ID);
+                println!(
+                    "\n✓ Confirmed: GAID \"{}\" is now associated with user {}",
+                    gaid_to_add, USER_ID
+                );
             } else {
                 eprintln!("\n⚠ Warning: GAID not found in user's GAID list after addition");
             }

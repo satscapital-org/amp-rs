@@ -125,7 +125,10 @@ async fn list_all_resources(client: &ApiClient) -> Result<(), Box<dyn std::error
                 println!("     Is Authorized: {}", asset.is_authorized);
                 println!("     Is Locked: {}", asset.is_locked);
                 println!("     Transfer Restricted: {}", asset.transfer_restricted);
-                println!("     Issuer Authorization Endpoint: {:?}", asset.issuer_authorization_endpoint);
+                println!(
+                    "     Issuer Authorization Endpoint: {:?}",
+                    asset.issuer_authorization_endpoint
+                );
                 if i < assets.len() - 1 {
                     println!();
                 }

@@ -92,10 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !assets.is_empty() {
                 println!("   All assets:");
                 for asset in assets.iter() {
-                    println!(
-                        "   • {} - {}",
-                        asset.name, asset.asset_uuid
-                    );
+                    println!("   • {} - {}", asset.name, asset.asset_uuid);
                 }
             }
         }
