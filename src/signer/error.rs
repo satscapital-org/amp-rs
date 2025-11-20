@@ -18,7 +18,7 @@ pub enum SignerError {
     Lwk(String),
     #[error("LWK signing operation failed: {error_message}\n\nOperation: {operation}\n\nContext: {context}")]
     LwkDetailed {
-        /// The LWK operation that failed (e.g., "sign_transaction", "create_signer")
+        /// The LWK operation that failed (e.g., "`sign_transaction`", "`create_signer`")
         operation: String,
         /// Additional context about the operation
         context: String,

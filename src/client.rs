@@ -8249,8 +8249,7 @@ impl ApiClient {
                 }
             }),
             Err(e) => Err(Error::ResponseParsingFailed(format!(
-                "Failed to read response body: {}",
-                e
+                "Failed to read response body: {e}"
             ))),
         }
     }
