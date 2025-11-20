@@ -2,7 +2,6 @@
 ///
 /// This test suite verifies that all newly enhanced error types include
 /// comprehensive diagnostic information and format correctly.
-
 use amp_rs::{AmpError, Error, SignerError};
 
 #[test]
@@ -21,10 +20,7 @@ fn test_error_request_failed_detailed() {
         error_string.contains("https://amp-test.blockstream.com/api/assets/issue"),
         "Should contain endpoint"
     );
-    assert!(
-        error_string.contains("400"),
-        "Should contain status code"
-    );
+    assert!(error_string.contains("400"), "Should contain status code");
     assert!(
         error_string.contains("Invalid issuance request"),
         "Should contain error message"

@@ -2,7 +2,6 @@
 ///
 /// This example demonstrates the improved error reporting across all
 /// error types in the amp-rs crate.
-
 use amp_rs::{AmpError, Error, SignerError};
 
 fn main() {
@@ -83,7 +82,8 @@ fn main() {
     println!("   (Transaction validation failures with specifics)\n");
     let error = SignerError::InvalidTransactionDetailed {
         txid: "abc123def456789".to_string(),
-        validation_details: "Input 0 references UTXO abc:1 which does not exist in wallet".to_string(),
+        validation_details: "Input 0 references UTXO abc:1 which does not exist in wallet"
+            .to_string(),
         error_message: "Transaction validation failed: missing input UTXOs".to_string(),
     };
     println!("{}\n", error);
@@ -96,7 +96,9 @@ fn main() {
         operation: "serialize".to_string(),
         data_type: "MnemonicStorage".to_string(),
         context: "Saving encrypted mnemonic to ~/.amp-rs/mnemonic.json".to_string(),
-        serde_error: "invalid type: integer `12345`, expected a string for field 'encrypted_mnemonic'".to_string(),
+        serde_error:
+            "invalid type: integer `12345`, expected a string for field 'encrypted_mnemonic'"
+                .to_string(),
     };
     println!("{}\n", error);
     println!("{}\n", "-".repeat(80));
