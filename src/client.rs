@@ -407,8 +407,32 @@ pub enum Error {
     MissingEnvVar(String),
     #[error("AMP request failed: {0}")]
     RequestFailed(String),
+    #[error("AMP request failed\n\nMethod: {method}\nEndpoint: {endpoint}\nStatus: {status}\n\nError: {error_message}")]
+    RequestFailedDetailed {
+        /// The HTTP method used (GET, POST, etc.)
+        method: String,
+        /// The full endpoint URL that was called
+        endpoint: String,
+        /// The HTTP status code
+        status: reqwest::StatusCode,
+        /// The error message or response body
+        error_message: String,
+    },
     #[error("Failed to parse AMP response: {0}")]
     ResponseParsingFailed(String),
+    #[error("Failed to parse AMP response: {serde_error}\n\nMethod: {method}\nEndpoint: {endpoint}\nExpected Type: {expected_type}\n\nRaw Response:\n{raw_response}")]
+    ResponseDeserializationFailed {
+        /// The HTTP method used (GET, POST, etc.)
+        method: String,
+        /// The full endpoint URL that was called
+        endpoint: String,
+        /// The expected Rust type name
+        expected_type: String,
+        /// The original serde deserialization error message
+        serde_error: String,
+        /// The complete raw response body text that failed to parse
+        raw_response: String,
+    },
     #[error("AMP token request failed with status {status}: {error_text}")]
     TokenRequestFailed {
         status: reqwest::StatusCode,
@@ -429,9 +453,29 @@ pub enum Error {
 pub enum AmpError {
     #[error("API error: {0}")]
     Api(String),
+    #[error("API error\n\nEndpoint: {endpoint}\nMethod: {method}\n\nError: {error_message}")]
+    ApiDetailed {
+        /// The API endpoint that was called
+        endpoint: String,
+        /// The HTTP method used
+        method: String,
+        /// The error message
+        error_message: String,
+    },
 
     #[error("RPC error: {0}")]
     Rpc(String),
+    #[error("RPC error: {error_message}\n\nMethod: {rpc_method}\nParameters: {params}\n\nRaw Response:\n{raw_response}")]
+    RpcDetailed {
+        /// The RPC method name that was called
+        rpc_method: String,
+        /// The parameters passed to the RPC method
+        params: String,
+        /// The error message
+        error_message: String,
+        /// The complete raw response from the RPC server
+        raw_response: String,
+    },
 
     #[error("Signer error: {0}")]
     Signer(#[from] SignerError),
@@ -447,6 +491,17 @@ pub enum AmpError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("Serialization error: {serde_error}\n\nOperation: {operation}\nData Type: {data_type}\n\nContext: {context}")]
+    SerializationDetailed {
+        /// The serialization operation (serialize/deserialize)
+        operation: String,
+        /// The data type being processed
+        data_type: String,
+        /// Additional context about the operation
+        context: String,
+        /// The original serde error message
+        serde_error: String,
+    },
 
     #[error(transparent)]
     Existing(#[from] Error),
@@ -479,7 +534,27 @@ impl AmpError {
         let context_str = context.into();
         match self {
             Self::Api(msg) => Self::Api(format!("{context_str}: {msg}")),
+            Self::ApiDetailed {
+                endpoint,
+                method,
+                error_message,
+            } => Self::ApiDetailed {
+                endpoint,
+                method,
+                error_message: format!("{context_str}: {error_message}"),
+            },
             Self::Rpc(msg) => Self::Rpc(format!("{context_str}: {msg}")),
+            Self::RpcDetailed {
+                rpc_method,
+                params,
+                error_message,
+                raw_response,
+            } => Self::RpcDetailed {
+                rpc_method,
+                params,
+                error_message: format!("{context_str}: {error_message}"),
+                raw_response,
+            },
             Self::Timeout(msg) => Self::Timeout(format!("{context_str}: {msg}")),
             Self::Validation(msg) => Self::Validation(format!("{context_str}: {msg}")),
             other => other, // Don't modify other error types
@@ -490,7 +565,7 @@ impl AmpError {
     #[must_use]
     pub const fn is_retryable(&self) -> bool {
         match self {
-            Self::Network(_) | Self::Rpc(_) => true, // RPC errors might be transient
+            Self::Network(_) | Self::Rpc(_) | Self::RpcDetailed { .. } => true, // RPC errors might be transient
             Self::Existing(Error::Token(token_err)) => token_err.is_retryable(),
             _ => false,
         }
@@ -501,7 +576,9 @@ impl AmpError {
     pub fn retry_instructions(&self) -> Option<String> {
         match self {
             Self::Network(_) => Some("Check network connection and retry".to_string()),
-            Self::Rpc(_) => Some("Check Elements node connection and retry".to_string()),
+            Self::Rpc(_) | Self::RpcDetailed { .. } => {
+                Some("Check Elements node connection and retry".to_string())
+            }
             Self::Timeout(msg) if msg.contains("txid") => {
                 Some("Use the transaction ID to manually confirm the distribution".to_string())
             }
@@ -8151,11 +8228,31 @@ impl ApiClient {
         path: &[&str],
         body: Option<impl serde::Serialize>,
     ) -> Result<T, Error> {
+        // Capture request context for better error messages
+        let method_str = method.to_string();
+        let mut url = self.base_url.clone();
+        url.path_segments_mut().unwrap().extend(path);
+        let endpoint = url.to_string();
+        let expected_type = std::any::type_name::<T>().to_string();
+
         let response = self.request_raw(method, path, body).await?;
-        response
-            .json()
-            .await
-            .map_err(|e| Error::ResponseParsingFailed(e.to_string()))
+
+        // Try to deserialize, capturing raw response on failure
+        match response.text().await {
+            Ok(raw_response) => serde_json::from_str(&raw_response).map_err(|e| {
+                Error::ResponseDeserializationFailed {
+                    method: method_str,
+                    endpoint,
+                    expected_type,
+                    serde_error: e.to_string(),
+                    raw_response,
+                }
+            }),
+            Err(e) => Err(Error::ResponseParsingFailed(format!(
+                "Failed to read response body: {}",
+                e
+            ))),
+        }
     }
 
     async fn request_empty(

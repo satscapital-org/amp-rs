@@ -16,6 +16,15 @@ pub enum SignerError {
     /// - Key derivation and cryptographic operations
     #[error("LWK signing operation failed: {0}")]
     Lwk(String),
+    #[error("LWK signing operation failed: {error_message}\n\nOperation: {operation}\n\nContext: {context}")]
+    LwkDetailed {
+        /// The LWK operation that failed (e.g., "sign_transaction", "create_signer")
+        operation: String,
+        /// Additional context about the operation
+        context: String,
+        /// The error message from LWK
+        error_message: String,
+    },
 
     /// Invalid mnemonic phrase errors
     ///
@@ -36,6 +45,15 @@ pub enum SignerError {
     /// - Malformed transaction hex data
     #[error("Hex parsing failed: {0}")]
     HexParse(#[from] hex::FromHexError),
+    #[error("Hex parsing failed: {hex_error}\n\nParsing: {parsing_context}\nHex String (first 100 chars): {hex_preview}")]
+    HexParseDetailed {
+        /// Context about what was being parsed
+        parsing_context: String,
+        /// Preview of the hex string that failed to parse
+        hex_preview: String,
+        /// The original hex parsing error
+        hex_error: String,
+    },
 
     /// Invalid transaction structure or content errors
     ///
@@ -47,6 +65,15 @@ pub enum SignerError {
     /// - Transaction size or format issues
     #[error("Invalid transaction structure: {0}")]
     InvalidTransaction(String),
+    #[error("Invalid transaction: {error_message}\n\nTransaction ID: {txid}\nValidation Details: {validation_details}")]
+    InvalidTransactionDetailed {
+        /// The transaction ID if available
+        txid: String,
+        /// Specific validation failure details
+        validation_details: String,
+        /// The error message
+        error_message: String,
+    },
 
     /// Network-related communication errors
     ///
@@ -63,6 +90,17 @@ pub enum SignerError {
     /// - Serialization failures when writing storage
     #[error("JSON serialization failed: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("Serialization error: {serde_error}\n\nOperation: {operation}\nData Type: {data_type}\n\nContext: {context}")]
+    SerializationDetailed {
+        /// The serialization operation (serialize/deserialize)
+        operation: String,
+        /// The data type being processed
+        data_type: String,
+        /// Additional context about the operation
+        context: String,
+        /// The original serde error message
+        serde_error: String,
+    },
 
     /// File system I/O operation errors
     ///
