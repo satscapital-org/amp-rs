@@ -510,6 +510,275 @@ The same signer setup and passing pattern will be used for upcoming operations:
 
 The signer abstraction ensures consistent transaction signing across all asset operations while maintaining security best practices for testnet development.
 
+## Known Issue: Null Owner Fields in Asset Ownerships
+
+### Overview
+
+The AMP API has a known issue where it doesn't currently guarantee an `owner` field for **Issuer Tracked assets** when calling `get_asset_ownerships`. This issue only affects Issuer Tracked assets; **Transfer Restricted assets** currently transmit the `owner` field as expected.
+
+When the API returns ownership records with null owner fields for Issuer Tracked assets, the client will throw a deserialization error. The error message includes the raw JSON response, allowing implementations to handle the error and rebuild missing owners using the GAIDs they have stored in their state management strategy.
+
+### Error Recovery Pattern
+
+You can extract and repair the data by looking up owners via their GAID (Global Asset ID) in your local database:
+
+```rust
+use amp_rs::ApiClient;
+
+async fn fetch_ownerships_with_recovery(
+    client: &ApiClient,
+    db: &DatabaseConnection, // Your database connection
+    asset_uuid: &str,
+) -> Result<Vec<Ownership>, Box<dyn std::error::Error>> {
+    match client.get_asset_ownerships(asset_uuid, None).await {
+        Ok(ownerships) => Ok(ownerships),
+        Err(e) => {
+            let error_string = format!("{}", e);
+            
+            // Check if this is a null owner error (affects Issuer Tracked assets only)
+            if error_string.contains("null") && error_string.contains("owner") {
+                // Extract raw response from error message
+                let error_lines: Vec<&str> = error_string.lines().collect();
+                let mut in_raw_response = false;
+                let mut raw_json_lines = Vec::new();
+                
+                for line in error_lines {
+                    if line.contains("Raw Response:") {
+                        in_raw_response = true;
+                        continue;
+                    }
+                    if in_raw_response && !line.starts_with("===") {
+                        raw_json_lines.push(line);
+                    }
+                }
+                
+                let raw_response = raw_json_lines.join("\n");
+                
+                if let Ok(mut ownerships_json) = serde_json::from_str::<serde_json::Value>(&raw_response) {
+                    // Fix null owners by looking up via GAID
+                    if let Some(array) = ownerships_json.as_array_mut() {
+                        for item in array.iter_mut() {
+                            if let Some(obj) = item.as_object_mut() {
+                                // Check if owner is null but GAID exists
+                                if obj.get("owner").and_then(|v| v.as_str()).is_none() {
+                                    if let Some(gaid) = obj.get("GAID").and_then(|v| v.as_str()) {
+                                        // Look up user by GAID in your database
+                                        if let Ok(Some(user)) = find_user_by_gaid(db, gaid).await {
+                                            // Insert the owner field
+                                            obj.insert(
+                                                "owner".to_string(),
+                                                serde_json::json!(user.registered_id.to_string()),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Parse the fixed JSON into Ownership structs
+                        let fixed_ownerships = serde_json::from_value::<Vec<Ownership>>(
+                            serde_json::Value::Array(array.clone()),
+                        )?;
+                        
+                        return Ok(fixed_ownerships);
+                    }
+                }
+            }
+            
+            // If not a null owner error or recovery failed, return original error
+            Err(e)
+        }
+    }
+}
+```
+
+### Complete Error Recovery Example
+
+For a complete, production-ready implementation with logging and detailed error handling, see this example from the [sats-asset-manager-demo](https://github.com/satscapital-org/sats-assets/blob/main/sats-asset-manager-demo/src/main.rs#L834-L988):
+
+```rust
+// Fetch ownership data with error recovery for null owners
+let ownerships = match client.get_asset_ownerships(asset_uuid, None).await {
+    Ok(ownerships) => ownerships,
+    Err(e) => {
+        // Log error details - amp-rust 0.0.6 now includes raw response in error
+        use std::io::Write;
+
+        let error_string = format!("{}", e);
+
+        // Check if this is a deserialization error with null owner (Issuer Tracked assets only)
+        if error_string.contains("null") && error_string.contains("owner") {
+            // Attempt recovery: Try to parse raw response and fix null owners
+            let detailed_msg = format!(
+                "\n=== Attempting Error Recovery ===\n\
+                Detected null owner in ownerships response.\n\
+                Attempting to resolve owners via GAID lookup...\n\
+                Original error: {}\n",
+                e
+            );
+
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("app.log")
+            {
+                let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+                let _ = writeln!(
+                    file,
+                    "[{}][asset:{}] {}",
+                    timestamp, asset_uuid, detailed_msg
+                );
+            }
+
+            // Try to extract raw response and fix it
+            // The error from amp-rust 0.0.6 should contain the raw response
+            // We'll attempt to parse it as JSON Value first, then fix owners
+            let error_lines: Vec<&str> = error_string.lines().collect();
+            let mut in_raw_response = false;
+            let mut raw_json_lines = Vec::new();
+
+            for line in error_lines {
+                if line.contains("Raw Response:") {
+                    in_raw_response = true;
+                    continue;
+                }
+                if in_raw_response && !line.starts_with("===") {
+                    raw_json_lines.push(line);
+                }
+            }
+
+            let raw_response = raw_json_lines.join("\n");
+
+            if let Ok(mut ownerships_json) =
+                serde_json::from_str::<serde_json::Value>(&raw_response)
+            {
+                // Fix null owners by looking up via GAID
+                if let Some(array) = ownerships_json.as_array_mut() {
+                    for item in array.iter_mut() {
+                        if let Some(obj) = item.as_object_mut() {
+                            // Check if owner is null but GAID exists
+                            if obj.get("owner").and_then(|v| v.as_str()).is_none() {
+                                if let Some(gaid) = obj
+                                    .get("GAID")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                {
+                                    // Try to find user by GAID
+                                    if let Ok(gaid_model) =
+                                        GaidService::find_by_gaid(db, &gaid).await
+                                    {
+                                        if let Some(gaid_entry) = gaid_model {
+                                            // Get the user's registered_id
+                                            if let Ok(Some(user)) =
+                                                UserService::find_by_id(db, gaid_entry.user_id)
+                                                    .await
+                                            {
+                                                if let Some(registered_id) = user.registered_id
+                                                {
+                                                    obj.insert(
+                                                        "owner".to_string(),
+                                                        serde_json::json!(
+                                                            registered_id.to_string()
+                                                        ),
+                                                    );
+
+                                                    let success_msg = format!("Resolved null owner via GAID {}: user {}", gaid, registered_id);
+                                                    if let Ok(mut file) =
+                                                        std::fs::OpenOptions::new()
+                                                            .create(true)
+                                                            .append(true)
+                                                            .open("app.log")
+                                                    {
+                                                        let timestamp = chrono::Local::now()
+                                                            .format("%Y-%m-%d %H:%M:%S");
+                                                        let _ = writeln!(
+                                                            file,
+                                                            "[{}][asset:{}] {}",
+                                                            timestamp, asset_uuid, success_msg
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Try to parse the fixed JSON into Ownership structs
+                    match serde_json::from_value::<Vec<amp_rs::model::Ownership>>(
+                        serde_json::Value::Array(array.clone()),
+                    ) {
+                        Ok(fixed_ownerships) => {
+                            let recovery_msg =
+                                "Successfully recovered ownerships after fixing null owners";
+                            if let Ok(mut file) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("app.log")
+                            {
+                                let timestamp =
+                                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+                                let _ = writeln!(
+                                    file,
+                                    "[{}][asset:{}] {}",
+                                    timestamp, asset_uuid, recovery_msg
+                                );
+                            }
+                            fixed_ownerships
+                        }
+                        Err(parse_err) => {
+                            let failure_msg =
+                                format!("Failed to parse fixed ownerships: {}", parse_err);
+                            if let Ok(mut file) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("app.log")
+                            {
+                                let timestamp =
+                                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+                                let _ = writeln!(
+                                    file,
+                                    "[{}][asset:{}] {}",
+                                    timestamp, asset_uuid, failure_msg
+                                );
+                            }
+                            return Err(Box::<dyn std::error::Error>::from(format!(
+                                "Failed to recover ownerships: {}",
+                                parse_err
+                            )));
+                        }
+                    }
+                } else {
+                    return Err(Box::<dyn std::error::Error>::from(
+                        "Failed to parse ownerships as array",
+                    ));
+                }
+            } else {
+                return Err(Box::<dyn std::error::Error>::from(format!(
+                    "Failed to extract raw response for recovery: {}",
+                    e
+                )));
+            }
+        } else {
+            // Not a null owner error, return original error
+            return Err(e);
+        }
+    }
+};
+```
+
+### Summary
+
+This pattern allows applications to:
+1. Detect when the AMP API returns incomplete ownership data for Issuer Tracked assets
+2. Extract the raw JSON response from the error
+3. Resolve missing owner information using locally stored GAID mappings
+4. Successfully process ownership data despite the API limitation
+
+**Note**: Transfer Restricted assets are not affected by this issue and should work without requiring error recovery.
+
 ## Testing
 
 To run the tests, you will need to set the `AMP_USERNAME` and `AMP_PASSWORD` environment variables.
