@@ -2674,7 +2674,10 @@ impl ElementsRpc {
             .get("txid")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let vin = result.get("vin").and_then(serde_json::Value::as_u64).unwrap_or(0);
+        let vin = result
+            .get("vin")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
 
         tracing::info!("Reissuance transaction created: txid={}, vin={}", txid, vin);
 

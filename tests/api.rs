@@ -4970,9 +4970,7 @@ async fn test_reissue_request_mock() {
     )
     .unwrap();
 
-    let result = client
-        .reissue_request("mock_asset_uuid", 1000000000)
-        .await;
+    let result = client.reissue_request("mock_asset_uuid", 1000000000).await;
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -5076,7 +5074,10 @@ async fn test_get_asset_summary_mock() {
     assert!(result.is_ok());
     let summary = result.unwrap();
     assert_eq!(summary.asset_id, "mock_asset_id");
-    assert_eq!(summary.reissuance_token_id, Some("mock_reissuance_token_id".to_string()));
+    assert_eq!(
+        summary.reissuance_token_id,
+        Some("mock_reissuance_token_id".to_string())
+    );
     assert_eq!(summary.issued, 2100000000000000);
     assert_eq!(summary.reissued, 0);
 
@@ -5106,7 +5107,10 @@ async fn test_get_reissuable_asset_mock() {
     let asset = result.unwrap();
     assert_eq!(asset.asset_uuid, "mock_asset_uuid");
     assert_eq!(asset.name, "Mock Reissuable Asset");
-    assert_eq!(asset.reissuance_token_id, Some("mock_reissuance_token_id".to_string()));
+    assert_eq!(
+        asset.reissuance_token_id,
+        Some("mock_reissuance_token_id".to_string())
+    );
 
     // Cleanup
     cleanup_mock_test().await;

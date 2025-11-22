@@ -224,12 +224,7 @@ async fn test_reissue_asset_invalid_uuid() -> Result<(), Box<dyn std::error::Err
     let (_, signer) = LwkSoftwareSigner::generate_new_indexed(501)?;
 
     let result = api_client
-        .reissue_asset(
-            "invalid-uuid-format",
-            1000000000,
-            &elements_rpc,
-            &signer,
-        )
+        .reissue_asset("invalid-uuid-format", 1000000000, &elements_rpc, &signer)
         .await;
 
     match result {
@@ -311,4 +306,3 @@ async fn test_reissue_asset_zero_amount() -> Result<(), Box<dyn std::error::Erro
 
     Ok(())
 }
-
