@@ -4953,3 +4953,161 @@ async fn test_get_asset_distribution_mock() {
     // Cleanup
     cleanup_mock_test().await;
 }
+
+#[tokio::test]
+#[serial]
+async fn test_reissue_request_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_reissue_request(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client
+        .reissue_request("mock_asset_uuid", 1000000000)
+        .await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert_eq!(response.asset_uuid, "mock_asset_uuid");
+    assert_eq!(response.asset_id, "mock_asset_id");
+    assert_eq!(response.amount, 10.0);
+    assert_eq!(response.command, "reissue");
+    assert_eq!(response.reissuance_utxos.len(), 1);
+    assert_eq!(response.reissuance_utxos[0].txid, "mock_reissuance_txid");
+    assert_eq!(response.reissuance_utxos[0].vout, 0);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn test_reissue_confirm_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_reissue_confirm(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let details = serde_json::json!({});
+    let listissuances = vec![serde_json::json!({
+        "asset_id": "mock_asset_id",
+        "amount": 1000000000
+    })];
+    let reissuance_output = serde_json::json!({
+        "txid": "mock_reissuance_txid",
+        "vin": 1
+    });
+
+    let result = client
+        .reissue_confirm("mock_asset_uuid", details, listissuances, reissuance_output)
+        .await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+    assert_eq!(response.txid, "mock_reissuance_txid");
+    assert_eq!(response.vin, 1);
+    assert_eq!(response.reissuance_amount, 1000000000);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn test_get_asset_balance_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_asset_balance(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.get_asset_balance("mock_asset_uuid").await;
+
+    assert!(result.is_ok());
+    let balance = result.unwrap();
+    // Balance is Vec<GaidBalanceEntry>, so we just check it's empty
+    assert_eq!(balance.len(), 0);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn test_get_asset_summary_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_asset_summary(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.get_asset_summary("mock_asset_uuid").await;
+
+    assert!(result.is_ok());
+    let summary = result.unwrap();
+    assert_eq!(summary.asset_id, "mock_asset_id");
+    assert_eq!(summary.reissuance_token_id, Some("mock_reissuance_token_id".to_string()));
+    assert_eq!(summary.issued, 2100000000000000);
+    assert_eq!(summary.reissued, 0);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn test_get_reissuable_asset_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_get_reissuable_asset(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client.get_asset("mock_asset_uuid").await;
+
+    assert!(result.is_ok());
+    let asset = result.unwrap();
+    assert_eq!(asset.asset_uuid, "mock_asset_uuid");
+    assert_eq!(asset.name, "Mock Reissuable Asset");
+    assert_eq!(asset.reissuance_token_id, Some("mock_reissuance_token_id".to_string()));
+
+    // Cleanup
+    cleanup_mock_test().await;
+}

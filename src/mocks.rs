@@ -1240,3 +1240,140 @@ pub fn mock_get_asset_distribution(server: &MockServer) {
             }));
     });
 }
+
+/// Sets up a mock for the GET /assets/{asset_uuid}/balance endpoint.
+///
+/// This mock returns a balance response as Vec<GaidBalanceEntry> (empty array).
+/// Note: The reissue_asset method uses request_json directly to get lost_outputs,
+/// but the public get_asset_balance method returns Balance (Vec<GaidBalanceEntry>).
+pub fn mock_get_asset_balance(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/balance");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([]));
+    });
+}
+
+/// Sets up a mock for the GET /assets/{asset_uuid}/summary endpoint.
+///
+/// This mock returns asset summary information including issued and reissued amounts.
+pub fn mock_get_asset_summary(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/summary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_id": "mock_asset_id",
+                "reissuance_token_id": "mock_reissuance_token_id",
+                "issued": 2100000000000000i64,
+                "reissued": 0,
+                "assigned": 0,
+                "distributed": 0,
+                "burned": 0,
+                "blacklisted": 0,
+                "registered_users": 0,
+                "active_registered_users": 0,
+                "active_green_subaccounts": 0,
+                "reissuance_tokens": 100000
+            }));
+    });
+}
+
+/// Sets up a mock for the GET /assets/{asset_uuid}/summary endpoint with reissued amount.
+///
+/// This mock returns asset summary with a non-zero reissued amount (for after reissuance).
+pub fn mock_get_asset_summary_with_reissued(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/summary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "asset_id": "mock_asset_id",
+                "reissuance_token_id": "mock_reissuance_token_id",
+                "issued": 2100000000000000i64,
+                "reissued": 1000000000,
+                "assigned": 0,
+                "distributed": 0,
+                "burned": 0,
+                "blacklisted": 0,
+                "registered_users": 0,
+                "active_registered_users": 0,
+                "active_green_subaccounts": 0,
+                "reissuance_tokens": 100000
+            }));
+    });
+}
+
+/// Sets up a mock for a reissuable asset (GET /assets/{asset_uuid}).
+///
+/// This mock returns an asset with reissuance_token_id set, indicating it's reissuable.
+pub fn mock_get_reissuable_asset(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "name": "Mock Reissuable Asset",
+                "asset_uuid": "mock_asset_uuid",
+                "issuer": 1,
+                "asset_id": "mock_asset_id",
+                "reissuance_token_id": "mock_reissuance_token_id",
+                "requirements": [],
+                "ticker": "MOCK",
+                "precision": 8,
+                "domain": "mock.com",
+                "pubkey": "mock_pubkey",
+                "is_registered": true,
+                "is_authorized": true,
+                "is_locked": false,
+                "issuer_authorization_endpoint": null,
+                "transfer_restricted": false
+            }));
+    });
+}
+
+/// Sets up a mock for the POST /assets/{asset_uuid}/reissue-request endpoint.
+///
+/// This mock returns a reissuance request response with reissuance token UTXOs.
+pub fn mock_reissue_request(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/reissue-request")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "command": "reissue",
+                "min_supported_client_script_version": 2,
+                "base_url": "https://amp-test.blockstream.com/api",
+                "asset_uuid": "mock_asset_uuid",
+                "asset_id": "mock_asset_id",
+                "amount": 10.0,
+                "reissuance_utxos": [
+                    {
+                        "txid": "mock_reissuance_txid",
+                        "vout": 0
+                    }
+                ]
+            }));
+    });
+}
+
+/// Sets up a mock for the POST /assets/{asset_uuid}/reissue-confirm endpoint.
+///
+/// This mock returns a successful reissuance confirmation response.
+pub fn mock_reissue_confirm(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/reissue-confirm")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "txid": "mock_reissuance_txid",
+                "vin": 1,
+                "reissuance_amount": 1000000000
+            }));
+    });
+}
