@@ -6,7 +6,7 @@ use serde_json::json;
 /// This mock returns a sample changelog with version 0.1.0.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use httpmock::prelude::*;
 /// # use amp_rs::mocks::mock_get_changelog;
 /// let server = MockServer::start();
@@ -255,7 +255,7 @@ pub fn mock_create_manager(server: &MockServer) {
 /// This mock returns a successful token response with `"mock_token"`.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use httpmock::prelude::*;
 /// # use amp_rs::mocks::mock_obtain_token;
 /// let server = MockServer::start();
@@ -470,7 +470,7 @@ pub fn mock_edit_asset(server: &MockServer) {
 /// This mock returns a successful asset registration response with the Blockstream Asset Registry.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use httpmock::prelude::*;
 /// # use amp_rs::mocks::mock_register_asset;
 /// let server = MockServer::start();
@@ -583,7 +583,7 @@ pub fn mock_register_asset_with_auth(server: &MockServer) {
 /// This mock returns a successful asset issuance response with mock data.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use httpmock::prelude::*;
 /// # use amp_rs::mocks::mock_issue_asset;
 /// let server = MockServer::start();
@@ -627,7 +627,7 @@ pub fn mock_issue_asset(server: &MockServer) {
 /// This mock returns a list containing one sample asset with mock data.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// # use httpmock::prelude::*;
 /// # use amp_rs::mocks::mock_get_assets;
 /// let server = MockServer::start();

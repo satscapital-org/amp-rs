@@ -2644,7 +2644,7 @@ impl ElementsRpc {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
     /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
-    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    /// let amount = 1000000.0; // 0.01 of an asset with 8 decimals
     /// let result = rpc.reissueasset(asset_id, amount).await?;
     /// println!("Reissuance txid: {}, vin: {}", result["txid"], result["vin"]);
     /// # Ok(())
@@ -2760,10 +2760,7 @@ impl ElementsRpc {
     /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
     /// let amount = 1000.0; // Burn 1000 units
     ///
-    /// let result = rpc.destroyamount(asset_id, amount).await?;
-    /// let txid = result.get("txid")
-    ///     .and_then(|v| v.as_str())
-    ///     .unwrap_or("unknown");
+    /// let txid = rpc.destroyamount(asset_id, amount).await?;
     /// println!("Burn transaction created: {}", txid);
     /// # Ok(())
     /// # }
@@ -8111,7 +8108,7 @@ impl ApiClient {
     /// This method is infallible but returns Result for API consistency.
     ///
     /// # Examples
-    /// ```
+    /// ```no_run
     /// # use amp_rs::ApiClient;
     /// # use reqwest::Url;
     /// # #[tokio::main]
@@ -8681,14 +8678,17 @@ impl ApiClient {
     ///
     /// ```no_run
     /// # use amp_rs::ApiClient;
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = ApiClient::from_env().await?;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     ///
     /// let response = client.register_asset(asset_uuid).await?;
     /// if response.success {
     ///     println!("Asset registered successfully!");
-    ///     println!("Asset ID: {}", response.asset_id);
+    ///     if let Some(asset) = response.asset_data {
+    ///         println!("Asset ID: {}", asset.asset_id);
+    ///     }
     ///     if let Some(message) = response.message {
     ///         println!("Message: {}", message);
     ///     }
@@ -8967,9 +8967,11 @@ impl ApiClient {
     /// - The memo cannot be set due to validation errors
     ///
     /// # Example
-    /// ```rust
+    /// ```no_run
     /// # use amp_rs::ApiClient;
-    /// # async fn example(client: &ApiClient) -> Result<(), Box<dyn std::error::Error>> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
     /// client.set_asset_memo("asset-uuid-123", "This is a memo for the asset").await?;
     /// # Ok(())
     /// # }

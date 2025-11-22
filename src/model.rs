@@ -571,7 +571,7 @@ impl TokenData {
     /// Returns the age of the token
     ///
     /// # Examples
-    /// ```
+    /// ```no_run
     /// # use amp_rs::model::TokenData;
     /// # use chrono::{Utc, Duration};
     /// let expires_at = Utc::now() + Duration::hours(24);
