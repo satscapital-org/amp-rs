@@ -5131,9 +5131,7 @@ async fn test_burn_request_mock() {
     )
     .unwrap();
 
-    let result = client
-        .burn_request("mock_asset_uuid", 1_000_000)
-        .await;
+    let result = client.burn_request("mock_asset_uuid", 1_000_000).await;
 
     assert!(result.is_ok());
     let burn_create = result.unwrap();
@@ -5169,7 +5167,10 @@ async fn test_burn_request_validation_errors() {
     let result = client.burn_request("", 1_000_000).await;
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Asset UUID cannot be empty") || error.to_string().contains("empty"));
+    assert!(
+        error.to_string().contains("Asset UUID cannot be empty")
+            || error.to_string().contains("empty")
+    );
 
     // Test invalid amount (zero)
     let result = client.burn_request("mock_asset_uuid", 0).await;
@@ -5274,7 +5275,10 @@ async fn test_burn_confirm_validation_errors() {
         .await;
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Asset UUID cannot be empty") || error.to_string().contains("empty"));
+    assert!(
+        error.to_string().contains("Asset UUID cannot be empty")
+            || error.to_string().contains("empty")
+    );
 
     // Cleanup
     cleanup_mock_test().await;
@@ -5296,7 +5300,7 @@ async fn test_burn_asset_validation_errors() {
 
     // Test invalid UUID format
     let (_, signer) = amp_rs::signer::LwkSoftwareSigner::generate_new_indexed(300).unwrap();
-    
+
     // We can't easily mock ElementsRpc here, so we'll test the validation that happens before RPC calls
     // Test empty asset UUID
     let elements_rpc = amp_rs::ElementsRpc::new(
@@ -5312,7 +5316,11 @@ async fn test_burn_asset_validation_errors() {
     assert!(result.is_err());
     let error = result.unwrap_err();
     // Should fail at UUID validation
-    assert!(error.to_string().contains("UUID") || error.to_string().contains("empty") || error.to_string().contains("invalid"));
+    assert!(
+        error.to_string().contains("UUID")
+            || error.to_string().contains("empty")
+            || error.to_string().contains("invalid")
+    );
 
     // Test invalid UUID format (not a valid UUID)
     let result = client
@@ -5320,11 +5328,21 @@ async fn test_burn_asset_validation_errors() {
         .await;
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("UUID") || error.to_string().contains("format") || error.to_string().contains("5 parts"));
+    assert!(
+        error.to_string().contains("UUID")
+            || error.to_string().contains("format")
+            || error.to_string().contains("5 parts")
+    );
 
     // Test invalid amount (zero)
     let result = client
-        .burn_asset("550e8400-e29b-41d4-a716-446655440000", 0, &elements_rpc, "wallet", &signer)
+        .burn_asset(
+            "550e8400-e29b-41d4-a716-446655440000",
+            0,
+            &elements_rpc,
+            "wallet",
+            &signer,
+        )
         .await;
     assert!(result.is_err());
     let error = result.unwrap_err();
@@ -5332,7 +5350,13 @@ async fn test_burn_asset_validation_errors() {
 
     // Test invalid amount (negative)
     let result = client
-        .burn_asset("550e8400-e29b-41d4-a716-446655440000", -1, &elements_rpc, "wallet", &signer)
+        .burn_asset(
+            "550e8400-e29b-41d4-a716-446655440000",
+            -1,
+            &elements_rpc,
+            "wallet",
+            &signer,
+        )
         .await;
     assert!(result.is_err());
     let error = result.unwrap_err();
