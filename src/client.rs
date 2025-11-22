@@ -2736,6 +2736,120 @@ impl ElementsRpc {
         Ok(issuances)
     }
 
+    /// Destroys (burns) a specific amount of an asset
+    ///
+    /// This method calls the Elements node's `destroyamount` RPC to permanently
+    /// remove (burn) a specified amount of an asset from the wallet.
+    ///
+    /// # Arguments
+    /// * `asset_id` - The asset ID to burn
+    /// * `amount` - The amount to burn (as a floating point number)
+    ///
+    /// # Returns
+    /// Returns a JSON value containing the transaction ID of the burn transaction
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails or if insufficient balance exists
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+    /// let amount = 1000.0; // Burn 1000 units
+    ///
+    /// let result = rpc.destroyamount(asset_id, amount).await?;
+    /// let txid = result.get("txid")
+    ///     .and_then(|v| v.as_str())
+    ///     .unwrap_or("unknown");
+    /// println!("Burn transaction created: {}", txid);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn destroyamount(
+        &self,
+        asset_id: &str,
+        amount: f64,
+    ) -> Result<String, AmpError> {
+        tracing::debug!("Burning asset {} with amount {}", asset_id, amount);
+
+        let params = serde_json::json!([asset_id, amount]);
+
+        let result: String = self
+            .rpc_call("destroyamount", params)
+            .await
+            .map_err(|e| {
+                e.with_context(format!(
+                    "Failed to burn asset {asset_id}. \
+                    Ensure sufficient balance exists in the wallet."
+                ))
+            })?;
+
+        tracing::info!("Burn transaction created: txid={}", result);
+
+        Ok(result)
+    }
+
+    /// Gets the balance for all assets or a specific asset
+    ///
+    /// This method calls the Elements node's `getbalance` RPC to retrieve
+    /// the wallet balance. If an asset_id is provided, returns the balance
+    /// for that specific asset. If None, returns balances for all assets.
+    ///
+    /// # Arguments
+    /// * `asset_id` - Optional asset ID to get balance for. If None, returns all asset balances
+    ///
+    /// # Returns
+    /// Returns a JSON value containing asset balances (as a map of asset_id -> balance)
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+    ///
+    /// let balances = rpc.get_balance(None).await?;
+    /// if let Some(balance) = balances.get(asset_id) {
+    ///     println!("Balance for asset {}: {}", asset_id, balance);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_balance(
+        &self,
+        asset_id: Option<&str>,
+    ) -> Result<serde_json::Value, AmpError> {
+        tracing::debug!("Getting balance for asset: {:?}", asset_id);
+
+        // getbalance RPC signature: getbalance ( "dummy" minconf include_watchonly )
+        // We use "*" as the account, 0 minconf, false for include_watchonly
+        let params = serde_json::json!(["*", 0, false]);
+
+        let balances: serde_json::Value = self
+            .rpc_call("getbalance", params)
+            .await
+            .map_err(|e| e.with_context("Failed to get balance"))?;
+
+        // If asset_id is specified, return just that balance
+        if let Some(asset_id) = asset_id {
+            if let Some(balance) = balances.get(asset_id) {
+                return Ok(balance.clone());
+            }
+            return Ok(serde_json::json!(0.0));
+        }
+
+        tracing::debug!("Retrieved balances for {} assets", balances.as_object().map_or(0, |m| m.len()));
+
+        Ok(balances)
+    }
+
     /// Selects appropriate UTXOs to cover the required amount plus fees
     ///
     /// This method implements a simple UTXO selection algorithm that:
@@ -11425,6 +11539,168 @@ impl ApiClient {
         Ok(response)
     }
 
+    /// Creates a burn request for an asset
+    ///
+    /// This method requests the data needed to burn (destroy) a specific amount of an asset.
+    /// The response contains UTXOs that need to be available in the wallet for the burn operation.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to burn
+    /// * `amount` - The amount to burn (in satoshis for the asset)
+    ///
+    /// # Returns
+    /// Returns a `BurnCreate` containing:
+    /// - Asset information (UUID, asset ID)
+    /// - Amount to burn
+    /// - Required UTXOs that must be available in the wallet
+    ///
+    /// # Errors
+    /// Returns an `AmpError` if:
+    /// - The asset UUID is invalid or empty
+    /// - The amount is invalid (non-positive)
+    /// - Authentication fails or insufficient permissions
+    /// - The asset does not exist
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    ///
+    /// # Related Methods
+    /// - [`burn_confirm`](Self::burn_confirm) - Confirm a burn transaction
+    /// - [`burn_asset`](Self::burn_asset) - Complete burn workflow
+    pub async fn burn_request(
+        &self,
+        asset_uuid: &str,
+        amount: i64,
+    ) -> Result<crate::model::BurnCreate, AmpError> {
+        use crate::model::BurnRequest;
+
+        let request_span = tracing::debug_span!("burn_request", asset_uuid = %asset_uuid);
+        let _enter = request_span.enter();
+
+        tracing::debug!(
+            "Creating burn request for asset {} with amount {}",
+            asset_uuid,
+            amount
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Burn request failed: empty asset UUID");
+            return Err(AmpError::validation("Asset UUID cannot be empty"));
+        }
+
+        if amount <= 0 {
+            tracing::error!("Burn request failed: invalid amount {}", amount);
+            return Err(AmpError::validation("Amount to burn must be positive"));
+        }
+
+        let request = BurnRequest { amount };
+
+        let response: crate::model::BurnCreate = self
+            .request_json(
+                Method::POST,
+                &["assets", asset_uuid, "burn-request"],
+                Some(&request),
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!("Burn request failed: {}", e);
+                AmpError::api(format!("Failed to create burn request: {e}"))
+                    .with_context("Burn request creation")
+            })?;
+
+        tracing::info!(
+            "Burn request created successfully: asset_id={}, amount={}",
+            response.asset_id,
+            response.amount
+        );
+
+        Ok(response)
+    }
+
+    /// Confirms a completed burn transaction
+    ///
+    /// This method confirms a burn transaction that has been broadcast
+    /// to the Elements network. It provides the transaction details and
+    /// change data to complete the burn registration with the AMP API.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset that was burned
+    /// * `tx_data` - Transaction data from `gettransaction` RPC call (as JSON Value, containing at least txid)
+    /// * `change_data` - Change data from `listunspent` RPC call filtered by asset_id and txid (as JSON Values)
+    ///
+    /// # Returns
+    /// Returns `Ok(())` on success (the API returns an empty response with status 200)
+    ///
+    /// # Errors
+    /// Returns an `AmpError` if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - The transaction data is invalid or incomplete
+    /// - The burn transaction is not valid
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    ///
+    /// # Related Methods
+    /// - [`burn_request`](Self::burn_request) - Create a burn request
+    /// - [`burn_asset`](Self::burn_asset) - Complete burn workflow
+    pub async fn burn_confirm(
+        &self,
+        asset_uuid: &str,
+        tx_data: serde_json::Value,
+        change_data: Vec<serde_json::Value>,
+    ) -> Result<(), AmpError> {
+        use crate::model::BurnConfirmRequest;
+
+        let confirm_span = tracing::debug_span!("burn_confirm", asset_uuid = %asset_uuid);
+        let _enter = confirm_span.enter();
+
+        // Extract txid for logging
+        let txid = tx_data
+            .get("txid")
+            .and_then(serde_json::Value::as_str)
+            .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
+
+        tracing::debug!(
+            "Confirming burn for asset {} with txid {} ({} change outputs)",
+            asset_uuid,
+            txid,
+            change_data.len()
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Burn confirmation failed: empty asset UUID");
+            return Err(AmpError::validation("Asset UUID cannot be empty"));
+        }
+
+        let request = BurnConfirmRequest {
+            tx_data,
+            change_data,
+        };
+
+        // The burn-confirm endpoint returns 200 with empty body (no JSON response)
+        self.request_empty(
+            Method::POST,
+            &["assets", asset_uuid, "burn-confirm"],
+            Some(&request),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Burn confirmation failed: {}", e);
+            AmpError::api(format!(
+                "Failed to confirm burn for txid {}: {}. \
+                IMPORTANT: Transaction {} was successful on blockchain. \
+                You may need to retry confirmation with this txid.",
+                &txid, e, &txid
+            ))
+            .with_context("Burn confirmation")
+        })?;
+
+        tracing::info!("Burn confirmed successfully: txid={}", txid);
+
+        Ok(())
+    }
+
     /// Gets a specific manager by ID.
     ///
     /// # Arguments
@@ -12608,6 +12884,424 @@ impl ApiClient {
 
         tracing::info!(
             "🎉 Asset reissuance completed successfully for asset: {} with transaction: {}",
+            asset_uuid,
+            txid
+        );
+
+        Ok(())
+    }
+
+    /// Burns (destroys) a specific amount of an asset
+    ///
+    /// This method orchestrates the complete burn workflow:
+    /// 1. Validates input parameters (asset UUID format, amount)
+    /// 2. Validates Elements RPC connection and signer interface
+    /// 3. Authenticates with AMP API
+    /// 4. Creates a burn request via the AMP API
+    /// 5. Waits for transaction propagation and checks for lost outputs
+    /// 6. Verifies required UTXOs are available
+    /// 7. Verifies sufficient balance exists
+    /// 8. Calls the Elements node's `destroyamount` RPC method
+    /// 9. Waits for blockchain confirmations (2 confirmations minimum)
+    /// 10. Retrieves transaction data and change information
+    /// 11. Confirms the burn with the AMP API
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to burn (must be valid UUID format)
+    /// * `amount_to_burn` - The amount to burn (in satoshis for the asset)
+    /// * `node_rpc` - `ElementsRpc` client for blockchain operations
+    /// * `wallet_name` - Name of the Elements wallet containing the asset to burn
+    /// * `signer` - Signer implementation for future support (currently not used, node RPC signs)
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the burn completes successfully, or an `AmpError` if:
+    /// - Input validation fails (invalid UUID format, invalid amount, etc.)
+    /// - `ElementsRpc` connection cannot be established
+    /// - Signer interface is not available
+    /// - Authentication with AMP API fails
+    /// - Burn request creation fails
+    /// - Lost outputs are detected
+    /// - Required UTXOs are not available
+    /// - Insufficient balance exists
+    /// - Burn transaction creation fails
+    /// - Confirmation timeout occurs
+    /// - Burn confirmation with AMP API fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, ElementsRpc, AmpError};
+    /// # use amp_rs::signer::LwkSoftwareSigner;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await?;
+    /// let elements_rpc = ElementsRpc::from_env()?;
+    /// let (_, signer) = LwkSoftwareSigner::generate_new()?;
+    ///
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    /// let wallet_name = "test_wallet";
+    ///
+    /// client.burn_asset(asset_uuid, amount, &elements_rpc, wallet_name, &signer).await?;
+    /// println!("Burn completed successfully");
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`burn_request`](Self::burn_request) - Create a burn request only
+    /// - [`burn_confirm`](Self::burn_confirm) - Confirm a burn transaction only
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+    pub async fn burn_asset(
+        &self,
+        asset_uuid: &str,
+        amount_to_burn: i64,
+        node_rpc: &ElementsRpc,
+        wallet_name: &str,
+        signer: &dyn Signer,
+    ) -> Result<(), AmpError> {
+        let burn_span = tracing::info_span!(
+            "burn_asset",
+            asset_uuid = %asset_uuid,
+            amount_to_burn = amount_to_burn
+        );
+        let _enter = burn_span.enter();
+
+        tracing::info!(
+            "Starting asset burn workflow for asset: {} with amount: {}",
+            asset_uuid,
+            amount_to_burn
+        );
+
+        // Step 1: Input validation - asset_uuid format
+        tracing::debug!("Step 1: Validating asset UUID format");
+        Self::validate_asset_uuid(asset_uuid).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid asset UUID: {e}"));
+            tracing::error!("Asset UUID validation failed: {}", e);
+            error.with_context("Step 1: Asset UUID validation")
+        })?;
+        tracing::debug!("Asset UUID validation passed");
+
+        // Step 2: Input validation - amount
+        tracing::debug!("Step 2: Validating burn amount");
+        if amount_to_burn <= 0 {
+            let error = AmpError::validation("Amount to burn must be positive".to_string());
+            tracing::error!("Amount validation failed: amount must be positive");
+            return Err(error.with_context("Step 2: Amount validation"));
+        }
+        tracing::debug!("Amount validation passed");
+
+        // Step 3: Check ElementsRpc connection availability
+        tracing::debug!("Step 3: Validating Elements RPC connection");
+        self.validate_elements_rpc_connection(node_rpc)
+            .await
+            .map_err(|e| {
+                let error = AmpError::rpc(format!("ElementsRpc connection validation failed: {e}"));
+                tracing::error!("Elements RPC connection validation failed: {}", e);
+                error.with_context("Step 3: Elements RPC connection validation")
+            })?;
+        tracing::debug!("Elements RPC connection validation passed");
+
+        // Step 4: Check signer interface availability (for future support)
+        tracing::debug!("Step 4: Validating signer interface");
+        self.validate_signer_interface(signer).await.map_err(|e| {
+            let error = AmpError::validation(format!("Signer interface validation failed: {e}"));
+            tracing::error!("Signer interface validation failed: {}", e);
+            error.with_context("Step 4: Signer interface validation")
+        })?;
+        tracing::debug!("Signer interface validation passed");
+
+        tracing::info!("✓ All input validations completed successfully");
+
+        // Step 5: Authenticate with AMP API using existing TokenManager
+        tracing::debug!("Step 5: Authenticating with AMP API");
+        let _token = self.token_strategy.get_token().await.map_err(|e| {
+            tracing::error!("AMP API authentication failed: {}", e);
+            let amp_error = AmpError::Existing(e);
+            if amp_error.is_retryable() {
+                if let Some(instructions) = amp_error.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
+                }
+            }
+            amp_error.with_context("Step 5: AMP API authentication")
+        })?;
+        tracing::info!("✓ Successfully authenticated with AMP API");
+
+        // Step 6: Create burn request and parse response data
+        tracing::debug!(
+            "Step 6: Creating burn request with amount {}",
+            amount_to_burn
+        );
+        let burn_response = self
+            .burn_request(asset_uuid, amount_to_burn)
+            .await
+            .map_err(|e| {
+                tracing::error!("Burn request creation failed: {}", e);
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
+                }
+                e.with_context("Step 6: Burn request creation")
+            })?;
+
+        tracing::info!(
+            "✓ Burn request created successfully: asset_id={}, amount={}",
+            burn_response.asset_id,
+            burn_response.amount
+        );
+
+        // Step 7: Verify Elements node status
+        tracing::debug!("Step 7: Verifying Elements node status");
+        let (network_info, blockchain_info) = node_rpc.get_node_status().await.map_err(|e| {
+            tracing::error!("Elements node status verification failed: {}", e);
+            if e.is_retryable() {
+                if let Some(instructions) = e.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
+                }
+            }
+            e.with_context("Step 7: Elements node status verification")
+        })?;
+
+        tracing::info!(
+            "✓ Elements node verified - chain: {}, blocks: {}, connections: {}",
+            blockchain_info.chain,
+            blockchain_info.blocks,
+            network_info.connections
+        );
+
+        // Step 8: Wait for transaction propagation (60 seconds as per Python script)
+        tracing::debug!("Step 8: Waiting for transaction propagation (60 seconds)");
+        tracing::info!("Waiting 60 seconds for transaction propagation...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        tracing::debug!("Transaction propagation wait completed");
+
+        // Step 9: Check for lost outputs
+        tracing::debug!("Step 9: Checking for lost outputs");
+        let balance_response: serde_json::Value = self
+            .request_json(Method::GET, &["assets", asset_uuid, "balance"], None::<&()>)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check lost outputs: {}", e);
+                AmpError::api(format!("Balance check failed: {e}"))
+                    .with_context("Step 9: Lost outputs check")
+            })?;
+
+        // Check if lost_outputs field exists and is not empty
+        if let Some(lost_outputs) = balance_response.get("lost_outputs") {
+            if let Some(lost_outputs_array) = lost_outputs.as_array() {
+                if !lost_outputs_array.is_empty() {
+                    let error_msg = format!(
+                        "Lost outputs detected: {}. Transaction will not be sent.",
+                        serde_json::to_string(&lost_outputs_array).unwrap_or_default()
+                    );
+                    tracing::error!("{}", error_msg);
+                    return Err(AmpError::api(error_msg).with_context("Step 9: Lost outputs check"));
+                }
+            }
+        }
+
+        tracing::info!("✓ No lost outputs detected");
+
+        // Step 10: Check UTXOs match expected UTXOs from response
+        tracing::debug!(
+            "Step 10: Verifying {} required UTXOs are available",
+            burn_response.utxos.len()
+        );
+
+        let available_utxos = node_rpc.list_unspent(None).await.map_err(|e| {
+            tracing::error!("Failed to list UTXOs: {}", e);
+            AmpError::rpc(format!("Failed to list UTXOs: {e}"))
+                .with_context("Step 10: UTXO verification")
+        })?;
+
+        // Check that all required UTXOs are available
+        let local_utxos: std::collections::HashSet<(String, i64)> = available_utxos
+            .iter()
+            .map(|utxo| (utxo.txid.clone(), i64::from(utxo.vout)))
+            .collect();
+
+        let mut missing_utxos = Vec::new();
+        for required_utxo in &burn_response.utxos {
+            if !local_utxos.contains(&(required_utxo.txid.clone(), required_utxo.vout)) {
+                missing_utxos.push(format!("{}:{}", required_utxo.txid, required_utxo.vout));
+            }
+        }
+
+        if !missing_utxos.is_empty() {
+            let error_msg = format!(
+                "Missing required UTXOs: {}. Ensure the asset UTXOs are available in the wallet.",
+                missing_utxos.join(", ")
+            );
+            tracing::error!("{}", error_msg);
+            return Err(AmpError::rpc(error_msg).with_context("Step 10: UTXO verification"));
+        }
+
+        tracing::info!(
+            "✓ All {} required UTXOs are available",
+            burn_response.utxos.len()
+        );
+
+        // Step 11: Check local balance >= requested amount
+        tracing::debug!("Step 11: Verifying sufficient balance");
+        let balances = node_rpc.get_balance(None).await.map_err(|e| {
+            tracing::error!("Failed to get balance: {}", e);
+            AmpError::rpc(format!("Failed to get balance: {e}"))
+                .with_context("Step 11: Balance verification")
+        })?;
+
+        // Extract balance for the specific asset_id (getbalance returns a map)
+        let local_amount = balances
+            .get(&burn_response.asset_id)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let requested_amount = burn_response.amount;
+
+        if local_amount < requested_amount {
+            let error_msg = format!(
+                "Insufficient balance: local balance ({}) is lower than requested amount ({})",
+                local_amount, requested_amount
+            );
+            tracing::error!("{}", error_msg);
+            return Err(AmpError::rpc(error_msg).with_context("Step 11: Balance verification"));
+        }
+
+        tracing::info!(
+            "✓ Sufficient balance verified: local={}, requested={}",
+            local_amount,
+            requested_amount
+        );
+
+        // Step 12: Call Elements node's destroyamount RPC method
+        tracing::debug!("Step 12: Calling Elements destroyamount RPC method");
+        let txid = node_rpc
+            .destroyamount(&burn_response.asset_id, requested_amount)
+            .await
+            .map_err(|e| {
+                tracing::error!("Burn transaction creation failed: {}", e);
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
+                }
+                e.with_context("Step 12: Burn transaction creation")
+            })?;
+
+        tracing::info!("✓ Burn transaction created: txid={}", txid);
+
+        // Step 13: Wait for confirmations
+        tracing::debug!("Step 13: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
+        let confirmation_start = std::time::Instant::now();
+        let _tx_detail = node_rpc
+            .wait_for_confirmations(&txid, Some(2), Some(10))
+            .await
+            .map_err(|e| {
+                let elapsed = confirmation_start.elapsed();
+                tracing::error!(
+                    "Confirmation waiting failed after {:?}: {}",
+                    elapsed,
+                    e
+                );
+
+                if let AmpError::Timeout(_) = &e {
+                    tracing::warn!(
+                        "Confirmation timeout - transaction {} may still be pending. \
+                        Use this txid to manually confirm the burn if it gets confirmed later.",
+                        txid
+                    );
+                    let timeout_error = AmpError::timeout(format!(
+                        "Confirmation timeout for txid: {txid}. Use this txid to manually confirm the burn."
+                    ));
+                    timeout_error.with_context("Step 13: Confirmation waiting")
+                } else {
+                    if e.is_retryable() {
+                        if let Some(instructions) = e.retry_instructions() {
+                            tracing::warn!("Retry instructions: {}", instructions);
+                        }
+                    }
+                    e.with_context(format!("Step 13: Confirmation waiting for txid: {txid}"))
+                }
+            })?;
+
+        tracing::info!("✓ Transaction confirmed with at least 2 confirmations");
+
+        // Step 14: Get transaction data and change data
+        tracing::debug!("Step 14: Retrieving transaction data and change information");
+
+        // Get transaction details (we only need txid for tx_data)
+        let tx_data = serde_json::json!({
+            "txid": txid
+        });
+
+        // Get change_data from listunspent with blinding data filtered by asset_id and txid
+        // We need to use list_unspent_with_blinding_data to get amountblinder and assetblinder fields
+        // required by the AMP API
+        let all_unspent = node_rpc
+            .list_unspent_with_blinding_data(wallet_name)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to list unspent outputs with blinding data: {}", e);
+                AmpError::rpc(format!("Failed to list unspent outputs with blinding data: {e}"))
+                    .with_context("Step 14: Change data retrieval")
+            })?;
+
+        // Filter and convert to JSON values, preserving all fields including blinding data
+        let change_data: Vec<serde_json::Value> = all_unspent
+            .into_iter()
+            .filter(|utxo| {
+                utxo.asset == burn_response.asset_id && utxo.txid == txid
+            })
+            .map(|utxo| {
+                // Serialize the full Unspent struct to JSON to include all fields
+                // including amountblinder and assetblinder which are required by the API
+                serde_json::to_value(&utxo).unwrap_or_else(|e| {
+                    tracing::warn!("Failed to serialize UTXO to JSON: {}", e);
+                    // Fallback to manual construction if serialization fails
+                    serde_json::json!({
+                        "txid": utxo.txid,
+                        "vout": utxo.vout,
+                        "address": utxo.address,
+                        "amount": utxo.amount,
+                        "asset": utxo.asset,
+                        "spendable": utxo.spendable,
+                        "amountblinder": utxo.amountblinder,
+                        "assetblinder": utxo.assetblinder
+                    })
+                })
+            })
+            .collect();
+
+        tracing::info!(
+            "✓ Retrieved transaction data and {} change output(s) for txid {}",
+            change_data.len(),
+            txid
+        );
+
+        // Step 15: Confirm burn with AMP API
+        tracing::debug!("Step 15: Confirming burn with AMP API");
+
+        self.burn_confirm(asset_uuid, tx_data, change_data)
+            .await
+            .map_err(|e| {
+                tracing::error!("Burn confirmation failed: {}", e);
+
+                // For confirmation failures, always provide retry instructions with txid
+                let confirmation_error = AmpError::api(format!(
+                    "Failed to confirm burn: {e}. \
+                IMPORTANT: Transaction {txid} was successful on blockchain. \
+                Use this txid to manually retry confirmation."
+                ));
+
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
+                }
+
+                confirmation_error.with_context("Step 15: Burn confirmation")
+            })?;
+
+        tracing::info!(
+            "🎉 Asset burn completed successfully for asset: {} with transaction: {}",
             asset_uuid,
             txid
         );

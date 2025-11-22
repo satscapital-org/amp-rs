@@ -458,6 +458,13 @@ pub struct BurnCreate {
     pub utxos: Vec<Outpoint>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct BurnResponse {
+    pub success: bool,
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct BurnConfirmRequest {
     pub tx_data: serde_json::Value,

@@ -51,6 +51,10 @@ name = "reissue_asset_example"
 path = "examples/reissue_asset_example.rs"
 
 [[example]]
+name = "burn_asset_example"
+path = "examples/burn_asset_example.rs"
+
+[[example]]
 name = "asset_display_tui"
 path = "examples/asset_display_tui.rs"
 
