@@ -1241,11 +1241,11 @@ pub fn mock_get_asset_distribution(server: &MockServer) {
     });
 }
 
-/// Sets up a mock for the GET /assets/{asset_uuid}/balance endpoint.
+/// Sets up a mock for the `GET /assets/{asset_uuid}/balance` endpoint.
 ///
-/// This mock returns a balance response as Vec<GaidBalanceEntry> (empty array).
-/// Note: The reissue_asset method uses request_json directly to get lost_outputs,
-/// but the public get_asset_balance method returns Balance (Vec<GaidBalanceEntry>).
+/// This mock returns a balance response as `Vec<GaidBalanceEntry>` (empty array).
+/// Note: The `reissue_asset` method uses `request_json` directly to get `lost_outputs`,
+/// but the public `get_asset_balance` method returns `Balance` (`Vec<GaidBalanceEntry>`).
 pub fn mock_get_asset_balance(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/assets/mock_asset_uuid/balance");
@@ -1255,7 +1255,7 @@ pub fn mock_get_asset_balance(server: &MockServer) {
     });
 }
 
-/// Sets up a mock for the GET /assets/{asset_uuid}/summary endpoint.
+/// Sets up a mock for the `GET /assets/{asset_uuid}/summary` endpoint.
 ///
 /// This mock returns asset summary information including issued and reissued amounts.
 pub fn mock_get_asset_summary(server: &MockServer) {
@@ -1266,7 +1266,7 @@ pub fn mock_get_asset_summary(server: &MockServer) {
             .json_body(json!({
                 "asset_id": "mock_asset_id",
                 "reissuance_token_id": "mock_reissuance_token_id",
-                "issued": 2100000000000000i64,
+                "issued": 2_100_000_000_000_000_i64,
                 "reissued": 0,
                 "assigned": 0,
                 "distributed": 0,
@@ -1275,12 +1275,12 @@ pub fn mock_get_asset_summary(server: &MockServer) {
                 "registered_users": 0,
                 "active_registered_users": 0,
                 "active_green_subaccounts": 0,
-                "reissuance_tokens": 100000
+                "reissuance_tokens": 100_000
             }));
     });
 }
 
-/// Sets up a mock for the GET /assets/{asset_uuid}/summary endpoint with reissued amount.
+/// Sets up a mock for the `GET /assets/{asset_uuid}/summary` endpoint with reissued amount.
 ///
 /// This mock returns asset summary with a non-zero reissued amount (for after reissuance).
 pub fn mock_get_asset_summary_with_reissued(server: &MockServer) {
@@ -1291,8 +1291,8 @@ pub fn mock_get_asset_summary_with_reissued(server: &MockServer) {
             .json_body(json!({
                 "asset_id": "mock_asset_id",
                 "reissuance_token_id": "mock_reissuance_token_id",
-                "issued": 2100000000000000i64,
-                "reissued": 1000000000,
+                "issued": 2_100_000_000_000_000_i64,
+                "reissued": 1_000_000_000,
                 "assigned": 0,
                 "distributed": 0,
                 "burned": 0,
@@ -1300,14 +1300,14 @@ pub fn mock_get_asset_summary_with_reissued(server: &MockServer) {
                 "registered_users": 0,
                 "active_registered_users": 0,
                 "active_green_subaccounts": 0,
-                "reissuance_tokens": 100000
+                "reissuance_tokens": 100_000
             }));
     });
 }
 
-/// Sets up a mock for a reissuable asset (GET /assets/{asset_uuid}).
+/// Sets up a mock for a reissuable asset (`GET /assets/{asset_uuid}`).
 ///
-/// This mock returns an asset with reissuance_token_id set, indicating it's reissuable.
+/// This mock returns an asset with `reissuance_token_id` set, indicating it's reissuable.
 pub fn mock_get_reissuable_asset(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/assets/mock_asset_uuid");
@@ -1373,7 +1373,7 @@ pub fn mock_reissue_confirm(server: &MockServer) {
             .json_body(json!({
                 "txid": "mock_reissuance_txid",
                 "vin": 1,
-                "reissuance_amount": 1000000000
+                "reissuance_amount": 1_000_000_000
             }));
     });
 }
