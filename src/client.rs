@@ -2788,14 +2788,14 @@ impl ElementsRpc {
     /// Gets the balance for all assets or a specific asset
     ///
     /// This method calls the Elements node's `getbalance` RPC to retrieve
-    /// the wallet balance. If an asset_id is provided, returns the balance
+    /// the wallet balance. If an `asset_id` is provided, returns the balance
     /// for that specific asset. If None, returns balances for all assets.
     ///
     /// # Arguments
     /// * `asset_id` - Optional asset ID to get balance for. If None, returns all asset balances
     ///
     /// # Returns
-    /// Returns a JSON value containing asset balances (as a map of asset_id -> balance)
+    /// Returns a JSON value containing asset balances (as a map of `asset_id` -> balance)
     ///
     /// # Errors
     /// Returns an error if the RPC call fails
@@ -2837,7 +2837,7 @@ impl ElementsRpc {
 
         tracing::debug!(
             "Retrieved balances for {} assets",
-            balances.as_object().map_or(0, |m| m.len())
+            balances.as_object().map_or(0, serde_json::Map::len)
         );
 
         Ok(balances)
@@ -11559,6 +11559,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`burn_confirm`](Self::burn_confirm) - Confirm a burn transaction
     /// - [`burn_asset`](Self::burn_asset) - Complete burn workflow
+    #[allow(clippy::cognitive_complexity)]
     pub async fn burn_request(
         &self,
         asset_uuid: &str,
@@ -11619,7 +11620,7 @@ impl ApiClient {
     /// # Arguments
     /// * `asset_uuid` - The UUID of the asset that was burned
     /// * `tx_data` - Transaction data from `gettransaction` RPC call (as JSON Value, containing at least txid)
-    /// * `change_data` - Change data from `listunspent` RPC call filtered by asset_id and txid (as JSON Values)
+    /// * `change_data` - Change data from `listunspent` RPC call filtered by `asset_id` and txid (as JSON Values)
     ///
     /// # Returns
     /// Returns `Ok(())` on success (the API returns an empty response with status 200)
@@ -11636,6 +11637,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`burn_request`](Self::burn_request) - Create a burn request
     /// - [`burn_asset`](Self::burn_asset) - Complete burn workflow
+    #[allow(clippy::cognitive_complexity)]
     pub async fn burn_confirm(
         &self,
         asset_uuid: &str,
@@ -13145,14 +13147,13 @@ impl ApiClient {
         // Extract balance for the specific asset_id (getbalance returns a map)
         let local_amount = balances
             .get(&burn_response.asset_id)
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let requested_amount = burn_response.amount;
 
         if local_amount < requested_amount {
             let error_msg = format!(
-                "Insufficient balance: local balance ({}) is lower than requested amount ({})",
-                local_amount, requested_amount
+                "Insufficient balance: local balance ({local_amount}) is lower than requested amount ({requested_amount})"
             );
             tracing::error!("{}", error_msg);
             return Err(AmpError::rpc(error_msg).with_context("Step 11: Balance verification"));
