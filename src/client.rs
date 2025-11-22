@@ -2670,14 +2670,13 @@ impl ElementsRpc {
             })?;
 
         // Extract txid and vin from result for logging
-        let txid = result.get("txid").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let txid = result
+            .get("txid")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
         let vin = result.get("vin").and_then(|v| v.as_u64()).unwrap_or(0);
 
-        tracing::info!(
-            "Reissuance transaction created: txid={}, vin={}",
-            txid,
-            vin
-        );
+        tracing::info!("Reissuance transaction created: txid={}, vin={}", txid, vin);
 
         Ok(result)
     }
@@ -11252,13 +11251,14 @@ impl ApiClient {
         }
 
         if amount_to_reissue <= 0 {
-            tracing::error!("Reissuance request failed: invalid amount {}", amount_to_reissue);
+            tracing::error!(
+                "Reissuance request failed: invalid amount {}",
+                amount_to_reissue
+            );
             return Err(AmpError::validation("Amount to reissue must be positive"));
         }
 
-        let request = ReissueRequest {
-            amount_to_reissue,
-        };
+        let request = ReissueRequest { amount_to_reissue };
 
         let response: crate::model::ReissueRequestResponse = self
             .request_json(
@@ -12346,7 +12346,10 @@ impl ApiClient {
         tracing::info!("✓ Successfully authenticated with AMP API");
 
         // Step 6: Create reissuance request and parse response data
-        tracing::debug!("Step 6: Creating reissuance request with amount {}", amount_to_reissue);
+        tracing::debug!(
+            "Step 6: Creating reissuance request with amount {}",
+            amount_to_reissue
+        );
         let reissue_response = self
             .reissue_request(asset_uuid, amount_to_reissue)
             .await
@@ -12579,32 +12582,27 @@ impl ApiClient {
             "vin": vin
         });
 
-        self.reissue_confirm(
-            asset_uuid,
-            details,
-            listissuances,
-            reissuance_output_value,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!("Reissuance confirmation failed: {}", e);
+        self.reissue_confirm(asset_uuid, details, listissuances, reissuance_output_value)
+            .await
+            .map_err(|e| {
+                tracing::error!("Reissuance confirmation failed: {}", e);
 
-            // For confirmation failures, always provide retry instructions with txid
-            let confirmation_error = AmpError::api(format!(
-                "Failed to confirm reissuance: {}. \
+                // For confirmation failures, always provide retry instructions with txid
+                let confirmation_error = AmpError::api(format!(
+                    "Failed to confirm reissuance: {}. \
                 IMPORTANT: Transaction {} was successful on blockchain. \
                 Use this txid to manually retry confirmation.",
-                e, txid
-            ));
+                    e, txid
+                ));
 
-            if e.is_retryable() {
-                if let Some(instructions) = e.retry_instructions() {
-                    tracing::warn!("Retry instructions: {}", instructions);
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
                 }
-            }
 
-            confirmation_error.with_context("Step 14: Reissuance confirmation")
-        })?;
+                confirmation_error.with_context("Step 14: Reissuance confirmation")
+            })?;
 
         tracing::info!(
             "🎉 Asset reissuance completed successfully for asset: {} with transaction: {}",

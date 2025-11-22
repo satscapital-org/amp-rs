@@ -57,7 +57,10 @@ fn print_usage() {
     println!("  TEST_ASSET_UUID    Asset UUID (alternative to command line argument, uses default if not set)");
     println!();
     println!("Default Asset:");
-    println!("  If no asset UUID is provided, uses default: {}", DEFAULT_ASSET_UUID);
+    println!(
+        "  If no asset UUID is provided, uses default: {}",
+        DEFAULT_ASSET_UUID
+    );
     println!("  (Created by create_issue_authorize_reissuable_asset example)");
     println!("  AMP_TESTS          Must be set to 'live' for live API testing");
     println!("  AMP_USERNAME       AMP API username");
@@ -106,11 +109,18 @@ async fn main() -> Result<(), AmpError> {
 
     println!("\n📋 Configuration:");
     println!("   Asset UUID: {}", asset_uuid);
-    println!("   Reissuance Amount: {} whole units", REISSUANCE_AMOUNT_WHOLE_UNITS);
-    
+    println!(
+        "   Reissuance Amount: {} whole units",
+        REISSUANCE_AMOUNT_WHOLE_UNITS
+    );
+
     // Calculate amount in satoshis (whole units * 10^precision)
-    let reissuance_amount_satoshis = REISSUANCE_AMOUNT_WHOLE_UNITS * 10_i64.pow(ASSET_PRECISION as u32);
-    println!("   Reissuance Amount (satoshis): {}", reissuance_amount_satoshis);
+    let reissuance_amount_satoshis =
+        REISSUANCE_AMOUNT_WHOLE_UNITS * 10_i64.pow(ASSET_PRECISION as u32);
+    println!(
+        "   Reissuance Amount (satoshis): {}",
+        reissuance_amount_satoshis
+    );
 
     // Step 1: Initialize clients
     println!("\n1️⃣  Initializing clients");
@@ -165,7 +175,10 @@ async fn main() -> Result<(), AmpError> {
     println!("\n📊 Current Asset Summary:");
     println!("   Issued: {} satoshis", summary_before.issued);
     println!("   Reissued: {} satoshis", summary_before.reissued);
-    println!("   Total Supply: {} satoshis", summary_before.issued + summary_before.reissued);
+    println!(
+        "   Total Supply: {} satoshis",
+        summary_before.issued + summary_before.reissued
+    );
 
     // Step 3: Create signer (for future support, currently node RPC signs)
     println!("\n3️⃣  Setting up signer");
@@ -221,10 +234,15 @@ async fn main() -> Result<(), AmpError> {
 
     println!("📊 Updated Asset Summary:");
     println!("   Issued: {} satoshis (unchanged)", summary_after.issued);
-    println!("   Reissued: {} satoshis (was: {})", summary_after.reissued, summary_before.reissued);
-    println!("   Total Supply: {} satoshis (was: {})", 
+    println!(
+        "   Reissued: {} satoshis (was: {})",
+        summary_after.reissued, summary_before.reissued
+    );
+    println!(
+        "   Total Supply: {} satoshis (was: {})",
         summary_after.issued + summary_after.reissued,
-        summary_before.issued + summary_before.reissued);
+        summary_before.issued + summary_before.reissued
+    );
 
     let reissued_delta = summary_after.reissued - summary_before.reissued;
     println!("\n✅ Reissuance verified!");
@@ -246,12 +264,18 @@ async fn main() -> Result<(), AmpError> {
     println!("   Asset UUID: {}", asset_uuid);
     println!("   Asset Name: {}", asset.name);
     println!("   Asset ID: {}", asset.asset_id);
-    println!("   Amount Reissued: {} whole units ({} satoshis)", 
-        REISSUANCE_AMOUNT_WHOLE_UNITS, reissuance_amount_satoshis);
-    println!("   Previous Total Supply: {} satoshis", 
-        summary_before.issued + summary_before.reissued);
-    println!("   New Total Supply: {} satoshis", 
-        summary_after.issued + summary_after.reissued);
+    println!(
+        "   Amount Reissued: {} whole units ({} satoshis)",
+        REISSUANCE_AMOUNT_WHOLE_UNITS, reissuance_amount_satoshis
+    );
+    println!(
+        "   Previous Total Supply: {} satoshis",
+        summary_before.issued + summary_before.reissued
+    );
+    println!(
+        "   New Total Supply: {} satoshis",
+        summary_after.issued + summary_after.reissued
+    );
     println!();
     println!("🚀 The asset is now ready for:");
     println!("   • Distribution with increased supply");
@@ -260,4 +284,3 @@ async fn main() -> Result<(), AmpError> {
 
     Ok(())
 }
-

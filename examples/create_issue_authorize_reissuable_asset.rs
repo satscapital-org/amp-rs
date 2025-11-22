@@ -100,11 +100,22 @@ async fn main() -> Result<(), AmpError> {
     let reissuance_confidential_address = elements_rpc
         .get_confidential_address(WALLET_NAME, &reissuance_unconfidential_address)
         .await
-        .map_err(|e| AmpError::rpc(format!("Failed to derive reissuance confidential address: {}", e)))?;
+        .map_err(|e| {
+            AmpError::rpc(format!(
+                "Failed to derive reissuance confidential address: {}",
+                e
+            ))
+        })?;
 
     println!("✅ Successfully derived reissuance address pair:");
-    println!("   Reissuance Unconfidential: {}", reissuance_unconfidential_address);
-    println!("   Reissuance Confidential:   {}", reissuance_confidential_address);
+    println!(
+        "   Reissuance Unconfidential: {}",
+        reissuance_unconfidential_address
+    );
+    println!(
+        "   Reissuance Confidential:   {}",
+        reissuance_confidential_address
+    );
 
     // Step 2: Issue reissuable asset with maximum amount
     println!("\n2️⃣  Issuing reissuable asset with maximum circulation");
@@ -128,7 +139,7 @@ async fn main() -> Result<(), AmpError> {
         pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
         precision: Some(8),
         is_confidential: Some(true),
-        is_reissuable: Some(true), // Enable reissuance
+        is_reissuable: Some(true),                  // Enable reissuance
         reissuance_amount: Some(REISSUANCE_AMOUNT), // Set reissuance token amount
         reissuance_address: Some(reissuance_confidential_address.clone()), // Use second confidential address for reissuance tokens (must be different from destination)
         transfer_restricted: Some(false), // Allow free transfers for distribution tests
@@ -315,4 +326,3 @@ async fn main() -> Result<(), AmpError> {
 
     Ok(())
 }
-
