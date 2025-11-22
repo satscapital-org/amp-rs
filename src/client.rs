@@ -12992,6 +12992,7 @@ impl ApiClient {
     /// # Returns
     /// Returns `Ok(())` if successful, or an error if extraction/submission fails.
     /// Errors are logged but do not affect the main reissuance operation.
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     async fn extract_and_submit_reissuance_token_change_address(
         &self,
         asset_uuid: &str,
@@ -13007,7 +13008,7 @@ impl ApiClient {
         // Get asset to retrieve reissuance token ID
         let asset = self.get_asset(asset_uuid).await.map_err(|e| {
             tracing::error!("[Treasury Address Task] Failed to get asset: {}", e);
-            AmpError::api(format!("Failed to get asset: {}", e))
+            AmpError::api(format!("Failed to get asset: {e}"))
         })?;
 
         let reissuance_token_id = asset.reissuance_token_id.as_ref().ok_or_else(|| {
@@ -13071,7 +13072,7 @@ impl ApiClient {
                         "[Treasury Address Task] Failed to get treasury addresses: {}",
                         e
                     );
-                    AmpError::api(format!("Failed to get treasury addresses: {}", e))
+                    AmpError::api(format!("Failed to get treasury addresses: {e}"))
                 })?;
 
             if treasury_addresses.contains(&address) {
@@ -13088,14 +13089,14 @@ impl ApiClient {
                 address
             );
 
-            self.add_asset_treasury_addresses(asset_uuid, &[address.clone()])
+            self.add_asset_treasury_addresses(asset_uuid, std::slice::from_ref(&address))
                 .await
                 .map_err(|e| {
                     tracing::error!(
                         "[Treasury Address Task] Failed to add treasury address: {}",
                         e
                     );
-                    AmpError::api(format!("Failed to add treasury address: {}", e))
+                    AmpError::api(format!("Failed to add treasury address: {e}"))
                 })?;
 
             tracing::info!(
