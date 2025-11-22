@@ -2674,7 +2674,7 @@ impl ElementsRpc {
             .get("txid")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let vin = result.get("vin").and_then(|v| v.as_u64()).unwrap_or(0);
+        let vin = result.get("vin").and_then(serde_json::Value::as_u64).unwrap_or(0);
 
         tracing::info!("Reissuance transaction created: txid={}, vin={}", txid, vin);
 
@@ -2684,7 +2684,7 @@ impl ElementsRpc {
     /// Lists all issuances for a specific asset or all assets
     ///
     /// This method retrieves issuance information including initial issuances
-    /// and reissuances. If an asset_id is provided, only issuances for that
+    /// and reissuances. If an `asset_id` is provided, only issuances for that
     /// asset are returned.
     ///
     /// # Arguments
@@ -11228,6 +11228,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`reissue_confirm`](Self::reissue_confirm) - Confirm a completed reissuance
     /// - [`reissue_asset`](Self::reissue_asset) - Complete reissuance workflow
+    #[allow(clippy::cognitive_complexity)]
     pub async fn reissue_request(
         &self,
         asset_uuid: &str,
@@ -11269,7 +11270,7 @@ impl ApiClient {
             .await
             .map_err(|e| {
                 tracing::error!("Reissuance request failed: {}", e);
-                AmpError::api(format!("Failed to create reissuance request: {}", e))
+                AmpError::api(format!("Failed to create reissuance request: {e}"))
                     .with_context("Reissuance request creation")
             })?;
 
@@ -11350,6 +11351,7 @@ impl ApiClient {
     /// # Related Methods
     /// - [`reissue_request`](Self::reissue_request) - Create a reissuance request
     /// - [`reissue_asset`](Self::reissue_asset) - Complete reissuance workflow
+    #[allow(clippy::cognitive_complexity)]
     pub async fn reissue_confirm(
         &self,
         asset_uuid: &str,
@@ -11365,12 +11367,11 @@ impl ApiClient {
         // Extract txid for logging (clone to avoid borrow checker issue)
         let txid = reissuance_output
             .get("txid")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unknown".to_string());
+            .and_then(serde_json::Value::as_str)
+            .map_or_else(|| "unknown".to_string(), std::string::ToString::to_string);
         let vin = reissuance_output
             .get("vin")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
         tracing::debug!(
@@ -12401,7 +12402,7 @@ impl ApiClient {
             .await
             .map_err(|e| {
                 tracing::error!("Failed to check lost outputs: {}", e);
-                AmpError::api(format!("Balance check failed: {}", e))
+                AmpError::api(format!("Balance check failed: {e}"))
                     .with_context("Step 9: Lost outputs check")
             })?;
 
@@ -12429,14 +12430,14 @@ impl ApiClient {
 
         let available_utxos = node_rpc.list_unspent(None).await.map_err(|e| {
             tracing::error!("Failed to list UTXOs: {}", e);
-            AmpError::rpc(format!("Failed to list UTXOs: {}", e))
+            AmpError::rpc(format!("Failed to list UTXOs: {e}"))
                 .with_context("Step 10: UTXO verification")
         })?;
 
         // Check that all required reissuance UTXOs are available
         let local_utxos: std::collections::HashSet<(String, i64)> = available_utxos
             .iter()
-            .map(|utxo| (utxo.txid.clone(), utxo.vout as i64))
+            .map(|utxo| (utxo.txid.clone(), i64::from(utxo.vout)))
             .collect();
 
         let mut missing_utxos = Vec::new();
@@ -12485,7 +12486,7 @@ impl ApiClient {
             })?;
         let vin = reissuance_output
             .get("vin")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .ok_or_else(|| {
                 AmpError::rpc("Reissuance output missing vin field".to_string())
                     .with_context("Step 11: Reissuance transaction creation")
@@ -12539,21 +12540,21 @@ impl ApiClient {
         // Get transaction details
         let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
             tracing::error!("Failed to get transaction details: {}", e);
-            AmpError::rpc(format!("Failed to get transaction details: {}", e))
+            AmpError::rpc(format!("Failed to get transaction details: {e}"))
                 .with_context("Step 13: Transaction details retrieval")
         })?;
 
         // Convert details to JSON Value
         let details = serde_json::to_value(tx_detail.details).map_err(|e| {
             tracing::error!("Failed to serialize transaction details: {}", e);
-            AmpError::api(format!("Failed to serialize transaction details: {}", e))
+            AmpError::api(format!("Failed to serialize transaction details: {e}"))
                 .with_context("Step 13: Transaction details serialization")
         })?;
 
         // Get all issuances and filter by txid
         let all_issuances = node_rpc.list_issuances(None).await.map_err(|e| {
             tracing::error!("Failed to list issuances: {}", e);
-            AmpError::rpc(format!("Failed to list issuances: {}", e))
+            AmpError::rpc(format!("Failed to list issuances: {e}"))
                 .with_context("Step 13: Issuance listing")
         })?;
 
@@ -12562,9 +12563,8 @@ impl ApiClient {
             .filter(|issuance| {
                 issuance
                     .get("txid")
-                    .and_then(|v| v.as_str())
-                    .map(|tid| tid == txid)
-                    .unwrap_or(false)
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|tid| tid == txid)
             })
             .collect();
 
@@ -12589,10 +12589,9 @@ impl ApiClient {
 
                 // For confirmation failures, always provide retry instructions with txid
                 let confirmation_error = AmpError::api(format!(
-                    "Failed to confirm reissuance: {}. \
-                IMPORTANT: Transaction {} was successful on blockchain. \
-                Use this txid to manually retry confirmation.",
-                    e, txid
+                    "Failed to confirm reissuance: {e}. \
+                IMPORTANT: Transaction {txid} was successful on blockchain. \
+                Use this txid to manually retry confirmation."
                 ));
 
                 if e.is_retryable() {
