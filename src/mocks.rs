@@ -1377,3 +1377,60 @@ pub fn mock_reissue_confirm(server: &MockServer) {
             }));
     });
 }
+
+/// Sets up a mock for the `POST /assets/{asset_uuid}/burn-request` endpoint.
+///
+/// This mock returns a burn request response with asset information and required UTXOs.
+pub fn mock_burn_request(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/burn-request")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "command": "destroyamount",
+                "min_supported_client_script_version": 1,
+                "base_url": "http://localhost:8080",
+                "asset_uuid": "mock_asset_uuid",
+                "asset_id": "mock_asset_id",
+                "amount": 1_000_000.0,
+                "utxos": [
+                    {
+                        "txid": "mock_txid_1",
+                        "vout": 0
+                    },
+                    {
+                        "txid": "mock_txid_2",
+                        "vout": 1
+                    }
+                ]
+            }));
+    });
+}
+
+/// Sets up a mock for the `POST /assets/{asset_uuid}/burn-confirm` endpoint.
+///
+/// This mock returns a successful empty response (200 OK with empty body) for burn confirmation.
+pub fn mock_burn_confirm(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/burn-confirm")
+            .header("content-type", "application/json");
+        then.status(200).body("");
+    });
+}
+
+/// Sets up a mock for the `GET /assets/{asset_uuid}/balance` endpoint used for checking lost outputs.
+///
+/// This mock returns an empty lost_outputs array indicating no lost outputs.
+pub fn mock_get_asset_balance_no_lost_outputs(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/balance");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "lost_outputs": []
+            }));
+    });
+}

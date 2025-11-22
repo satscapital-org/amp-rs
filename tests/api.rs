@@ -5115,3 +5115,229 @@ async fn test_get_reissuable_asset_mock() {
     // Cleanup
     cleanup_mock_test().await;
 }
+
+#[tokio::test]
+async fn test_burn_request_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_burn_request(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let result = client
+        .burn_request("mock_asset_uuid", 1_000_000)
+        .await;
+
+    assert!(result.is_ok());
+    let burn_create = result.unwrap();
+    assert_eq!(burn_create.asset_uuid, "mock_asset_uuid");
+    assert_eq!(burn_create.asset_id, "mock_asset_id");
+    assert_eq!(burn_create.amount, 1_000_000.0);
+    assert_eq!(burn_create.command, "destroyamount");
+    assert_eq!(burn_create.utxos.len(), 2);
+    assert_eq!(burn_create.utxos[0].txid, "mock_txid_1");
+    assert_eq!(burn_create.utxos[0].vout, 0);
+    assert_eq!(burn_create.utxos[1].txid, "mock_txid_2");
+    assert_eq!(burn_create.utxos[1].vout, 1);
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_burn_request_validation_errors() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    // Test empty asset UUID
+    let result = client.burn_request("", 1_000_000).await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("Asset UUID cannot be empty") || error.to_string().contains("empty"));
+
+    // Test invalid amount (zero)
+    let result = client.burn_request("mock_asset_uuid", 0).await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("positive") || error.to_string().contains("Amount"));
+
+    // Test invalid amount (negative)
+    let result = client.burn_request("mock_asset_uuid", -1).await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("positive") || error.to_string().contains("Amount"));
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_burn_confirm_mock() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+    mocks::mock_burn_confirm(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let tx_data = serde_json::json!({
+        "txid": "mock_txid"
+    });
+
+    let change_data = vec![serde_json::json!({
+        "txid": "mock_txid",
+        "vout": 0,
+        "address": "mock_address",
+        "amount": 100.0,
+        "asset": "mock_asset_id",
+        "spendable": true
+    })];
+
+    let result = client
+        .burn_confirm("mock_asset_uuid", tx_data, change_data)
+        .await;
+
+    assert!(result.is_ok());
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_burn_confirm_live() {
+    dotenvy::from_filename_override(".env").ok();
+    if env::var("AMP_TESTS").unwrap_or_default() != "live" {
+        println!("Skipping live test");
+        return;
+    }
+
+    // Ensure that the environment variables are set
+    if env::var("AMP_USERNAME").is_err() || env::var("AMP_PASSWORD").is_err() {
+        panic!("AMP_USERNAME and AMP_PASSWORD must be set for this test");
+    }
+
+    // Note: burn_confirm requires a valid transaction that was already created
+    // and confirmed on the blockchain. This is difficult to test in a live environment
+    // without actually performing a burn first. We'll skip this test for now as it
+    // requires complex setup with actual blockchain transactions.
+    println!("Skipping test_burn_confirm_live - requires actual burn transaction on blockchain");
+}
+
+#[tokio::test]
+async fn test_burn_confirm_validation_errors() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    let tx_data = serde_json::json!({
+        "txid": "mock_txid"
+    });
+
+    let change_data = vec![serde_json::json!({
+        "txid": "mock_txid",
+        "vout": 0
+    })];
+
+    // Test empty asset UUID
+    let result = client
+        .burn_confirm("", tx_data.clone(), change_data.clone())
+        .await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("Asset UUID cannot be empty") || error.to_string().contains("empty"));
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
+
+#[tokio::test]
+async fn test_burn_asset_validation_errors() {
+    // Setup mock test environment
+    setup_mock_test().await;
+
+    let server = MockServer::start();
+    mocks::mock_obtain_token(&server);
+
+    let client = ApiClient::with_mock_token(
+        Url::parse(&server.base_url()).unwrap(),
+        "mock_token".to_string(),
+    )
+    .unwrap();
+
+    // Test invalid UUID format
+    let (_, signer) = amp_rs::signer::LwkSoftwareSigner::generate_new_indexed(300).unwrap();
+    
+    // We can't easily mock ElementsRpc here, so we'll test the validation that happens before RPC calls
+    // Test empty asset UUID
+    let elements_rpc = amp_rs::ElementsRpc::new(
+        "http://localhost:18443".to_string(),
+        "user".to_string(),
+        "pass".to_string(),
+    );
+
+    // Note: This will fail at validation step before making any RPC calls
+    let result = client
+        .burn_asset("", 1_000_000, &elements_rpc, "wallet", &signer)
+        .await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    // Should fail at UUID validation
+    assert!(error.to_string().contains("UUID") || error.to_string().contains("empty") || error.to_string().contains("invalid"));
+
+    // Test invalid UUID format (not a valid UUID)
+    let result = client
+        .burn_asset("invalid-uuid", 1_000_000, &elements_rpc, "wallet", &signer)
+        .await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("UUID") || error.to_string().contains("format") || error.to_string().contains("5 parts"));
+
+    // Test invalid amount (zero)
+    let result = client
+        .burn_asset("550e8400-e29b-41d4-a716-446655440000", 0, &elements_rpc, "wallet", &signer)
+        .await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("positive") || error.to_string().contains("Amount"));
+
+    // Test invalid amount (negative)
+    let result = client
+        .burn_asset("550e8400-e29b-41d4-a716-446655440000", -1, &elements_rpc, "wallet", &signer)
+        .await;
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("positive") || error.to_string().contains("Amount"));
+
+    // Cleanup
+    cleanup_mock_test().await;
+}
