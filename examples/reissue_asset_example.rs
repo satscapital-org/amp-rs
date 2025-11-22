@@ -40,7 +40,7 @@ use std::env;
 const REISSUANCE_AMOUNT_WHOLE_UNITS: i64 = 10; // 10 whole units
 const ASSET_PRECISION: i64 = 8; // 8 decimal places
 /// Default asset UUID for reissuance (created by create_issue_authorize_reissuable_asset example)
-const DEFAULT_ASSET_UUID: &str = "84e282bf-16bf-40e2-9d4f-5b25415a906a";
+const DEFAULT_ASSET_UUID: &str = "15e6c571-be37-4074-9d02-89724e8d5aca";
 
 fn print_usage() {
     println!("Usage:");
@@ -256,6 +256,8 @@ async fn main() -> Result<(), AmpError> {
     }
 
     // Step 6: Display success information
+    // Note: The reissuance token change address extraction and submission
+    // is now handled automatically by the reissue_asset method in a background task
     println!("\n🎉 Reissuance Complete!");
     println!("======================");
     println!("✅ Asset supply successfully expanded!");

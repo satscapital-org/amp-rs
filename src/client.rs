@@ -806,7 +806,7 @@ mod amp_error_tests {
 }
 
 /// Elements RPC client for blockchain operations
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ElementsRpc {
     client: reqwest::Client,
     base_url: String,
@@ -7961,11 +7961,11 @@ impl TokenManager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApiClient {
     client: Client,
     base_url: Url,
-    token_strategy: Box<dyn TokenStrategy>,
+    token_strategy: Arc<Box<dyn TokenStrategy>>,
 }
 
 #[allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
@@ -8012,7 +8012,7 @@ impl ApiClient {
         Ok(Self {
             client,
             base_url,
-            token_strategy,
+            token_strategy: Arc::new(token_strategy),
         })
     }
 
@@ -8053,7 +8053,7 @@ impl ApiClient {
         Ok(Self {
             client,
             base_url,
-            token_strategy,
+            token_strategy: Arc::new(token_strategy),
         })
     }
 
@@ -8074,7 +8074,7 @@ impl ApiClient {
         Ok(Self {
             client: Client::new(),
             base_url,
-            token_strategy,
+            token_strategy: Arc::new(token_strategy),
         })
     }
 
@@ -8096,7 +8096,7 @@ impl ApiClient {
         Ok(Self {
             client: Client::new(),
             base_url,
-            token_strategy,
+            token_strategy: Arc::new(token_strategy),
         })
     }
 
@@ -8134,7 +8134,7 @@ impl ApiClient {
         Ok(Self {
             client,
             base_url,
-            token_strategy,
+            token_strategy: Arc::new(token_strategy),
         })
     }
 
@@ -12821,6 +12821,48 @@ impl ApiClient {
         // Step 12: Wait for confirmations
         tracing::debug!("Step 12: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
         let confirmation_start = std::time::Instant::now();
+        
+        // First, wait for 1 confirmation before spawning treasury address task
+        node_rpc
+            .wait_for_confirmations(txid, Some(1), Some(10))
+            .await
+            .map_err(|e| {
+                let elapsed = confirmation_start.elapsed();
+                tracing::error!(
+                    "Confirmation waiting (1 conf) failed after {:?}: {}",
+                    elapsed,
+                    e
+                );
+                e.with_context(format!("Step 12: Waiting for 1 confirmation for txid: {txid}"))
+            })?;
+        
+        tracing::info!("✓ Transaction has 1 confirmation, spawning treasury address extraction task");
+        
+        // Spawn async task to extract and submit reissuance token change address
+        // This runs in parallel with the remaining confirmation wait
+        let asset_uuid_clone = asset_uuid.to_string();
+        let txid_clone = txid.to_string();
+        let client_clone = self.clone();
+        let node_rpc_clone = node_rpc.clone();
+        
+        tokio::spawn(async move {
+            if let Err(e) = client_clone
+                .extract_and_submit_reissuance_token_change_address(
+                    &asset_uuid_clone,
+                    &txid_clone,
+                    &node_rpc_clone,
+                )
+                .await
+            {
+                tracing::warn!(
+                    "Failed to extract/submit reissuance token change address: {}. \
+                    This is non-critical and does not affect the reissuance operation.",
+                    e
+                );
+            }
+        });
+        
+        // Continue waiting for the full 2 confirmations
         let _tx_detail = node_rpc
             .wait_for_confirmations(txid, Some(2), Some(10))
             .await
@@ -12930,6 +12972,145 @@ impl ApiClient {
         );
 
         Ok(())
+    }
+
+    /// Extracts the reissuance token change address from a reissuance transaction
+    /// and submits it to the asset's treasury addresses list.
+    ///
+    /// This method is called asynchronously after a reissuance transaction has 1 confirmation.
+    /// It runs in a separate task to avoid blocking the main reissuance flow.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset that was reissued
+    /// * `txid` - The transaction ID of the reissuance transaction
+    /// * `node_rpc` - Elements RPC client to query transaction details
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if successful, or an error if extraction/submission fails.
+    /// Errors are logged but do not affect the main reissuance operation.
+    async fn extract_and_submit_reissuance_token_change_address(
+        &self,
+        asset_uuid: &str,
+        txid: &str,
+        node_rpc: &ElementsRpc,
+    ) -> Result<(), AmpError> {
+        tracing::info!(
+            "[Treasury Address Task] Starting extraction for asset {} from txid {}",
+            asset_uuid,
+            txid
+        );
+
+        // Get asset to retrieve reissuance token ID
+        let asset = self.get_asset(asset_uuid).await.map_err(|e| {
+            tracing::error!("[Treasury Address Task] Failed to get asset: {}", e);
+            AmpError::api(format!("Failed to get asset: {}", e))
+        })?;
+
+        let reissuance_token_id = asset
+            .reissuance_token_id
+            .as_ref()
+            .ok_or_else(|| {
+                tracing::error!("[Treasury Address Task] Asset has no reissuance token ID");
+                AmpError::validation("Asset has no reissuance token ID".to_string())
+            })?;
+
+        tracing::debug!(
+            "[Treasury Address Task] Looking for reissuance token ID: {}",
+            reissuance_token_id
+        );
+
+        // Get transaction details
+        let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
+            tracing::error!("[Treasury Address Task] Failed to get transaction details: {}", e);
+            e
+        })?;
+
+        // Find the reissuance token change address
+        let mut change_address: Option<String> = None;
+        if let Some(details) = &tx_detail.details {
+            tracing::debug!(
+                "[Treasury Address Task] Scanning {} transaction detail entries",
+                details.len()
+            );
+
+            for (index, detail) in details.iter().enumerate() {
+                if let (Some(category), Some(asset_id), Some(address)) = (
+                    detail.get("category").and_then(|v| v.as_str()),
+                    detail.get("asset").and_then(|v| v.as_str()),
+                    detail.get("address").and_then(|v| v.as_str()),
+                ) {
+                    if category == "receive" && asset_id == reissuance_token_id {
+                        tracing::info!(
+                            "[Treasury Address Task] Found reissuance token receive address at index {}: {}",
+                            index,
+                            address
+                        );
+                        change_address = Some(address.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(address) = change_address {
+            tracing::info!(
+                "[Treasury Address Task] Extracted change address: {}",
+                address
+            );
+
+            // Check if address is already in treasury addresses
+            let treasury_addresses = self
+                .get_asset_treasury_addresses(asset_uuid)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "[Treasury Address Task] Failed to get treasury addresses: {}",
+                        e
+                    );
+                    AmpError::api(format!("Failed to get treasury addresses: {}", e))
+                })?;
+
+            if treasury_addresses.contains(&address) {
+                tracing::info!(
+                    "[Treasury Address Task] Address {} is already in treasury addresses list",
+                    address
+                );
+                return Ok(());
+            }
+
+            // Submit address to treasury addresses
+            tracing::debug!(
+                "[Treasury Address Task] Submitting address {} to treasury addresses",
+                address
+            );
+
+            self.add_asset_treasury_addresses(asset_uuid, &[address.clone()])
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "[Treasury Address Task] Failed to add treasury address: {}",
+                        e
+                    );
+                    AmpError::api(format!("Failed to add treasury address: {}", e))
+                })?;
+
+            tracing::info!(
+                "[Treasury Address Task] Successfully added {} to treasury addresses for asset {}",
+                address,
+                asset_uuid
+            );
+
+            Ok(())
+        } else {
+            tracing::warn!(
+                "[Treasury Address Task] Could not find reissuance token change address in transaction {}. \
+                This may be normal if all reissuance tokens were consumed.",
+                txid
+            );
+            Err(AmpError::validation(
+                "No reissuance token change address found".to_string(),
+            ))
+        }
     }
 
     /// Burns (destroys) a specific amount of an asset
