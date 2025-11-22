@@ -2618,6 +2618,122 @@ impl ElementsRpc {
         }
     }
 
+    /// Reissues an asset using the Elements RPC reissueasset command
+    ///
+    /// This method reissues the specified amount of an asset.
+    /// It requires the asset to be reissuable and the reissuance token to be available.
+    ///
+    /// # Arguments
+    /// * `asset_id` - The asset ID (hex string) to reissue
+    /// * `amount` - The amount to reissue (in satoshis for the asset)
+    ///
+    /// # Returns
+    /// Returns a JSON value containing the reissuance output with txid and vin fields
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset ID is invalid
+    /// - The asset is not reissuable
+    /// - The reissuance token is not available
+    /// - The RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    /// let result = rpc.reissueasset(asset_id, amount).await?;
+    /// println!("Reissuance txid: {}, vin: {}", result["txid"], result["vin"]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn reissueasset(
+        &self,
+        asset_id: &str,
+        amount: f64,
+    ) -> Result<serde_json::Value, AmpError> {
+        tracing::debug!("Reissuing asset {} with amount {}", asset_id, amount);
+
+        let params = serde_json::json!([asset_id, amount]);
+
+        let result: serde_json::Value = self
+            .rpc_call("reissueasset", params)
+            .await
+            .map_err(|e| {
+                e.with_context(format!(
+                    "Failed to reissue asset {asset_id}. \
+                    Ensure the asset is reissuable and the reissuance token is available in the wallet."
+                ))
+            })?;
+
+        // Extract txid and vin from result for logging
+        let txid = result.get("txid").and_then(|v| v.as_str()).unwrap_or("unknown");
+        let vin = result.get("vin").and_then(|v| v.as_u64()).unwrap_or(0);
+
+        tracing::info!(
+            "Reissuance transaction created: txid={}, vin={}",
+            txid,
+            vin
+        );
+
+        Ok(result)
+    }
+
+    /// Lists all issuances for a specific asset or all assets
+    ///
+    /// This method retrieves issuance information including initial issuances
+    /// and reissuances. If an asset_id is provided, only issuances for that
+    /// asset are returned.
+    ///
+    /// # Arguments
+    /// * `asset_id` - Optional asset ID to filter issuances by. If None, returns all issuances
+    ///
+    /// # Returns
+    /// Returns a vector of JSON values, each containing issuance information
+    ///
+    /// # Errors
+    /// Returns an error if the RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+    /// let issuances = rpc.list_issuances(Some(asset_id)).await?;
+    /// for issuance in issuances {
+    ///     if let Some(is_reissuance) = issuance.get("isreissuance").and_then(|v| v.as_bool()) {
+    ///         println!("Reissuance: {}", is_reissuance);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_issuances(
+        &self,
+        asset_id: Option<&str>,
+    ) -> Result<Vec<serde_json::Value>, AmpError> {
+        tracing::debug!("Listing issuances for asset: {:?}", asset_id);
+
+        let params = asset_id.map_or_else(
+            || serde_json::Value::Array(vec![]),
+            |asset| serde_json::json!([asset]),
+        );
+
+        let issuances: Vec<serde_json::Value> = self
+            .rpc_call("listissuances", params)
+            .await
+            .map_err(|e| e.with_context("Failed to list issuances"))?;
+
+        tracing::debug!("Found {} issuances", issuances.len());
+
+        Ok(issuances)
+    }
+
     /// Selects appropriate UTXOs to cover the required amount plus fees
     ///
     /// This method implements a simple UTXO selection algorithm that:
@@ -11064,6 +11180,247 @@ impl ApiClient {
         .await
     }
 
+    /// Requests reissuance data for an asset
+    ///
+    /// This method creates a reissuance request with the AMP API and returns
+    /// the necessary data to execute the reissuance transaction, including
+    /// asset information, amount, and required UTXOs.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to reissue
+    /// * `amount_to_reissue` - The amount to reissue (in satoshis for the asset)
+    ///
+    /// # Returns
+    /// Returns a `ReissueRequestResponse` containing:
+    /// - `command` - The command type ("reissue")
+    /// - `min_supported_client_script_version` - Minimum script version required
+    /// - `base_url` - Base URL for the AMP API
+    /// - `asset_uuid` - The asset UUID
+    /// - `asset_id` - The asset ID (hex string)
+    /// - `amount` - The amount to reissue
+    /// - `reissuance_utxos` - List of required reissuance token UTXOs
+    ///
+    /// # Errors
+    /// Returns an `AmpError` if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - The asset is not reissuable
+    /// - Insufficient reissuance tokens are available
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, AmpError};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await.map_err(AmpError::from)?;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    ///
+    /// let response = client.reissue_request(asset_uuid, amount).await?;
+    /// println!("Reissuance request created for asset: {}", response.asset_id);
+    /// println!("Amount to reissue: {}", response.amount);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`reissue_confirm`](Self::reissue_confirm) - Confirm a completed reissuance
+    /// - [`reissue_asset`](Self::reissue_asset) - Complete reissuance workflow
+    pub async fn reissue_request(
+        &self,
+        asset_uuid: &str,
+        amount_to_reissue: i64,
+    ) -> Result<crate::model::ReissueRequestResponse, AmpError> {
+        use crate::model::ReissueRequest;
+
+        let request_span = tracing::debug_span!("reissue_request", asset_uuid = %asset_uuid);
+        let _enter = request_span.enter();
+
+        tracing::debug!(
+            "Creating reissuance request for asset {} with amount {}",
+            asset_uuid,
+            amount_to_reissue
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Reissuance request failed: empty asset UUID");
+            return Err(AmpError::validation("Asset UUID cannot be empty"));
+        }
+
+        if amount_to_reissue <= 0 {
+            tracing::error!("Reissuance request failed: invalid amount {}", amount_to_reissue);
+            return Err(AmpError::validation("Amount to reissue must be positive"));
+        }
+
+        let request = ReissueRequest {
+            amount_to_reissue,
+        };
+
+        let response: crate::model::ReissueRequestResponse = self
+            .request_json(
+                Method::POST,
+                &["assets", asset_uuid, "reissue-request"],
+                Some(&request),
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!("Reissuance request failed: {}", e);
+                AmpError::api(format!("Failed to create reissuance request: {}", e))
+                    .with_context("Reissuance request creation")
+            })?;
+
+        tracing::info!(
+            "Reissuance request created successfully: asset_id={}, amount={}",
+            response.asset_id,
+            response.amount
+        );
+
+        Ok(response)
+    }
+
+    /// Confirms a completed reissuance transaction
+    ///
+    /// This method confirms a reissuance transaction that has been broadcast
+    /// to the Elements network. It provides the transaction details and issuance
+    /// information to the AMP API to register the reissuance.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset that was reissued
+    /// * `details` - Transaction details from `gettransaction` RPC call (as JSON Value)
+    /// * `listissuances` - List of issuances from `listissuances` RPC call for this transaction
+    /// * `reissuance_output` - Reissuance output containing txid and vin (as JSON Value)
+    ///
+    /// # Returns
+    /// Returns a `ReissueResponse` containing:
+    /// - `txid` - The transaction ID
+    /// - `vin` - The input index of the reissuance
+    /// - `reissuance_amount` - The amount that was reissued
+    ///
+    /// # Errors
+    /// Returns an `AmpError` if:
+    /// - Authentication fails or insufficient permissions
+    /// - The asset UUID is invalid or does not exist
+    /// - The transaction data is invalid or incomplete
+    /// - The reissuance transaction is not valid
+    /// - The HTTP request fails
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, AmpError, ElementsRpc};
+    /// # use serde_json::json;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await.map_err(AmpError::from)?;
+    /// let rpc = ElementsRpc::from_env()?;
+    ///
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let txid = "abc123...";
+    ///
+    /// // Get transaction details
+    /// let tx_detail = rpc.get_transaction(txid).await?;
+    /// let details = serde_json::to_value(&tx_detail.details).unwrap();
+    ///
+    /// // Get issuances for this transaction
+    /// let issuances = rpc.list_issuances(None).await?;
+    /// let listissuances: Vec<_> = issuances
+    ///     .into_iter()
+    ///     .filter(|i| i.get("txid").and_then(|v| v.as_str()) == Some(txid))
+    ///     .collect();
+    ///
+    /// let reissuance_output = json!({"txid": txid, "vin": 0});
+    ///
+    /// let response = client.reissue_confirm(
+    ///     asset_uuid,
+    ///     details,
+    ///     listissuances,
+    ///     reissuance_output,
+    /// ).await?;
+    ///
+    /// println!("Reissuance confirmed: txid={}, vin={}", response.txid, response.vin);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`reissue_request`](Self::reissue_request) - Create a reissuance request
+    /// - [`reissue_asset`](Self::reissue_asset) - Complete reissuance workflow
+    pub async fn reissue_confirm(
+        &self,
+        asset_uuid: &str,
+        details: serde_json::Value,
+        listissuances: Vec<serde_json::Value>,
+        reissuance_output: serde_json::Value,
+    ) -> Result<crate::model::ReissueResponse, AmpError> {
+        use crate::model::ReissueConfirmRequest;
+
+        let confirm_span = tracing::debug_span!("reissue_confirm", asset_uuid = %asset_uuid);
+        let _enter = confirm_span.enter();
+
+        // Extract txid for logging (clone to avoid borrow checker issue)
+        let txid = reissuance_output
+            .get("txid")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let vin = reissuance_output
+            .get("vin")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        tracing::debug!(
+            "Confirming reissuance for asset {} with txid {} vin {} ({} issuances)",
+            asset_uuid,
+            txid,
+            vin,
+            listissuances.len()
+        );
+
+        // Validate inputs
+        if asset_uuid.is_empty() {
+            tracing::error!("Reissuance confirmation failed: empty asset UUID");
+            return Err(AmpError::validation("Asset UUID cannot be empty"));
+        }
+
+        let request = ReissueConfirmRequest {
+            details,
+            listissuances,
+            reissuance_output,
+        };
+
+        let response: crate::model::ReissueResponse = self
+            .request_json(
+                Method::POST,
+                &["assets", asset_uuid, "reissue-confirm"],
+                Some(&request),
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!("Reissuance confirmation failed: {}", e);
+                AmpError::api(format!(
+                    "Failed to confirm reissuance for txid {}: {}. \
+                    IMPORTANT: Transaction {} was successful on blockchain. \
+                    You may need to retry confirmation with this txid.",
+                    &txid, e, &txid
+                ))
+                .with_context("Reissuance confirmation")
+            })?;
+
+        tracing::info!(
+            "Reissuance confirmed successfully: txid={}, vin={}, amount={}",
+            response.txid,
+            response.vin,
+            response.reissuance_amount
+        );
+
+        Ok(response)
+    }
+
     /// Gets a specific manager by ID.
     ///
     /// # Arguments
@@ -11851,6 +12208,406 @@ impl ApiClient {
 
         tracing::info!(
             "🎉 Asset distribution completed successfully for asset: {} with transaction: {}",
+            asset_uuid,
+            txid
+        );
+
+        Ok(())
+    }
+
+    /// Reissues an asset through a comprehensive workflow
+    ///
+    /// This method orchestrates the complete asset reissuance process:
+    /// 1. Validates input parameters (asset UUID format, amount)
+    /// 2. Verifies `ElementsRpc` connection and signer interface availability
+    /// 3. Authenticates with the AMP API using the client's token
+    /// 4. Creates a reissuance request via the AMP API
+    /// 5. Waits for transaction propagation and checks for lost outputs
+    /// 6. Verifies reissuance token UTXOs are available
+    /// 7. Calls the Elements node's `reissueasset` RPC method
+    /// 8. Waits for blockchain confirmations (2 confirmations minimum)
+    /// 9. Retrieves transaction details and issuance information
+    /// 10. Confirms the reissuance with the AMP API
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to reissue (must be valid UUID format)
+    /// * `amount_to_reissue` - The amount to reissue (in satoshis for the asset)
+    /// * `node_rpc` - `ElementsRpc` client for blockchain operations
+    /// * `signer` - Signer implementation for future support (currently not used, node RPC signs)
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the reissuance completes successfully, or an `AmpError` if:
+    /// - Input validation fails (invalid UUID format, invalid amount, etc.)
+    /// - `ElementsRpc` connection cannot be established
+    /// - Signer interface is not available
+    /// - Authentication with AMP API fails
+    /// - Reissuance request creation fails
+    /// - Lost outputs are detected
+    /// - Required UTXOs are not available
+    /// - Reissuance transaction creation fails
+    /// - Confirmation timeout occurs
+    /// - Reissuance confirmation with AMP API fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, ElementsRpc, AmpError};
+    /// # use amp_rs::signer::LwkSoftwareSigner;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await?;
+    /// let elements_rpc = ElementsRpc::from_env()?;
+    /// let (_, signer) = LwkSoftwareSigner::generate_new()?;
+    ///
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    ///
+    /// client.reissue_asset(asset_uuid, amount, &elements_rpc, &signer).await?;
+    /// println!("Reissuance completed successfully");
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Related Methods
+    /// - [`reissue_request`](Self::reissue_request) - Create a reissuance request only
+    /// - [`reissue_confirm`](Self::reissue_confirm) - Confirm a reissuance transaction only
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+    pub async fn reissue_asset(
+        &self,
+        asset_uuid: &str,
+        amount_to_reissue: i64,
+        node_rpc: &ElementsRpc,
+        signer: &dyn Signer,
+    ) -> Result<(), AmpError> {
+        let reissue_span = tracing::info_span!(
+            "reissue_asset",
+            asset_uuid = %asset_uuid,
+            amount_to_reissue = amount_to_reissue
+        );
+        let _enter = reissue_span.enter();
+
+        tracing::info!(
+            "Starting asset reissuance workflow for asset: {} with amount: {}",
+            asset_uuid,
+            amount_to_reissue
+        );
+
+        // Step 1: Input validation - asset_uuid format
+        tracing::debug!("Step 1: Validating asset UUID format");
+        Self::validate_asset_uuid(asset_uuid).map_err(|e| {
+            let error = AmpError::validation(format!("Invalid asset UUID: {e}"));
+            tracing::error!("Asset UUID validation failed: {}", e);
+            error.with_context("Step 1: Asset UUID validation")
+        })?;
+        tracing::debug!("Asset UUID validation passed");
+
+        // Step 2: Input validation - amount
+        tracing::debug!("Step 2: Validating reissuance amount");
+        if amount_to_reissue <= 0 {
+            let error = AmpError::validation("Amount to reissue must be positive".to_string());
+            tracing::error!("Amount validation failed: amount must be positive");
+            return Err(error.with_context("Step 2: Amount validation"));
+        }
+        tracing::debug!("Amount validation passed");
+
+        // Step 3: Check ElementsRpc connection availability
+        tracing::debug!("Step 3: Validating Elements RPC connection");
+        self.validate_elements_rpc_connection(node_rpc)
+            .await
+            .map_err(|e| {
+                let error = AmpError::rpc(format!("ElementsRpc connection validation failed: {e}"));
+                tracing::error!("Elements RPC connection validation failed: {}", e);
+                error.with_context("Step 3: Elements RPC connection validation")
+            })?;
+        tracing::debug!("Elements RPC connection validation passed");
+
+        // Step 4: Check signer interface availability (for future support)
+        tracing::debug!("Step 4: Validating signer interface");
+        self.validate_signer_interface(signer).await.map_err(|e| {
+            let error = AmpError::validation(format!("Signer interface validation failed: {e}"));
+            tracing::error!("Signer interface validation failed: {}", e);
+            error.with_context("Step 4: Signer interface validation")
+        })?;
+        tracing::debug!("Signer interface validation passed");
+
+        tracing::info!("✓ All input validations completed successfully");
+
+        // Step 5: Authenticate with AMP API using existing TokenManager
+        tracing::debug!("Step 5: Authenticating with AMP API");
+        let _token = self.token_strategy.get_token().await.map_err(|e| {
+            tracing::error!("AMP API authentication failed: {}", e);
+            let amp_error = AmpError::Existing(e);
+            if amp_error.is_retryable() {
+                if let Some(instructions) = amp_error.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
+                }
+            }
+            amp_error.with_context("Step 5: AMP API authentication")
+        })?;
+        tracing::info!("✓ Successfully authenticated with AMP API");
+
+        // Step 6: Create reissuance request and parse response data
+        tracing::debug!("Step 6: Creating reissuance request with amount {}", amount_to_reissue);
+        let reissue_response = self
+            .reissue_request(asset_uuid, amount_to_reissue)
+            .await
+            .map_err(|e| {
+                tracing::error!("Reissuance request creation failed: {}", e);
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
+                }
+                e.with_context("Step 6: Reissuance request creation")
+            })?;
+
+        tracing::info!(
+            "✓ Reissuance request created successfully: asset_id={}, amount={}",
+            reissue_response.asset_id,
+            reissue_response.amount
+        );
+
+        // Step 7: Verify Elements node status
+        tracing::debug!("Step 7: Verifying Elements node status");
+        let (network_info, blockchain_info) = node_rpc.get_node_status().await.map_err(|e| {
+            tracing::error!("Elements node status verification failed: {}", e);
+            if e.is_retryable() {
+                if let Some(instructions) = e.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
+                }
+            }
+            e.with_context("Step 7: Elements node status verification")
+        })?;
+
+        tracing::info!(
+            "✓ Elements node verified - chain: {}, blocks: {}, connections: {}",
+            blockchain_info.chain,
+            blockchain_info.blocks,
+            network_info.connections
+        );
+
+        // Step 8: Wait for transaction propagation (60 seconds as per Python script)
+        tracing::debug!("Step 8: Waiting for transaction propagation (60 seconds)");
+        tracing::info!("Waiting 60 seconds for transaction propagation...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        tracing::debug!("Transaction propagation wait completed");
+
+        // Step 9: Check for lost outputs
+        tracing::debug!("Step 9: Checking for lost outputs");
+        let balance_response: serde_json::Value = self
+            .request_json(Method::GET, &["assets", asset_uuid, "balance"], None::<&()>)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check lost outputs: {}", e);
+                AmpError::api(format!("Balance check failed: {}", e))
+                    .with_context("Step 9: Lost outputs check")
+            })?;
+
+        // Check if lost_outputs field exists and is not empty
+        if let Some(lost_outputs) = balance_response.get("lost_outputs") {
+            if let Some(lost_outputs_array) = lost_outputs.as_array() {
+                if !lost_outputs_array.is_empty() {
+                    let error_msg = format!(
+                        "Lost outputs detected: {}. Transaction will not be sent.",
+                        serde_json::to_string(&lost_outputs_array).unwrap_or_default()
+                    );
+                    tracing::error!("{}", error_msg);
+                    return Err(AmpError::api(error_msg).with_context("Step 9: Lost outputs check"));
+                }
+            }
+        }
+
+        tracing::info!("✓ No lost outputs detected");
+
+        // Step 10: Check UTXOs match reissuance_utxos from response
+        tracing::debug!(
+            "Step 10: Verifying {} reissuance token UTXOs are available",
+            reissue_response.reissuance_utxos.len()
+        );
+
+        let available_utxos = node_rpc.list_unspent(None).await.map_err(|e| {
+            tracing::error!("Failed to list UTXOs: {}", e);
+            AmpError::rpc(format!("Failed to list UTXOs: {}", e))
+                .with_context("Step 10: UTXO verification")
+        })?;
+
+        // Check that all required reissuance UTXOs are available
+        let local_utxos: std::collections::HashSet<(String, i64)> = available_utxos
+            .iter()
+            .map(|utxo| (utxo.txid.clone(), utxo.vout as i64))
+            .collect();
+
+        let mut missing_utxos = Vec::new();
+        for required_utxo in &reissue_response.reissuance_utxos {
+            if !local_utxos.contains(&(required_utxo.txid.clone(), required_utxo.vout)) {
+                missing_utxos.push(format!("{}:{}", required_utxo.txid, required_utxo.vout));
+            }
+        }
+
+        if !missing_utxos.is_empty() {
+            let error_msg = format!(
+                "Missing reissuance token UTXOs: {}. Ensure reissuance tokens are available in the wallet.",
+                missing_utxos.join(", ")
+            );
+            tracing::error!("{}", error_msg);
+            return Err(AmpError::rpc(error_msg).with_context("Step 10: UTXO verification"));
+        }
+
+        tracing::info!(
+            "✓ All {} reissuance token UTXOs are available",
+            reissue_response.reissuance_utxos.len()
+        );
+
+        // Step 11: Call Elements node's reissueasset RPC method
+        tracing::debug!("Step 11: Calling Elements reissueasset RPC method");
+        let reissuance_output = node_rpc
+            .reissueasset(&reissue_response.asset_id, reissue_response.amount)
+            .await
+            .map_err(|e| {
+                tracing::error!("Reissuance transaction creation failed: {}", e);
+                if e.is_retryable() {
+                    if let Some(instructions) = e.retry_instructions() {
+                        tracing::warn!("Retry instructions: {}", instructions);
+                    }
+                }
+                e.with_context("Step 11: Reissuance transaction creation")
+            })?;
+
+        // Extract txid and vin from reissuance output
+        let txid = reissuance_output
+            .get("txid")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                AmpError::rpc("Reissuance output missing txid field".to_string())
+                    .with_context("Step 11: Reissuance transaction creation")
+            })?;
+        let vin = reissuance_output
+            .get("vin")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| {
+                AmpError::rpc("Reissuance output missing vin field".to_string())
+                    .with_context("Step 11: Reissuance transaction creation")
+            })?;
+
+        tracing::info!(
+            "✓ Reissuance transaction created: txid={}, vin={}",
+            txid,
+            vin
+        );
+
+        // Step 12: Wait for confirmations
+        tracing::debug!("Step 12: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
+        let confirmation_start = std::time::Instant::now();
+        let _tx_detail = node_rpc
+            .wait_for_confirmations(txid, Some(2), Some(10))
+            .await
+            .map_err(|e| {
+                let elapsed = confirmation_start.elapsed();
+                tracing::error!(
+                    "Confirmation waiting failed after {:?}: {}",
+                    elapsed,
+                    e
+                );
+
+                if let AmpError::Timeout(_) = &e {
+                    tracing::warn!(
+                        "Confirmation timeout - transaction {} may still be pending. \
+                        Use this txid to manually confirm the reissuance if it gets confirmed later.",
+                        txid
+                    );
+                    let timeout_error = AmpError::timeout(format!(
+                        "Confirmation timeout for txid: {txid}. Use this txid to manually confirm the reissuance."
+                    ));
+                    timeout_error.with_context("Step 12: Confirmation waiting")
+                } else {
+                    if e.is_retryable() {
+                        if let Some(instructions) = e.retry_instructions() {
+                            tracing::warn!("Retry instructions: {}", instructions);
+                        }
+                    }
+                    e.with_context(format!("Step 12: Confirmation waiting for txid: {txid}"))
+                }
+            })?;
+
+        tracing::info!("✓ Transaction confirmed with at least 2 confirmations");
+
+        // Step 13: Get transaction details and issuance information
+        tracing::debug!("Step 13: Retrieving transaction details and issuance information");
+
+        // Get transaction details
+        let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
+            tracing::error!("Failed to get transaction details: {}", e);
+            AmpError::rpc(format!("Failed to get transaction details: {}", e))
+                .with_context("Step 13: Transaction details retrieval")
+        })?;
+
+        // Convert details to JSON Value
+        let details = serde_json::to_value(tx_detail.details).map_err(|e| {
+            tracing::error!("Failed to serialize transaction details: {}", e);
+            AmpError::api(format!("Failed to serialize transaction details: {}", e))
+                .with_context("Step 13: Transaction details serialization")
+        })?;
+
+        // Get all issuances and filter by txid
+        let all_issuances = node_rpc.list_issuances(None).await.map_err(|e| {
+            tracing::error!("Failed to list issuances: {}", e);
+            AmpError::rpc(format!("Failed to list issuances: {}", e))
+                .with_context("Step 13: Issuance listing")
+        })?;
+
+        let listissuances: Vec<serde_json::Value> = all_issuances
+            .into_iter()
+            .filter(|issuance| {
+                issuance
+                    .get("txid")
+                    .and_then(|v| v.as_str())
+                    .map(|tid| tid == txid)
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        tracing::info!(
+            "✓ Retrieved transaction details and {} issuance(s) for txid {}",
+            listissuances.len(),
+            txid
+        );
+
+        // Step 14: Confirm reissuance with AMP API
+        tracing::debug!("Step 14: Confirming reissuance with AMP API");
+
+        let reissuance_output_value = serde_json::json!({
+            "txid": txid,
+            "vin": vin
+        });
+
+        self.reissue_confirm(
+            asset_uuid,
+            details,
+            listissuances,
+            reissuance_output_value,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Reissuance confirmation failed: {}", e);
+
+            // For confirmation failures, always provide retry instructions with txid
+            let confirmation_error = AmpError::api(format!(
+                "Failed to confirm reissuance: {}. \
+                IMPORTANT: Transaction {} was successful on blockchain. \
+                Use this txid to manually retry confirmation.",
+                e, txid
+            ));
+
+            if e.is_retryable() {
+                if let Some(instructions) = e.retry_instructions() {
+                    tracing::warn!("Retry instructions: {}", instructions);
+                }
+            }
+
+            confirmation_error.with_context("Step 14: Reissuance confirmation")
+        })?;
+
+        tracing::info!(
+            "🎉 Asset reissuance completed successfully for asset: {} with transaction: {}",
             asset_uuid,
             txid
         );

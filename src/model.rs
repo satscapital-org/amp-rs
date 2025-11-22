@@ -338,7 +338,7 @@ pub struct Ownership {
     pub gaid: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Outpoint {
     pub txid: String,
     pub vout: i64,
@@ -354,6 +354,16 @@ pub struct GaidBalanceEntry {
 }
 
 pub type Balance = Vec<GaidBalanceEntry>;
+
+/// Asset balance response that includes lost outputs (used for checking before operations)
+#[derive(Debug, Deserialize, Serialize)]
+pub struct AssetBalanceResponse {
+    #[serde(flatten)]
+    pub balance: std::collections::HashMap<String, serde_json::Value>,
+    pub lost_outputs: LostOutputs,
+    #[serde(default)]
+    pub reissuance_lost_outputs: LostOutputs,
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AssetLostOutputs {
@@ -404,11 +414,32 @@ pub struct ReissueRequest {
     pub amount_to_reissue: i64,
 }
 
+/// Response from reissue-request endpoint
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ReissueRequestResponse {
+    pub command: String,
+    pub min_supported_client_script_version: i64,
+    pub base_url: String,
+    pub asset_uuid: String,
+    pub asset_id: String,
+    pub amount: f64,
+    pub reissuance_utxos: Vec<Outpoint>,
+}
+
+/// Request payload for reissue-confirm endpoint
 #[derive(Debug, Serialize)]
 pub struct ReissueConfirmRequest {
     pub details: serde_json::Value,
     pub listissuances: Vec<serde_json::Value>,
     pub reissuance_output: serde_json::Value,
+}
+
+/// Response from reissue-confirm endpoint
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ReissueResponse {
+    pub txid: String,
+    pub vin: i64,
+    pub reissuance_amount: i64,
 }
 
 #[derive(Debug, Serialize)]

@@ -43,6 +43,14 @@ name = "create_issue_authorize_asset"
 path = "examples/create_issue_authorize_asset.rs"
 
 [[example]]
+name = "create_issue_authorize_reissuable_asset"
+path = "examples/create_issue_authorize_reissuable_asset.rs"
+
+[[example]]
+name = "reissue_asset_example"
+path = "examples/reissue_asset_example.rs"
+
+[[example]]
 name = "asset_display_tui"
 path = "examples/asset_display_tui.rs"
 

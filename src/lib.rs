@@ -34,6 +34,7 @@ pub mod signer;
 pub use client::{AmpError, ApiClient, ElementsRpc, Error};
 pub use model::{
     AssetDistributionAssignment, ConfirmDistributionRequest, DistributionResponse,
-    DistributionTxData, ReceivedByAddress, TransactionDetail, TxInput, Unspent,
+    DistributionTxData, ReceivedByAddress, ReissueConfirmRequest, ReissueRequest,
+    ReissueRequestResponse, ReissueResponse, TransactionDetail, TxInput, Unspent,
 };
 pub use signer::{LwkSoftwareSigner, Signer, SignerError};
