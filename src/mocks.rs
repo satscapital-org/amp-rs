@@ -1423,7 +1423,7 @@ pub fn mock_burn_confirm(server: &MockServer) {
 
 /// Sets up a mock for the `GET /assets/{asset_uuid}/balance` endpoint used for checking lost outputs.
 ///
-/// This mock returns an empty lost_outputs array indicating no lost outputs.
+/// This mock returns an empty `lost_outputs` array indicating no lost outputs.
 pub fn mock_get_asset_balance_no_lost_outputs(server: &MockServer) {
     server.mock(|when, then| {
         when.method(GET).path("/assets/mock_asset_uuid/balance");
