@@ -36,7 +36,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Display results
     println!("Asset Summary:");
     println!("  Asset ID: {}", summary.asset_id);
-    println!("  Reissuance Tokens Available: {}", summary.reissuance_tokens);
+    println!(
+        "  Reissuance Tokens Available: {}",
+        summary.reissuance_tokens
+    );
     println!();
     println!("Additional Information:");
     println!("  Issued: {}", summary.issued);

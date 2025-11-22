@@ -10,7 +10,7 @@
 //!
 //! Make sure to set up your .env file with AMP_USERNAME and AMP_PASSWORD
 
-use amp_rs::{ApiClient, model::AssetActivityParams};
+use amp_rs::{model::AssetActivityParams, ApiClient};
 use std::env;
 
 #[tokio::main]
@@ -44,7 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Count activities by type (same approach as list_asset_activities)
     let mut type_counts: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
     for activity in &activities {
-        *type_counts.entry(activity.activity_type.clone()).or_insert(0) += 1;
+        *type_counts
+            .entry(activity.activity_type.clone())
+            .or_insert(0) += 1;
     }
 
     // Count reissuance activities - check for any activity type containing "reissue" or "Reissuance"
@@ -85,25 +87,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let total_supply = summary.issued + summary.reissued;
     let available = total_supply - summary.distributed - summary.burned - summary.blacklisted;
     println!("Calculated Values:");
-    println!("  Total Supply:           {:>12} (issued + reissued)", total_supply);
-    println!("  Available:              {:>12} (total - distributed - burned - blacklisted)", available);
+    println!(
+        "  Total Supply:           {:>12} (issued + reissued)",
+        total_supply
+    );
+    println!(
+        "  Available:              {:>12} (total - distributed - burned - blacklisted)",
+        available
+    );
 
     println!();
     println!("User Statistics:");
-    println!("  Total Registered Users:     {:>8}", summary.registered_users);
-    println!("  Active Registered Users:    {:>8}", summary.active_registered_users);
-    println!("  Active Green Subaccounts:   {:>8}", summary.active_green_subaccounts);
+    println!(
+        "  Total Registered Users:     {:>8}",
+        summary.registered_users
+    );
+    println!(
+        "  Active Registered Users:    {:>8}",
+        summary.active_registered_users
+    );
+    println!(
+        "  Active Green Subaccounts:   {:>8}",
+        summary.active_green_subaccounts
+    );
 
     println!();
     println!("Reissuance Capability:");
-    println!("  Reissuance Tokens Available: {:>8}", summary.reissuance_tokens);
+    println!(
+        "  Reissuance Tokens Available: {:>8}",
+        summary.reissuance_tokens
+    );
     println!("  Reissuance Events Count:     {:>8}", reissuance_count);
 
     let remaining_reissuances = summary.reissuance_tokens - reissuance_count;
-    println!("  Remaining Reissuances:       {:>8} (available - used)", remaining_reissuances);
+    println!(
+        "  Remaining Reissuances:       {:>8} (available - used)",
+        remaining_reissuances
+    );
 
     if remaining_reissuances > 0 {
-        println!("  ✓ This asset can be reissued {} more time(s)", remaining_reissuances);
+        println!(
+            "  ✓ This asset can be reissued {} more time(s)",
+            remaining_reissuances
+        );
     } else if summary.reissuance_tokens > 0 {
         println!("  ✗ This asset cannot be reissued (all tokens have been used)");
     } else {

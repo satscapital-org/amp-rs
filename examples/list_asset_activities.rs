@@ -9,7 +9,7 @@
 //!
 //! Make sure to set up your .env file with AMP_USERNAME and AMP_PASSWORD
 
-use amp_rs::{ApiClient, model::AssetActivityParams};
+use amp_rs::{model::AssetActivityParams, ApiClient};
 use std::env;
 
 #[tokio::main]
@@ -61,11 +61,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  Output Index:       {}", activity.vout);
         println!("  Block Height:       {}", activity.blockheight);
         println!("  Amount:             {}", activity.amount);
-        
+
         if let Some(registered_user) = activity.registered_user {
             println!("  Registered User:    {}", registered_user);
         }
-        
+
         // Show blinding factors (truncated for readability)
         if !activity.asset_blinder.is_empty() {
             let blinder_preview = if activity.asset_blinder.len() > 16 {
@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("  Asset Blinder:      {}", blinder_preview);
         }
-        
+
         if !activity.amount_blinder.is_empty() {
             let blinder_preview = if activity.amount_blinder.len() > 16 {
                 format!("{}...", &activity.amount_blinder[..16])
@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             println!("  Amount Blinder:     {}", blinder_preview);
         }
-        
+
         println!();
     }
 
@@ -92,12 +92,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("═══════════════════════════════════════════════════════════");
     println!("Activity Summary:");
     println!("═══════════════════════════════════════════════════════════");
-    
-    let mut type_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+    let mut type_counts: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for activity in &activities {
-        *type_counts.entry(activity.activity_type.clone()).or_insert(0) += 1;
+        *type_counts
+            .entry(activity.activity_type.clone())
+            .or_insert(0) += 1;
     }
-    
+
     for (activity_type, count) in type_counts.iter() {
         println!("  {:<20} {:>5}", activity_type, count);
     }

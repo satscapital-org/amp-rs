@@ -12821,7 +12821,7 @@ impl ApiClient {
         // Step 12: Wait for confirmations
         tracing::debug!("Step 12: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
         let confirmation_start = std::time::Instant::now();
-        
+
         // First, wait for 1 confirmation before spawning treasury address task
         node_rpc
             .wait_for_confirmations(txid, Some(1), Some(10))
@@ -12833,18 +12833,22 @@ impl ApiClient {
                     elapsed,
                     e
                 );
-                e.with_context(format!("Step 12: Waiting for 1 confirmation for txid: {txid}"))
+                e.with_context(format!(
+                    "Step 12: Waiting for 1 confirmation for txid: {txid}"
+                ))
             })?;
-        
-        tracing::info!("✓ Transaction has 1 confirmation, spawning treasury address extraction task");
-        
+
+        tracing::info!(
+            "✓ Transaction has 1 confirmation, spawning treasury address extraction task"
+        );
+
         // Spawn async task to extract and submit reissuance token change address
         // This runs in parallel with the remaining confirmation wait
         let asset_uuid_clone = asset_uuid.to_string();
         let txid_clone = txid.to_string();
         let client_clone = self.clone();
         let node_rpc_clone = node_rpc.clone();
-        
+
         tokio::spawn(async move {
             if let Err(e) = client_clone
                 .extract_and_submit_reissuance_token_change_address(
@@ -12861,7 +12865,7 @@ impl ApiClient {
                 );
             }
         });
-        
+
         // Continue waiting for the full 2 confirmations
         let _tx_detail = node_rpc
             .wait_for_confirmations(txid, Some(2), Some(10))
@@ -13006,13 +13010,10 @@ impl ApiClient {
             AmpError::api(format!("Failed to get asset: {}", e))
         })?;
 
-        let reissuance_token_id = asset
-            .reissuance_token_id
-            .as_ref()
-            .ok_or_else(|| {
-                tracing::error!("[Treasury Address Task] Asset has no reissuance token ID");
-                AmpError::validation("Asset has no reissuance token ID".to_string())
-            })?;
+        let reissuance_token_id = asset.reissuance_token_id.as_ref().ok_or_else(|| {
+            tracing::error!("[Treasury Address Task] Asset has no reissuance token ID");
+            AmpError::validation("Asset has no reissuance token ID".to_string())
+        })?;
 
         tracing::debug!(
             "[Treasury Address Task] Looking for reissuance token ID: {}",
@@ -13021,7 +13022,10 @@ impl ApiClient {
 
         // Get transaction details
         let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
-            tracing::error!("[Treasury Address Task] Failed to get transaction details: {}", e);
+            tracing::error!(
+                "[Treasury Address Task] Failed to get transaction details: {}",
+                e
+            );
             e
         })?;
 
