@@ -51,7 +51,9 @@ fn print_usage() {
     println!("  cargo run --example burn_asset_example");
     println!();
     println!("Arguments:");
-    println!("  ASSET_UUID    The UUID of the asset to burn (optional, uses default if not provided)");
+    println!(
+        "  ASSET_UUID    The UUID of the asset to burn (optional, uses default if not provided)"
+    );
     println!();
     println!("Environment Variables:");
     println!("  TEST_ASSET_UUID    Asset UUID (alternative to command line argument, uses default if not set)");
@@ -109,18 +111,11 @@ async fn main() -> Result<(), AmpError> {
 
     println!("\n📋 Configuration:");
     println!("   Asset UUID: {}", asset_uuid);
-    println!(
-        "   Burn Amount: {} whole units",
-        BURN_AMOUNT_WHOLE_UNITS
-    );
+    println!("   Burn Amount: {} whole units", BURN_AMOUNT_WHOLE_UNITS);
 
     // Calculate amount in satoshis (whole units * 10^precision)
-    let burn_amount_satoshis =
-        BURN_AMOUNT_WHOLE_UNITS * 10_i64.pow(ASSET_PRECISION as u32);
-    println!(
-        "   Burn Amount (satoshis): {}",
-        burn_amount_satoshis
-    );
+    let burn_amount_satoshis = BURN_AMOUNT_WHOLE_UNITS * 10_i64.pow(ASSET_PRECISION as u32);
+    println!("   Burn Amount (satoshis): {}", burn_amount_satoshis);
 
     // Step 1: Initialize clients
     println!("\n1️⃣  Initializing clients");
@@ -244,7 +239,9 @@ async fn main() -> Result<(), AmpError> {
     if burned_delta == burn_amount_satoshis {
         println!("   ✅ Amount matches expected value!");
     } else {
-        println!("   ⚠️  Amount differs from expected (this may be normal if there were previous burns)");
+        println!(
+            "   ⚠️  Amount differs from expected (this may be normal if there were previous burns)"
+        );
     }
 
     // Step 6: Display success information
@@ -276,4 +273,3 @@ async fn main() -> Result<(), AmpError> {
 
     Ok(())
 }
-

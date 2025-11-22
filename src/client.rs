@@ -2768,24 +2768,17 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn destroyamount(
-        &self,
-        asset_id: &str,
-        amount: f64,
-    ) -> Result<String, AmpError> {
+    pub async fn destroyamount(&self, asset_id: &str, amount: f64) -> Result<String, AmpError> {
         tracing::debug!("Burning asset {} with amount {}", asset_id, amount);
 
         let params = serde_json::json!([asset_id, amount]);
 
-        let result: String = self
-            .rpc_call("destroyamount", params)
-            .await
-            .map_err(|e| {
-                e.with_context(format!(
-                    "Failed to burn asset {asset_id}. \
+        let result: String = self.rpc_call("destroyamount", params).await.map_err(|e| {
+            e.with_context(format!(
+                "Failed to burn asset {asset_id}. \
                     Ensure sufficient balance exists in the wallet."
-                ))
-            })?;
+            ))
+        })?;
 
         tracing::info!("Burn transaction created: txid={}", result);
 
@@ -2822,10 +2815,7 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_balance(
-        &self,
-        asset_id: Option<&str>,
-    ) -> Result<serde_json::Value, AmpError> {
+    pub async fn get_balance(&self, asset_id: Option<&str>) -> Result<serde_json::Value, AmpError> {
         tracing::debug!("Getting balance for asset: {:?}", asset_id);
 
         // getbalance RPC signature: getbalance ( "dummy" minconf include_watchonly )
@@ -2845,7 +2835,10 @@ impl ElementsRpc {
             return Ok(serde_json::json!(0.0));
         }
 
-        tracing::debug!("Retrieved balances for {} assets", balances.as_object().map_or(0, |m| m.len()));
+        tracing::debug!(
+            "Retrieved balances for {} assets",
+            balances.as_object().map_or(0, |m| m.len())
+        );
 
         Ok(balances)
     }
@@ -13240,16 +13233,16 @@ impl ApiClient {
             .await
             .map_err(|e| {
                 tracing::error!("Failed to list unspent outputs with blinding data: {}", e);
-                AmpError::rpc(format!("Failed to list unspent outputs with blinding data: {e}"))
-                    .with_context("Step 14: Change data retrieval")
+                AmpError::rpc(format!(
+                    "Failed to list unspent outputs with blinding data: {e}"
+                ))
+                .with_context("Step 14: Change data retrieval")
             })?;
 
         // Filter and convert to JSON values, preserving all fields including blinding data
         let change_data: Vec<serde_json::Value> = all_unspent
             .into_iter()
-            .filter(|utxo| {
-                utxo.asset == burn_response.asset_id && utxo.txid == txid
-            })
+            .filter(|utxo| utxo.asset == burn_response.asset_id && utxo.txid == txid)
             .map(|utxo| {
                 // Serialize the full Unspent struct to JSON to include all fields
                 // including amountblinder and assetblinder which are required by the API
