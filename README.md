@@ -40,6 +40,15 @@ cargo run --example get_distribution_info asset-uuid-123 distribution-uuid-456
 # Create, issue, and authorize a new asset for distribution tests (requires live API)
 AMP_TESTS=live cargo run --example create_issue_authorize_asset
 
+# Create, issue, and authorize a reissuable asset (requires live API)
+AMP_TESTS=live cargo run --example create_issue_authorize_reissuable_asset
+
+# Reissue an asset to expand its supply (requires live API)
+AMP_TESTS=live cargo run --example reissue_asset_example -- <ASSET_UUID>
+
+# Burn an asset to reduce its supply (requires live API)
+AMP_TESTS=live cargo run --example burn_asset_example -- <ASSET_UUID>
+
 # Run end-to-end asset distribution workflow with specific asset and user (requires live API)
 cargo run --example end_to_end_distribution_example
 ```
@@ -218,10 +227,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 The following AMP API endpoints are not yet implemented in this client library. This list may not be exhaustive:
 
 ### Asset Operations
-- `POST /api/assets/{assetUuid}/reissue-request` - Request asset reissuance
-- `POST /api/assets/{assetUuid}/reissue-confirm` - Confirm asset reissuance
-- `POST /api/assets/{assetUuid}/burn-request` - Request asset burn
-- `POST /api/assets/{assetUuid}/burn-confirm` - Confirm asset burn
 - `GET /api/assets/{assetUuid}/reissuances` - Get asset reissuances
 - `GET /api/assets/{assetUuid}/txs` - Get asset transactions
 - `GET /api/assets/{assetUuid}/txs/{txid}` - Get specific asset transaction
@@ -500,13 +505,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Future Operations
+### Reissue an Asset
 
-The same signer setup and passing pattern will be used for upcoming operations:
+Reissuance allows you to expand the supply of a reissuable asset. The asset must have been created with `is_reissuable: true` and you must have reissuance tokens available in your wallet.
 
-- **Asset Reissuance**: `reissue_asset(asset_uuid, amount, &signer)`
-- **Asset Burning**: `burn_asset(asset_uuid, amount, &signer)`
-- **Advanced Distribution**: Enhanced distribution workflows with complex signing requirements
+```rust
+use amp_rs::{ApiClient, ElementsRpc, signer::LwkSoftwareSigner};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = ApiClient::new().await?;
+    let elements_rpc = ElementsRpc::from_env()?;
+    let (_, signer) = LwkSoftwareSigner::generate_new_indexed(200)?;
+
+    let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let amount_to_reissue = 1_000_000_000; // 10 whole units (for 8-decimal precision)
+
+    client.reissue_asset(asset_uuid, amount_to_reissue, &elements_rpc, &signer).await?;
+    println!("Reissuance completed successfully");
+
+    Ok(())
+}
+```
+
+You can also use the included example:
+
+```bash
+AMP_TESTS=live cargo run --example reissue_asset_example -- <ASSET_UUID>
+```
+
+### Burn an Asset
+
+Burning allows you to permanently destroy (reduce the supply of) an asset. You must have sufficient asset balance in your wallet to burn.
+
+```rust
+use amp_rs::{ApiClient, ElementsRpc, signer::LwkSoftwareSigner};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = ApiClient::new().await?;
+    let elements_rpc = ElementsRpc::from_env()?;
+    let (_, signer) = LwkSoftwareSigner::generate_new_indexed(300)?;
+
+    let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let amount_to_burn = 100_000_000; // 1 whole unit (for 8-decimal precision)
+    let wallet_name = "amp_elements_wallet_static_for_funding";
+
+    client.burn_asset(asset_uuid, amount_to_burn, &elements_rpc, wallet_name, &signer).await?;
+    println!("Burn completed successfully");
+
+    Ok(())
+}
+```
+
+You can also use the included example:
+
+```bash
+AMP_TESTS=live cargo run --example burn_asset_example -- <ASSET_UUID>
+```
 
 The signer abstraction ensures consistent transaction signing across all asset operations while maintaining security best practices for testnet development.
 

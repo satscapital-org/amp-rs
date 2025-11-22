@@ -11556,6 +11556,23 @@ impl ApiClient {
     /// - The HTTP request fails
     /// - The server returns an error status
     ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, AmpError};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await?;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    ///
+    /// let response = client.burn_request(asset_uuid, amount).await?;
+    /// println!("Burn request created for asset: {}", response.asset_id);
+    /// println!("Amount to burn: {}", response.amount);
+    /// println!("Required UTXOs: {:?}", response.utxos);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
     /// # Related Methods
     /// - [`burn_confirm`](Self::burn_confirm) - Confirm a burn transaction
     /// - [`burn_asset`](Self::burn_asset) - Complete burn workflow
@@ -11633,6 +11650,33 @@ impl ApiClient {
     /// - The burn transaction is not valid
     /// - The HTTP request fails
     /// - The server returns an error status
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::{ApiClient, AmpError};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), AmpError> {
+    /// let client = ApiClient::new().await?;
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    ///
+    /// let tx_data = serde_json::json!({
+    ///     "txid": "abc123def456..."
+    /// });
+    ///
+    /// let change_data = vec![serde_json::json!({
+    ///     "txid": "abc123def456...",
+    ///     "vout": 0,
+    ///     "address": "tlq1qq...",
+    ///     "amount": 100.0,
+    ///     "asset": "asset_id_here",
+    ///     "spendable": true
+    /// })];
+    ///
+    /// client.burn_confirm(asset_uuid, tx_data, change_data).await?;
+    /// println!("Burn confirmed successfully");
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Related Methods
     /// - [`burn_request`](Self::burn_request) - Create a burn request
