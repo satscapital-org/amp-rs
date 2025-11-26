@@ -159,15 +159,11 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
         .await;
 
     match reissue_result {
-        Ok(response) => {
+        Ok(()) => {
             let reissue_duration = reissue_start.elapsed();
             print_if_nocapture(&format!(
                 "✅ Reissuance completed successfully in {:?}",
                 reissue_duration
-            ));
-            print_if_nocapture(&format!(
-                "   Transaction: {}, vin: {}, amount: {}",
-                response.txid, response.vin, response.reissuance_amount
             ));
 
             // Wait for API to update
@@ -189,10 +185,6 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
             assert_eq!(
                 reissued_delta, amount_to_reissue,
                 "Reissued amount should match expected amount"
-            );
-            assert_eq!(
-                response.reissuance_amount, amount_to_reissue,
-                "Response reissuance_amount should match expected amount"
             );
 
             print_if_nocapture("🎉 End-to-end reissue_asset test completed successfully!");
