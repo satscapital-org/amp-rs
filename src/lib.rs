@@ -8,6 +8,7 @@
 //! - [`client`] - HTTP API client for AMP operations
 //! - [`model`] - Data structures for API requests and responses  
 //! - [`mocks`] - Mock implementations for testing
+//! - [`mock_client`] - Mock API client for integration testing
 //! - [`signer`] - Transaction signing implementations ⚠️ **TESTNET ONLY**
 //!
 //! ## Signer Security Warning
@@ -28,10 +29,12 @@
 
 pub mod client;
 pub mod mocks;
+pub mod mock_client;
 pub mod model;
 pub mod signer;
 
 pub use client::{AmpError, ApiClient, ElementsRpc, Error};
+pub use mock_client::MockApiClient;
 pub use model::{
     AssetDistributionAssignment, BurnConfirmRequest, BurnCreate, BurnRequest, BurnResponse,
     ConfirmDistributionRequest, DistributionResponse, DistributionTxData, ReceivedByAddress,
