@@ -189,13 +189,13 @@ impl MnemonicStorage {
     }
 
     /// Get the number of stored mnemonics
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.mnemonic.len()
     }
 
     /// Check if storage is empty
     #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.mnemonic.is_empty()
     }
 }

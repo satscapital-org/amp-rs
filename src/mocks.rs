@@ -1328,7 +1328,7 @@ pub fn mock_get_asset_reissuances(server: &MockServer) {
                     "txid": "abc123def456",
                     "vout": 0,
                     "destination_address": "lq1qqwxyz1234567890abcdefghijk",
-                    "reissuance_amount": 1000000000,
+                    "reissuance_amount": 1_000_000_000,
                     "confirmed_in_block": "block_hash_1",
                     "created": "2024-01-15T10:30:00Z"
                 },
@@ -1336,7 +1336,7 @@ pub fn mock_get_asset_reissuances(server: &MockServer) {
                     "txid": "def789ghi012",
                     "vout": 1,
                     "destination_address": "lq1qqabcd9876543210zyxwvuts",
-                    "reissuance_amount": 500000000,
+                    "reissuance_amount": 500_000_000,
                     "confirmed_in_block": "block_hash_2",
                     "created": "2024-02-20T14:45:00Z"
                 }
