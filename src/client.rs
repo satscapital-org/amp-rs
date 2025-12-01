@@ -3476,7 +3476,7 @@ impl ElementsRpc {
         }
 
         // Check if hex string has valid format (even length, valid hex characters)
-        if unsigned_tx_hex.len() % 2 != 0 {
+        if !unsigned_tx_hex.len().is_multiple_of(2) {
             return Err(AmpError::validation(
                 "Unsigned transaction hex must have even length".to_string(),
             ));
@@ -3518,7 +3518,7 @@ impl ElementsRpc {
         }
 
         // Check if signed transaction has valid hex format
-        if signed_tx_hex.len() % 2 != 0 {
+        if !signed_tx_hex.len().is_multiple_of(2) {
             return Err(AmpError::validation(
                 "Signed transaction hex must have even length".to_string(),
             ));
