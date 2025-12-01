@@ -35,7 +35,7 @@ pub use client::{AmpError, ApiClient, ElementsRpc, Error};
 pub use model::{
     AssetDistributionAssignment, BurnConfirmRequest, BurnCreate, BurnRequest, BurnResponse,
     ConfirmDistributionRequest, DistributionResponse, DistributionTxData, ReceivedByAddress,
-    ReissueConfirmRequest, ReissueRequest, ReissueRequestResponse, ReissueResponse,
+    Reissuance, ReissueConfirmRequest, ReissueRequest, ReissueRequestResponse, ReissueResponse,
     TransactionDetail, TxInput, Unspent,
 };
 pub use signer::{LwkSoftwareSigner, Signer, SignerError};
