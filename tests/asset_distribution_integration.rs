@@ -3216,7 +3216,12 @@ async fn test_distribution_with_existing_asset() -> Result<(), Box<dyn std::erro
     // Import the treasury address as watch-only to see UTXOs
     // Note: This won't allow spending, but will let us see if there are UTXOs
     if let Err(e) = node_rpc
-        .import_address(&wallet_name, treasury_address, Some("treasury"), Some(false))
+        .import_address(
+            &wallet_name,
+            treasury_address,
+            Some("treasury"),
+            Some(false),
+        )
         .await
     {
         println!(
