@@ -26,7 +26,7 @@
 //! - Isolated test assets
 //! - Proper cleanup to avoid test interference
 
-use amp_rs::signer::{LwkSoftwareSigner, Signer};
+use amp_rs::signer::LwkSoftwareSigner;
 use amp_rs::{ApiClient, ElementsRpc};
 use dotenvy;
 use serial_test::serial;
@@ -132,7 +132,7 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
     // Setup test asset
     const WALLET_NAME: &str = "test_wallet";
     print_if_nocapture("\n📦 Setting up reissuable test asset...");
-    let (asset_uuid, asset_name, asset_ticker) =
+    let (asset_uuid, asset_name, _asset_ticker) =
         setup_reissuable_test_asset(&api_client, &elements_rpc, WALLET_NAME).await?;
     print_if_nocapture(&format!(
         "✅ Created reissuable asset: {} ({})",
@@ -159,15 +159,11 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
         .await;
 
     match reissue_result {
-        Ok(response) => {
+        Ok(()) => {
             let reissue_duration = reissue_start.elapsed();
             print_if_nocapture(&format!(
                 "✅ Reissuance completed successfully in {:?}",
                 reissue_duration
-            ));
-            print_if_nocapture(&format!(
-                "   Transaction: {}, vin: {}, amount: {}",
-                response.txid, response.vin, response.reissuance_amount
             ));
 
             // Wait for API to update
@@ -189,10 +185,6 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
             assert_eq!(
                 reissued_delta, amount_to_reissue,
                 "Reissued amount should match expected amount"
-            );
-            assert_eq!(
-                response.reissuance_amount, amount_to_reissue,
-                "Response reissuance_amount should match expected amount"
             );
 
             print_if_nocapture("🎉 End-to-end reissue_asset test completed successfully!");
