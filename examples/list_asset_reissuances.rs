@@ -52,10 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Summary statistics
-        let total_reissued: i64 = reissuances
-            .iter()
-            .map(|r| r.reissuance_amount)
-            .sum();
+        let total_reissued: i64 = reissuances.iter().map(|r| r.reissuance_amount).sum();
         println!("Summary:");
         println!("  Total Reissuances: {}", reissuances.len());
         println!("  Total Amount Reissued: {}", total_reissued);

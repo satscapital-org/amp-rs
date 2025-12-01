@@ -8965,8 +8965,12 @@ impl ApiClient {
     /// # }
     /// ```
     pub async fn get_asset_reissuances(&self, asset_uuid: &str) -> Result<Vec<Reissuance>, Error> {
-        self.request_json(Method::GET, &["assets", asset_uuid, "reissuances"], None::<&()>)
-            .await
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "reissuances"],
+            None::<&()>,
+        )
+        .await
     }
 
     /// Gets the memo for a specific asset.

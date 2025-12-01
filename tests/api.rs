@@ -5106,19 +5106,25 @@ async fn test_get_asset_reissuances_mock() {
     assert!(result.is_ok());
     let reissuances = result.unwrap();
     assert_eq!(reissuances.len(), 2);
-    
+
     // Verify first reissuance
     assert_eq!(reissuances[0].txid, "abc123def456");
     assert_eq!(reissuances[0].vout, 0);
-    assert_eq!(reissuances[0].destination_address, "lq1qqwxyz1234567890abcdefghijk");
+    assert_eq!(
+        reissuances[0].destination_address,
+        "lq1qqwxyz1234567890abcdefghijk"
+    );
     assert_eq!(reissuances[0].reissuance_amount, 1000000000);
     assert_eq!(reissuances[0].confirmed_in_block, "block_hash_1");
     assert_eq!(reissuances[0].created, "2024-01-15T10:30:00Z");
-    
+
     // Verify second reissuance
     assert_eq!(reissuances[1].txid, "def789ghi012");
     assert_eq!(reissuances[1].vout, 1);
-    assert_eq!(reissuances[1].destination_address, "lq1qqabcd9876543210zyxwvuts");
+    assert_eq!(
+        reissuances[1].destination_address,
+        "lq1qqabcd9876543210zyxwvuts"
+    );
     assert_eq!(reissuances[1].reissuance_amount, 500000000);
     assert_eq!(reissuances[1].confirmed_in_block, "block_hash_2");
     assert_eq!(reissuances[1].created, "2024-02-20T14:45:00Z");
