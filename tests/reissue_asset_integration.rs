@@ -26,7 +26,7 @@
 //! - Isolated test assets
 //! - Proper cleanup to avoid test interference
 
-use amp_rs::signer::{LwkSoftwareSigner, Signer};
+use amp_rs::signer::LwkSoftwareSigner;
 use amp_rs::{ApiClient, ElementsRpc};
 use dotenvy;
 use serial_test::serial;
@@ -132,7 +132,7 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
     // Setup test asset
     const WALLET_NAME: &str = "test_wallet";
     print_if_nocapture("\n📦 Setting up reissuable test asset...");
-    let (asset_uuid, asset_name, asset_ticker) =
+    let (asset_uuid, asset_name, _asset_ticker) =
         setup_reissuable_test_asset(&api_client, &elements_rpc, WALLET_NAME).await?;
     print_if_nocapture(&format!(
         "✅ Created reissuable asset: {} ({})",

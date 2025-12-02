@@ -116,7 +116,7 @@ async fn main() {
 
     // Register the asset with the public registry
     let response = client.register_asset(asset_uuid).await.unwrap();
-    
+
     if response.success {
         println!("Asset registered successfully!");
         if let Some(message) = response.message {
@@ -227,7 +227,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 The following AMP API endpoints are not yet implemented in this client library. This list may not be exhaustive:
 
 ### Asset Operations
-- `GET /api/assets/{assetUuid}/reissuances` - Get asset reissuances
 - `GET /api/assets/{assetUuid}/txs` - Get asset transactions
 - `GET /api/assets/{assetUuid}/txs/{txid}` - Get specific asset transaction
 - `GET /api/assets/{assetUuid}/lost-outputs` - Get asset lost outputs
@@ -590,14 +589,14 @@ async fn fetch_ownerships_with_recovery(
         Ok(ownerships) => Ok(ownerships),
         Err(e) => {
             let error_string = format!("{}", e);
-            
+
             // Check if this is a null owner error (affects Issuer Tracked assets only)
             if error_string.contains("null") && error_string.contains("owner") {
                 // Extract raw response from error message
                 let error_lines: Vec<&str> = error_string.lines().collect();
                 let mut in_raw_response = false;
                 let mut raw_json_lines = Vec::new();
-                
+
                 for line in error_lines {
                     if line.contains("Raw Response:") {
                         in_raw_response = true;
@@ -607,9 +606,9 @@ async fn fetch_ownerships_with_recovery(
                         raw_json_lines.push(line);
                     }
                 }
-                
+
                 let raw_response = raw_json_lines.join("\n");
-                
+
                 if let Ok(mut ownerships_json) = serde_json::from_str::<serde_json::Value>(&raw_response) {
                     // Fix null owners by looking up via GAID
                     if let Some(array) = ownerships_json.as_array_mut() {
@@ -630,17 +629,17 @@ async fn fetch_ownerships_with_recovery(
                                 }
                             }
                         }
-                        
+
                         // Parse the fixed JSON into Ownership structs
                         let fixed_ownerships = serde_json::from_value::<Vec<Ownership>>(
                             serde_json::Value::Array(array.clone()),
                         )?;
-                        
+
                         return Ok(fixed_ownerships);
                     }
                 }
             }
-            
+
             // If not a null owner error or recovery failed, return original error
             Err(e)
         }

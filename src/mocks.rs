@@ -1305,6 +1305,57 @@ pub fn mock_get_asset_summary_with_reissued(server: &MockServer) {
     });
 }
 
+/// Sets up a mock for the `GET /assets/{asset_uuid}/reissuances` endpoint.
+///
+/// This mock returns a list of reissuances for the specified asset.
+///
+/// # Examples
+/// ```no_run
+/// # use httpmock::prelude::*;
+/// # use amp_rs::mocks::mock_get_asset_reissuances;
+/// let server = MockServer::start();
+/// mock_get_asset_reissuances(&server);
+///
+/// // Now requests to /assets/mock_asset_uuid/reissuances will return the mocked response
+/// ```
+pub fn mock_get_asset_reissuances(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/reissuances");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([
+                {
+                    "txid": "abc123def456",
+                    "vout": 0,
+                    "destination_address": "lq1qqwxyz1234567890abcdefghijk",
+                    "reissuance_amount": 1_000_000_000,
+                    "confirmed_in_block": "block_hash_1",
+                    "created": "2024-01-15T10:30:00Z"
+                },
+                {
+                    "txid": "def789ghi012",
+                    "vout": 1,
+                    "destination_address": "lq1qqabcd9876543210zyxwvuts",
+                    "reissuance_amount": 500_000_000,
+                    "confirmed_in_block": "block_hash_2",
+                    "created": "2024-02-20T14:45:00Z"
+                }
+            ]));
+    });
+}
+
+/// Sets up a mock for the `GET /assets/{asset_uuid}/reissuances` endpoint with no reissuances.
+///
+/// This mock returns an empty list indicating the asset has never been reissued.
+pub fn mock_get_asset_reissuances_empty(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/reissuances");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!([]));
+    });
+}
+
 /// Sets up a mock for a reissuable asset (`GET /assets/{asset_uuid}`).
 ///
 /// This mock returns an asset with `reissuance_token_id` set, indicating it's reissuable.

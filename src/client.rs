@@ -22,8 +22,8 @@ use crate::model::{
     Balance, BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
     ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
     GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
-    ReceivedByAddress, RegisterAssetResponse, TokenData, TokenInfo, TokenRequest, TokenResponse,
-    TransactionDetail, TxInput, Unspent, Utxo,
+    ReceivedByAddress, RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest,
+    TokenResponse, TransactionDetail, TxInput, Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -3476,7 +3476,7 @@ impl ElementsRpc {
         }
 
         // Check if hex string has valid format (even length, valid hex characters)
-        if unsigned_tx_hex.len() % 2 != 0 {
+        if !unsigned_tx_hex.len().is_multiple_of(2) {
             return Err(AmpError::validation(
                 "Unsigned transaction hex must have even length".to_string(),
             ));
@@ -3518,7 +3518,7 @@ impl ElementsRpc {
         }
 
         // Check if signed transaction has valid hex format
-        if signed_tx_hex.len() % 2 != 0 {
+        if !signed_tx_hex.len().is_multiple_of(2) {
             return Err(AmpError::validation(
                 "Signed transaction hex must have even length".to_string(),
             ));
@@ -8927,6 +8927,50 @@ impl ApiClient {
     pub async fn get_asset_utxos(&self, asset_uuid: &str) -> Result<Vec<Utxo>, Error> {
         self.request_json(Method::GET, &["assets", asset_uuid, "utxos"], None::<&()>)
             .await
+    }
+
+    /// Gets the reissuances for a specific asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to retrieve reissuances for
+    ///
+    /// # Returns
+    /// A vector of `Reissuance` objects containing information about all reissuances
+    /// performed for the specified asset, including:
+    /// - Transaction ID and output index
+    /// - Destination address
+    /// - Reissuance amount
+    /// - Block confirmation
+    /// - Creation timestamp
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    /// let reissuances = client.get_asset_reissuances("asset-uuid-123").await?;
+    /// for reissuance in reissuances {
+    ///     println!("Reissuance txid: {}, amount: {}", reissuance.txid, reissuance.reissuance_amount);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_reissuances(&self, asset_uuid: &str) -> Result<Vec<Reissuance>, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "reissuances"],
+            None::<&()>,
+        )
+        .await
     }
 
     /// Gets the memo for a specific asset.
