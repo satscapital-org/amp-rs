@@ -59,16 +59,16 @@
 //! ```
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
-use crate::client::{Error, AmpError};
+use crate::client::{AmpError, Error};
 use crate::model::{
     AddressGaidResponse, Asset, AssetSummary, Assignment, Balance, BroadcastResponse,
-    CategoryResponse, CreateAssetAssignmentRequest, Distribution,
-    EditAssetRequest, GaidBalanceEntry, IssuanceRequest, IssuanceResponse,
-    RegisteredUserResponse, RegisterAssetResponse, ValidateGaidResponse,
+    CategoryResponse, CreateAssetAssignmentRequest, Distribution, EditAssetRequest,
+    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, RegisterAssetResponse,
+    RegisteredUserResponse, ValidateGaidResponse,
 };
 
 /// Mock API Client that provides the same interface as ApiClient
@@ -145,13 +145,16 @@ impl MockApiClient {
             name: "Mock Asset".to_string(),
             asset_uuid: asset_uuid.clone(),
             issuer: 1,
-            asset_id: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            asset_id: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                .to_string(),
             reissuance_token_id: None,
             requirements: vec![],
             ticker: Some("MOCK".to_string()),
             precision: 8,
             domain: Some("mock.com".to_string()),
-            pubkey: Some("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string()),
+            pubkey: Some(
+                "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798".to_string(),
+            ),
             is_registered: true,
             is_authorized: true,
             is_locked: false,
@@ -159,7 +162,11 @@ impl MockApiClient {
             transfer_restricted: false,
         };
 
-        self.inner.assets.lock().unwrap().insert(asset_uuid.clone(), asset.clone());
+        self.inner
+            .assets
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.clone(), asset.clone());
 
         // Create default asset summary
         let summary = AssetSummary {
@@ -176,7 +183,11 @@ impl MockApiClient {
             active_green_subaccounts: 0,
             reissuance_tokens: 0,
         };
-        self.inner.asset_summaries.lock().unwrap().insert(asset_uuid.clone(), summary);
+        self.inner
+            .asset_summaries
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.clone(), summary);
 
         // Create a default user
         let user_id = 1;
@@ -200,11 +211,20 @@ impl MockApiClient {
 
         // Add GAID for user
         if let Some(ref gaid) = user.gaid {
-            self.inner.user_gaids.lock().unwrap().insert(user_id, vec![gaid.clone()]);
-            self.inner.gaid_validations.lock().unwrap().insert(gaid.clone(), true);
+            self.inner
+                .user_gaids
+                .lock()
+                .unwrap()
+                .insert(user_id, vec![gaid.clone()]);
+            self.inner
+                .gaid_validations
+                .lock()
+                .unwrap()
+                .insert(gaid.clone(), true);
             self.inner.gaid_addresses.lock().unwrap().insert(
                 gaid.clone(),
-                "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string(),
+                "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+                    .to_string(),
             );
             self.inner.gaid_balances.lock().unwrap().insert(
                 gaid.clone(),
@@ -225,13 +245,21 @@ impl MockApiClient {
             registered_users: vec![user_id],
             assets: vec![asset_uuid],
         };
-        self.inner.categories.lock().unwrap().insert(category_id, category);
+        self.inner
+            .categories
+            .lock()
+            .unwrap()
+            .insert(category_id, category);
     }
 
     /// Builder method to add an asset to the mock client
     pub fn with_asset(mut self, asset: Asset) -> Self {
         let asset_uuid = asset.asset_uuid.clone();
-        self.inner.assets.lock().unwrap().insert(asset_uuid.clone(), asset.clone());
+        self.inner
+            .assets
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.clone(), asset.clone());
         // Also create a default summary for this asset
         let summary = AssetSummary {
             asset_id: asset.asset_id.clone(),
@@ -245,9 +273,17 @@ impl MockApiClient {
             registered_users: 0,
             active_registered_users: 0,
             active_green_subaccounts: 0,
-            reissuance_tokens: asset.reissuance_token_id.as_ref().map(|_| 100_000).unwrap_or(0),
+            reissuance_tokens: asset
+                .reissuance_token_id
+                .as_ref()
+                .map(|_| 100_000)
+                .unwrap_or(0),
         };
-        self.inner.asset_summaries.lock().unwrap().insert(asset_uuid, summary);
+        self.inner
+            .asset_summaries
+            .lock()
+            .unwrap()
+            .insert(asset_uuid, summary);
         self
     }
 
@@ -264,34 +300,60 @@ impl MockApiClient {
         };
         self.inner.users.lock().unwrap().insert(user_id, user_clone);
         if let Some(ref gaid) = user.gaid {
-            self.inner.user_gaids.lock().unwrap().entry(user_id).or_insert_with(Vec::new).push(gaid.clone());
-            self.inner.gaid_validations.lock().unwrap().insert(gaid.clone(), true);
+            self.inner
+                .user_gaids
+                .lock()
+                .unwrap()
+                .entry(user_id)
+                .or_insert_with(Vec::new)
+                .push(gaid.clone());
+            self.inner
+                .gaid_validations
+                .lock()
+                .unwrap()
+                .insert(gaid.clone(), true);
         }
         self
     }
 
     /// Builder method to set GAID validation status
     pub fn with_gaid_validation(mut self, gaid: &str, is_valid: bool) -> Self {
-        self.inner.gaid_validations.lock().unwrap().insert(gaid.to_string(), is_valid);
+        self.inner
+            .gaid_validations
+            .lock()
+            .unwrap()
+            .insert(gaid.to_string(), is_valid);
         self
     }
 
     /// Builder method to set GAID address
     pub fn with_gaid_address(mut self, gaid: &str, address: &str) -> Self {
-        self.inner.gaid_addresses.lock().unwrap().insert(gaid.to_string(), address.to_string());
+        self.inner
+            .gaid_addresses
+            .lock()
+            .unwrap()
+            .insert(gaid.to_string(), address.to_string());
         self
     }
 
     /// Builder method to set GAID balance
     pub fn with_gaid_balance(mut self, gaid: &str, balance: Vec<GaidBalanceEntry>) -> Self {
-        self.inner.gaid_balances.lock().unwrap().insert(gaid.to_string(), balance);
+        self.inner
+            .gaid_balances
+            .lock()
+            .unwrap()
+            .insert(gaid.to_string(), balance);
         self
     }
 
     /// Builder method to add a category
     pub fn with_category(mut self, category: CategoryResponse) -> Self {
         let category_id = category.id;
-        self.inner.categories.lock().unwrap().insert(category_id, category);
+        self.inner
+            .categories
+            .lock()
+            .unwrap()
+            .insert(category_id, category);
         self
     }
 
@@ -341,9 +403,14 @@ impl MockApiClient {
     /// Issues a new asset
     pub async fn issue_asset(&self, request: &IssuanceRequest) -> Result<IssuanceResponse, Error> {
         let next_id = self.inner.next_asset_uuid.fetch_add(1, Ordering::SeqCst);
-        let asset_uuid = format!("{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-            next_id as u32, (next_id >> 32) as u16, (next_id >> 48) as u16,
-            ((next_id >> 16) & 0xffff) as u16, next_id as u64);
+        let asset_uuid = format!(
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+            next_id as u32,
+            (next_id >> 32) as u16,
+            (next_id >> 48) as u16,
+            ((next_id >> 16) & 0xffff) as u16,
+            next_id as u64
+        );
 
         let asset = Asset {
             name: request.name.clone(),
@@ -368,7 +435,11 @@ impl MockApiClient {
         };
 
         // Store the asset
-        self.inner.assets.lock().unwrap().insert(asset_uuid.clone(), asset.clone());
+        self.inner
+            .assets
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.clone(), asset.clone());
 
         // Create response
         let response = IssuanceResponse {
@@ -388,7 +459,11 @@ impl MockApiClient {
             txid: format!("{:064x}", next_id + 2000),
             vin: 0,
             asset_vout: 0,
-            reissuance_vout: if request.is_reissuable.unwrap_or(false) { Some(1) } else { None },
+            reissuance_vout: if request.is_reissuable.unwrap_or(false) {
+                Some(1)
+            } else {
+                None
+            },
             issuer_authorization_endpoint: None,
             transfer_restricted: request.transfer_restricted.unwrap_or(false),
             issuance_assetblinder: format!("{:064x}", next_id + 3000),
@@ -412,21 +487,34 @@ impl MockApiClient {
             registered_users: 0,
             active_registered_users: 0,
             active_green_subaccounts: 0,
-            reissuance_tokens: asset.reissuance_token_id.as_ref().map(|_| 100_000).unwrap_or(0),
+            reissuance_tokens: asset
+                .reissuance_token_id
+                .as_ref()
+                .map(|_| 100_000)
+                .unwrap_or(0),
         };
-        self.inner.asset_summaries.lock().unwrap().insert(asset_uuid, summary);
+        self.inner
+            .asset_summaries
+            .lock()
+            .unwrap()
+            .insert(asset_uuid, summary);
 
         Ok(response)
     }
 
     /// Edits an existing asset
-    pub async fn edit_asset(&self, asset_uuid: &str, _request: &EditAssetRequest) -> Result<Asset, Error> {
+    pub async fn edit_asset(
+        &self,
+        asset_uuid: &str,
+        _request: &EditAssetRequest,
+    ) -> Result<Asset, Error> {
         let mut assets = self.inner.assets.lock().unwrap();
         assets
             .get_mut(asset_uuid)
             .ok_or_else(|| Error::RequestFailed(format!("Asset not found: {}", asset_uuid)))
             .map(|asset| {
-                asset.issuer_authorization_endpoint = Some("https://example.com/authorize".to_string());
+                asset.issuer_authorization_endpoint =
+                    Some("https://example.com/authorize".to_string());
                 asset.clone()
             })
     }
@@ -450,7 +538,8 @@ impl MockApiClient {
     /// Deletes an asset
     pub async fn delete_asset(&self, asset_uuid: &str) -> Result<(), Error> {
         let mut assets = self.inner.assets.lock().unwrap();
-        assets.remove(asset_uuid)
+        assets
+            .remove(asset_uuid)
             .ok_or_else(|| Error::RequestFailed(format!("Asset not found: {}", asset_uuid)))
             .map(|_| ())
     }
@@ -519,14 +608,17 @@ impl MockApiClient {
     /// Gets all registered users
     pub async fn get_registered_users(&self) -> Result<Vec<RegisteredUserResponse>, Error> {
         let users = self.inner.users.lock().unwrap();
-        Ok(users.values().map(|u| RegisteredUserResponse {
-            id: u.id,
-            gaid: u.gaid.clone(),
-            is_company: u.is_company,
-            name: u.name.clone(),
-            categories: u.categories.clone(),
-            creator: u.creator,
-        }).collect())
+        Ok(users
+            .values()
+            .map(|u| RegisteredUserResponse {
+                id: u.id,
+                gaid: u.gaid.clone(),
+                is_company: u.is_company,
+                name: u.name.clone(),
+                categories: u.categories.clone(),
+                creator: u.creator,
+            })
+            .collect())
     }
 
     /// Gets a specific registered user by ID
@@ -546,7 +638,10 @@ impl MockApiClient {
     }
 
     /// Adds a registered user
-    pub async fn add_registered_user(&self, request: &crate::model::RegisteredUserAdd) -> Result<RegisteredUserResponse, Error> {
+    pub async fn add_registered_user(
+        &self,
+        request: &crate::model::RegisteredUserAdd,
+    ) -> Result<RegisteredUserResponse, Error> {
         let user_id = self.inner.next_user_id.fetch_add(1, Ordering::SeqCst);
         let user = RegisteredUserResponse {
             id: user_id,
@@ -567,7 +662,13 @@ impl MockApiClient {
         };
         self.inner.users.lock().unwrap().insert(user_id, user_clone);
         if let Some(ref gaid) = user.gaid {
-            self.inner.user_gaids.lock().unwrap().entry(user_id).or_insert_with(Vec::new).push(gaid.clone());
+            self.inner
+                .user_gaids
+                .lock()
+                .unwrap()
+                .entry(user_id)
+                .or_insert_with(Vec::new)
+                .push(gaid.clone());
         }
 
         Ok(RegisteredUserResponse {
@@ -583,13 +684,18 @@ impl MockApiClient {
     /// Deletes a registered user
     pub async fn delete_registered_user(&self, user_id: i64) -> Result<(), Error> {
         let mut users = self.inner.users.lock().unwrap();
-        users.remove(&user_id)
+        users
+            .remove(&user_id)
             .ok_or_else(|| Error::RequestFailed(format!("User not found: {}", user_id)))
             .map(|_| ())
     }
 
     /// Edits a registered user
-    pub async fn edit_registered_user(&self, user_id: i64, request: &crate::model::RegisteredUserEdit) -> Result<RegisteredUserResponse, Error> {
+    pub async fn edit_registered_user(
+        &self,
+        user_id: i64,
+        request: &crate::model::RegisteredUserEdit,
+    ) -> Result<RegisteredUserResponse, Error> {
         let mut users = self.inner.users.lock().unwrap();
         let user = users
             .get_mut(&user_id)
@@ -616,15 +722,26 @@ impl MockApiClient {
     }
 
     /// Adds a GAID to a registered user
-    pub async fn add_gaid_to_registered_user(&self, user_id: i64, request: &crate::model::GaidRequest) -> Result<(), Error> {
+    pub async fn add_gaid_to_registered_user(
+        &self,
+        user_id: i64,
+        request: &crate::model::GaidRequest,
+    ) -> Result<(), Error> {
         let _users = self.inner.users.lock().unwrap();
         if !_users.contains_key(&user_id) {
             return Err(Error::RequestFailed(format!("User not found: {}", user_id)));
         }
 
         let mut user_gaids = self.inner.user_gaids.lock().unwrap();
-        user_gaids.entry(user_id).or_insert_with(Vec::new).push(request.gaid.clone());
-        self.inner.gaid_validations.lock().unwrap().insert(request.gaid.clone(), true);
+        user_gaids
+            .entry(user_id)
+            .or_insert_with(Vec::new)
+            .push(request.gaid.clone());
+        self.inner
+            .gaid_validations
+            .lock()
+            .unwrap()
+            .insert(request.gaid.clone(), true);
         Ok(())
     }
 
@@ -636,17 +753,21 @@ impl MockApiClient {
         let is_valid = validations.get(gaid).copied().unwrap_or(false);
         Ok(ValidateGaidResponse {
             is_valid,
-            error: if is_valid { None } else { Some("Invalid GAID".to_string()) },
+            error: if is_valid {
+                None
+            } else {
+                Some("Invalid GAID".to_string())
+            },
         })
     }
 
     /// Gets the address for a GAID
     pub async fn get_gaid_address(&self, gaid: &str) -> Result<AddressGaidResponse, Error> {
         let addresses = self.inner.gaid_addresses.lock().unwrap();
-        let address = addresses
-            .get(gaid)
-            .cloned()
-            .unwrap_or_else(|| "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26".to_string());
+        let address = addresses.get(gaid).cloned().unwrap_or_else(|| {
+            "vjU2i2EM2viGEzSywpStMPkTX9U9QSDsLSN63kJJYVpxKJZuxaph8v5r5Jf11aqnfBVdjSbrvcJ2pw26"
+                .to_string()
+        });
 
         Ok(AddressGaidResponse {
             address,
@@ -657,37 +778,62 @@ impl MockApiClient {
     /// Gets the balance for a GAID
     pub async fn get_gaid_balance(&self, gaid: &str) -> Result<Balance, Error> {
         let balances = self.inner.gaid_balances.lock().unwrap();
-        Ok(balances.get(gaid)
-            .map(|entries| entries.iter().map(|e| GaidBalanceEntry {
-                asset_uuid: e.asset_uuid.clone(),
-                asset_id: e.asset_id.clone(),
-                balance: e.balance,
-            }).collect())
+        Ok(balances
+            .get(gaid)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .map(|e| GaidBalanceEntry {
+                        asset_uuid: e.asset_uuid.clone(),
+                        asset_id: e.asset_id.clone(),
+                        balance: e.balance,
+                    })
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
     /// Gets the asset balance for a specific GAID and asset
-    pub async fn get_gaid_asset_balance(&self, gaid: &str, asset_uuid: &str) -> Result<GaidBalanceEntry, Error> {
+    pub async fn get_gaid_asset_balance(
+        &self,
+        gaid: &str,
+        asset_uuid: &str,
+    ) -> Result<GaidBalanceEntry, Error> {
         let balances = self.inner.gaid_balances.lock().unwrap();
-        let balance = balances.get(gaid)
-            .and_then(|entries| entries.iter().find(|e| e.asset_uuid == asset_uuid).map(|e| GaidBalanceEntry {
-                asset_uuid: e.asset_uuid.clone(),
-                asset_id: e.asset_id.clone(),
-                balance: e.balance,
-            }))
-            .ok_or_else(|| Error::RequestFailed(format!("Balance not found for GAID {} and asset {}", gaid, asset_uuid)))?;
+        let balance = balances
+            .get(gaid)
+            .and_then(|entries| {
+                entries
+                    .iter()
+                    .find(|e| e.asset_uuid == asset_uuid)
+                    .map(|e| GaidBalanceEntry {
+                        asset_uuid: e.asset_uuid.clone(),
+                        asset_id: e.asset_id.clone(),
+                        balance: e.balance,
+                    })
+            })
+            .ok_or_else(|| {
+                Error::RequestFailed(format!(
+                    "Balance not found for GAID {} and asset {}",
+                    gaid, asset_uuid
+                ))
+            })?;
 
         Ok(balance)
     }
 
     /// Gets the registered user for a GAID
-    pub async fn get_gaid_registered_user(&self, gaid: &str) -> Result<RegisteredUserResponse, Error> {
+    pub async fn get_gaid_registered_user(
+        &self,
+        gaid: &str,
+    ) -> Result<RegisteredUserResponse, Error> {
         let user_gaids = self.inner.user_gaids.lock().unwrap();
         let users = self.inner.users.lock().unwrap();
 
         for (user_id, gaids) in user_gaids.iter() {
             if gaids.contains(&gaid.to_string()) {
-                return users.get(user_id)
+                return users
+                    .get(user_id)
                     .map(|u| RegisteredUserResponse {
                         id: u.id,
                         gaid: u.gaid.clone(),
@@ -708,13 +854,16 @@ impl MockApiClient {
     /// Gets all categories
     pub async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
         let categories = self.inner.categories.lock().unwrap();
-        Ok(categories.values().map(|c| CategoryResponse {
-            id: c.id,
-            name: c.name.clone(),
-            description: c.description.clone(),
-            registered_users: c.registered_users.clone(),
-            assets: c.assets.clone(),
-        }).collect())
+        Ok(categories
+            .values()
+            .map(|c| CategoryResponse {
+                id: c.id,
+                name: c.name.clone(),
+                description: c.description.clone(),
+                registered_users: c.registered_users.clone(),
+                assets: c.assets.clone(),
+            })
+            .collect())
     }
 
     /// Gets a specific category by ID
@@ -733,7 +882,10 @@ impl MockApiClient {
     }
 
     /// Adds a category
-    pub async fn add_category(&self, request: &crate::model::CategoryAdd) -> Result<CategoryResponse, Error> {
+    pub async fn add_category(
+        &self,
+        request: &crate::model::CategoryAdd,
+    ) -> Result<CategoryResponse, Error> {
         let category_id = self.inner.next_category_id.fetch_add(1, Ordering::SeqCst);
         let category = CategoryResponse {
             id: category_id,
@@ -750,7 +902,11 @@ impl MockApiClient {
             registered_users: category.registered_users.clone(),
             assets: category.assets.clone(),
         };
-        self.inner.categories.lock().unwrap().insert(category_id, category_clone);
+        self.inner
+            .categories
+            .lock()
+            .unwrap()
+            .insert(category_id, category_clone);
         Ok(CategoryResponse {
             id: category.id,
             name: category.name.clone(),
@@ -761,7 +917,11 @@ impl MockApiClient {
     }
 
     /// Edits a category
-    pub async fn edit_category(&self, category_id: i64, request: &crate::model::CategoryEdit) -> Result<CategoryResponse, Error> {
+    pub async fn edit_category(
+        &self,
+        category_id: i64,
+        request: &crate::model::CategoryEdit,
+    ) -> Result<CategoryResponse, Error> {
         let mut categories = self.inner.categories.lock().unwrap();
         let category = categories
             .get_mut(&category_id)
@@ -786,13 +946,18 @@ impl MockApiClient {
     /// Deletes a category
     pub async fn delete_category(&self, category_id: i64) -> Result<(), Error> {
         let mut categories = self.inner.categories.lock().unwrap();
-        categories.remove(&category_id)
+        categories
+            .remove(&category_id)
             .ok_or_else(|| Error::RequestFailed(format!("Category not found: {}", category_id)))
             .map(|_| ())
     }
 
     /// Adds a registered user to a category
-    pub async fn add_registered_user_to_category(&self, category_id: i64, user_id: i64) -> Result<(), Error> {
+    pub async fn add_registered_user_to_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<(), Error> {
         let mut categories = self.inner.categories.lock().unwrap();
         let category = categories
             .get_mut(&category_id)
@@ -805,7 +970,11 @@ impl MockApiClient {
     }
 
     /// Removes a registered user from a category
-    pub async fn remove_registered_user_from_category(&self, category_id: i64, user_id: i64) -> Result<(), Error> {
+    pub async fn remove_registered_user_from_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<(), Error> {
         let mut categories = self.inner.categories.lock().unwrap();
         let category = categories
             .get_mut(&category_id)
@@ -816,7 +985,11 @@ impl MockApiClient {
     }
 
     /// Adds an asset to a category
-    pub async fn add_asset_to_category(&self, category_id: i64, asset_uuid: &str) -> Result<CategoryResponse, Error> {
+    pub async fn add_asset_to_category(
+        &self,
+        category_id: i64,
+        asset_uuid: &str,
+    ) -> Result<CategoryResponse, Error> {
         let mut categories = self.inner.categories.lock().unwrap();
         let category = categories
             .get_mut(&category_id)
@@ -835,7 +1008,11 @@ impl MockApiClient {
     }
 
     /// Removes an asset from a category
-    pub async fn remove_asset_from_category(&self, category_id: i64, asset_uuid: &str) -> Result<CategoryResponse, Error> {
+    pub async fn remove_asset_from_category(
+        &self,
+        category_id: i64,
+        asset_uuid: &str,
+    ) -> Result<CategoryResponse, Error> {
         let mut categories = self.inner.categories.lock().unwrap();
         let category = categories
             .get_mut(&category_id)
@@ -856,48 +1033,63 @@ impl MockApiClient {
     /// Gets all assignments for an asset
     pub async fn get_asset_assignments(&self, asset_uuid: &str) -> Result<Vec<Assignment>, Error> {
         let assignments = self.inner.asset_assignments.lock().unwrap();
-        Ok(assignments.get(asset_uuid)
-            .map(|v| v.iter().map(|a| Assignment {
-                id: a.id,
-                registered_user: a.registered_user,
-                amount: a.amount,
-                receiving_address: a.receiving_address.clone(),
-                distribution_uuid: a.distribution_uuid.clone(),
-                ready_for_distribution: a.ready_for_distribution,
-                vesting_datetime: a.vesting_datetime.clone(),
-                vesting_timestamp: a.vesting_timestamp,
-                has_vested: a.has_vested,
-                is_distributed: a.is_distributed,
-                creator: a.creator,
-                gaid: a.gaid.clone(),
-                investor: a.investor,
-            }).collect())
+        Ok(assignments
+            .get(asset_uuid)
+            .map(|v| {
+                v.iter()
+                    .map(|a| Assignment {
+                        id: a.id,
+                        registered_user: a.registered_user,
+                        amount: a.amount,
+                        receiving_address: a.receiving_address.clone(),
+                        distribution_uuid: a.distribution_uuid.clone(),
+                        ready_for_distribution: a.ready_for_distribution,
+                        vesting_datetime: a.vesting_datetime.clone(),
+                        vesting_timestamp: a.vesting_timestamp,
+                        has_vested: a.has_vested,
+                        is_distributed: a.is_distributed,
+                        creator: a.creator,
+                        gaid: a.gaid.clone(),
+                        investor: a.investor,
+                    })
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
     /// Gets a specific assignment
-    pub async fn get_asset_assignment(&self, asset_uuid: &str, assignment_id: &str) -> Result<Assignment, Error> {
+    pub async fn get_asset_assignment(
+        &self,
+        asset_uuid: &str,
+        assignment_id: &str,
+    ) -> Result<Assignment, Error> {
         let assignments = self.inner.asset_assignments.lock().unwrap();
-        let assignment_id_num = assignment_id.parse::<i64>()
-            .map_err(|_| Error::RequestFailed(format!("Invalid assignment ID: {}", assignment_id)))?;
+        let assignment_id_num = assignment_id.parse::<i64>().map_err(|_| {
+            Error::RequestFailed(format!("Invalid assignment ID: {}", assignment_id))
+        })?;
 
         assignments
             .get(asset_uuid)
-            .and_then(|assigns| assigns.iter().find(|a| a.id == assignment_id_num).map(|a| Assignment {
-                id: a.id,
-                registered_user: a.registered_user,
-                amount: a.amount,
-                receiving_address: a.receiving_address.clone(),
-                distribution_uuid: a.distribution_uuid.clone(),
-                ready_for_distribution: a.ready_for_distribution,
-                vesting_datetime: a.vesting_datetime.clone(),
-                vesting_timestamp: a.vesting_timestamp,
-                has_vested: a.has_vested,
-                is_distributed: a.is_distributed,
-                creator: a.creator,
-                gaid: a.gaid.clone(),
-                investor: a.investor,
-            }))
+            .and_then(|assigns| {
+                assigns
+                    .iter()
+                    .find(|a| a.id == assignment_id_num)
+                    .map(|a| Assignment {
+                        id: a.id,
+                        registered_user: a.registered_user,
+                        amount: a.amount,
+                        receiving_address: a.receiving_address.clone(),
+                        distribution_uuid: a.distribution_uuid.clone(),
+                        ready_for_distribution: a.ready_for_distribution,
+                        vesting_datetime: a.vesting_datetime.clone(),
+                        vesting_timestamp: a.vesting_timestamp,
+                        has_vested: a.has_vested,
+                        is_distributed: a.is_distributed,
+                        creator: a.creator,
+                        gaid: a.gaid.clone(),
+                        investor: a.investor,
+                    })
+            })
             .ok_or_else(|| Error::RequestFailed(format!("Assignment not found: {}", assignment_id)))
     }
 
@@ -911,7 +1103,9 @@ impl MockApiClient {
         let _asset = self.get_asset(asset_uuid).await?;
 
         let mut assignments_map = self.inner.asset_assignments.lock().unwrap();
-        let assignments = assignments_map.entry(asset_uuid.to_string()).or_insert_with(Vec::new);
+        let assignments = assignments_map
+            .entry(asset_uuid.to_string())
+            .or_insert_with(Vec::new);
 
         let mut created = Vec::new();
         for request in requests {
@@ -929,9 +1123,9 @@ impl MockApiClient {
                         .to_rfc3339()
                 }),
                 vesting_timestamp: request.vesting_timestamp,
-                has_vested: request.vesting_timestamp.map_or(true, |ts| {
-                    chrono::Utc::now().timestamp() >= ts
-                }),
+                has_vested: request
+                    .vesting_timestamp
+                    .map_or(true, |ts| chrono::Utc::now().timestamp() >= ts),
                 is_distributed: false,
                 creator: 1,
                 gaid: None,
@@ -981,21 +1175,31 @@ impl MockApiClient {
         asset_uuid: &str,
         assignments: Vec<crate::model::AssetDistributionAssignment>,
     ) -> Result<crate::model::DistributionResponse, AmpError> {
-        use AmpError;
         use crate::model::DistributionResponse;
+        use AmpError;
 
         // Verify asset exists
-        let asset = self.get_asset(asset_uuid).await
+        let asset = self
+            .get_asset(asset_uuid)
+            .await
             .map_err(|e| AmpError::api(format!("Asset not found: {}", e)))?;
 
         if assignments.is_empty() {
             return Err(AmpError::validation("Assignments cannot be empty"));
         }
 
-        let next_id = self.inner.next_distribution_uuid.fetch_add(1, Ordering::SeqCst);
-        let distribution_uuid = format!("dist-{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-            next_id as u32, (next_id >> 32) as u16, (next_id >> 48) as u16,
-            ((next_id >> 16) & 0xffff) as u16, next_id as u64);
+        let next_id = self
+            .inner
+            .next_distribution_uuid
+            .fetch_add(1, Ordering::SeqCst);
+        let distribution_uuid = format!(
+            "dist-{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+            next_id as u32,
+            (next_id >> 32) as u16,
+            (next_id >> 48) as u16,
+            ((next_id >> 16) & 0xffff) as u16,
+            next_id as u64
+        );
 
         let mut map_address_amount = std::collections::HashMap::new();
         let mut map_address_asset = std::collections::HashMap::new();
@@ -1024,7 +1228,7 @@ impl MockApiClient {
         // Store distribution
         let mut distributions = self.inner.distributions.lock().unwrap();
         // Create a basic distribution record
-        use crate::model::{Distribution, Status, Transaction, DistributionAssignment};
+        use crate::model::{Distribution, DistributionAssignment, Status, Transaction};
         let distribution = Distribution {
             distribution_uuid: distribution_uuid.to_string(),
             distribution_status: Status::Confirmed,
@@ -1045,7 +1249,10 @@ impl MockApiClient {
     }
 
     /// Gets asset distributions
-    pub async fn get_asset_distributions(&self, asset_uuid: &str) -> Result<Vec<Distribution>, AmpError> {
+    pub async fn get_asset_distributions(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<Vec<Distribution>, AmpError> {
         // For now, return empty list - can be extended to track distributions per asset
         Ok(vec![])
     }
@@ -1065,20 +1272,28 @@ impl MockApiClient {
                     crate::model::Status::Unconfirmed => crate::model::Status::Unconfirmed,
                     crate::model::Status::Confirmed => crate::model::Status::Confirmed,
                 },
-                transactions: d.transactions.iter().map(|t| crate::model::Transaction {
-                    txid: t.txid.clone(),
-                    transaction_status: match t.transaction_status {
-                        crate::model::Status::Unconfirmed => crate::model::Status::Unconfirmed,
-                        crate::model::Status::Confirmed => crate::model::Status::Confirmed,
-                    },
-                    included_blockheight: t.included_blockheight,
-                    confirmed_datetime: t.confirmed_datetime.clone(),
-                    assignments: t.assignments.iter().map(|a| crate::model::DistributionAssignment {
-                        registered_user: a.registered_user,
-                        amount: a.amount,
-                        vout: a.vout,
-                    }).collect(),
-                }).collect(),
+                transactions: d
+                    .transactions
+                    .iter()
+                    .map(|t| crate::model::Transaction {
+                        txid: t.txid.clone(),
+                        transaction_status: match t.transaction_status {
+                            crate::model::Status::Unconfirmed => crate::model::Status::Unconfirmed,
+                            crate::model::Status::Confirmed => crate::model::Status::Confirmed,
+                        },
+                        included_blockheight: t.included_blockheight,
+                        confirmed_datetime: t.confirmed_datetime.clone(),
+                        assignments: t
+                            .assignments
+                            .iter()
+                            .map(|a| crate::model::DistributionAssignment {
+                                registered_user: a.registered_user,
+                                amount: a.amount,
+                                vout: a.vout,
+                            })
+                            .collect(),
+                    })
+                    .collect(),
             })
             .ok_or_else(|| AmpError::api(format!("Distribution not found: {}", distribution_uuid)))
     }
@@ -1091,9 +1306,11 @@ impl MockApiClient {
         asset_uuid: &str,
         request: &crate::model::ReissueRequest,
     ) -> Result<crate::model::ReissueRequestResponse, AmpError> {
-        use crate::model::{ReissueRequestResponse, Outpoint};
+        use crate::model::{Outpoint, ReissueRequestResponse};
 
-        let asset = self.get_asset(asset_uuid).await
+        let asset = self
+            .get_asset(asset_uuid)
+            .await
             .map_err(|e| AmpError::api(format!("Asset not found: {}", e)))?;
 
         if asset.reissuance_token_id.is_none() {
@@ -1143,7 +1360,9 @@ impl MockApiClient {
         use crate::model::Reissuance;
 
         // Check if asset exists
-        let _asset = self.get_asset(asset_uuid).await
+        let _asset = self
+            .get_asset(asset_uuid)
+            .await
             .map_err(|e| AmpError::api(format!("Asset not found: {}", e)))?;
 
         // Check if asset has been reissued by looking at summary
@@ -1155,16 +1374,17 @@ impl MockApiClient {
 
         // If asset has reissuances, return mock data
         if has_reissuances {
-            Ok(vec![
-                Reissuance {
-                    txid: "abc123def456789012345678901234567890123456789012345678901234".to_string(),
-                    vout: 0,
-                    destination_address: "lq1qqwxyz1234567890abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr".to_string(),
-                    reissuance_amount: 1_000_000_000,
-                    confirmed_in_block: "block_hash_1234567890abcdef1234567890abcdef1234567890abcdef12345678".to_string(),
-                    created: "2024-01-15T10:30:00Z".to_string(),
-                },
-            ])
+            Ok(vec![Reissuance {
+                txid: "abc123def456789012345678901234567890123456789012345678901234".to_string(),
+                vout: 0,
+                destination_address:
+                    "lq1qqwxyz1234567890abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr".to_string(),
+                reissuance_amount: 1_000_000_000,
+                confirmed_in_block:
+                    "block_hash_1234567890abcdef1234567890abcdef1234567890abcdef12345678"
+                        .to_string(),
+                created: "2024-01-15T10:30:00Z".to_string(),
+            }])
         } else {
             // No reissuances yet
             Ok(vec![])
@@ -1185,7 +1405,9 @@ impl MockApiClient {
             return Err(AmpError::validation("Amount to burn must be positive"));
         }
 
-        let asset = self.get_asset(asset_uuid).await
+        let asset = self
+            .get_asset(asset_uuid)
+            .await
             .map_err(|e| AmpError::api(format!("Asset not found: {}", e)))?;
 
         Ok(BurnCreate {
@@ -1250,7 +1472,11 @@ impl MockApiClient {
     }
 
     /// Gets registered user summary
-    pub async fn get_registered_user_summary(&self, _user_id: i64, _asset_uuid: &str) -> Result<crate::model::RegisteredUserSummary, Error> {
+    pub async fn get_registered_user_summary(
+        &self,
+        _user_id: i64,
+        _asset_uuid: &str,
+    ) -> Result<crate::model::RegisteredUserSummary, Error> {
         Err(Error::RequestFailed("Not yet implemented".to_string()))
     }
 
@@ -1267,8 +1493,11 @@ impl MockApiClient {
     }
 
     /// Sets default GAID for registered user
-    pub async fn set_default_gaid_for_registered_user(&self, _user_id: i64, _request: &crate::model::GaidRequest) -> Result<(), Error> {
+    pub async fn set_default_gaid_for_registered_user(
+        &self,
+        _user_id: i64,
+        _request: &crate::model::GaidRequest,
+    ) -> Result<(), Error> {
         Ok(())
     }
 }
-

@@ -43,7 +43,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    println!("User {} is a member of {} categor{}:", user.id, user.categories.len(), if user.categories.len() == 1 { "y" } else { "ies" });
+    println!(
+        "User {} is a member of {} categor{}:",
+        user.id,
+        user.categories.len(),
+        if user.categories.len() == 1 {
+            "y"
+        } else {
+            "ies"
+        }
+    );
 
     // For each category ID, fetch its details to display ID and Name
     for cat_id in user.categories {

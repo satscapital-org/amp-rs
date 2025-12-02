@@ -268,7 +268,9 @@ async fn main() -> Result<(), AmpError> {
         description: category_description.clone(),
     };
 
-    let category = client.add_category(&new_category).await
+    let category = client
+        .add_category(&new_category)
+        .await
         .map_err(|e| AmpError::api(format!("Failed to create category: {}", e)))?;
 
     println!("✅ Category created successfully!");
@@ -288,7 +290,11 @@ async fn main() -> Result<(), AmpError> {
         .map_err(|e| AmpError::api(format!("Failed to add asset to category: {}", e)))?;
 
     println!("✅ Asset added to category!");
-    println!("   Category '{}' now has {} asset(s)", updated_category.name, updated_category.assets.len());
+    println!(
+        "   Category '{}' now has {} asset(s)",
+        updated_category.name,
+        updated_category.assets.len()
+    );
 
     // Step 8: Add the specified user to the category
     println!("\n8️⃣  Adding user {} to category", user_id);
@@ -300,14 +306,20 @@ async fn main() -> Result<(), AmpError> {
         .map_err(|e| AmpError::api(format!("Failed to add user to category: {}", e)))?;
 
     println!("✅ User added to category!");
-    println!("   Category '{}' now has {} user(s)", updated_category.name, updated_category.registered_users.len());
+    println!(
+        "   Category '{}' now has {} user(s)",
+        updated_category.name,
+        updated_category.registered_users.len()
+    );
 
     // Step 9: Display comprehensive information
     println!("\n🎉 Setup Complete! Displaying Summary");
     println!("====================================\n");
 
     // Fetch fresh asset details
-    let asset = client.get_asset(&issuance_response.asset_uuid).await
+    let asset = client
+        .get_asset(&issuance_response.asset_uuid)
+        .await
         .map_err(|e| AmpError::api(format!("Failed to fetch asset details: {}", e)))?;
 
     println!("📋 ASSET INFORMATION");
@@ -337,7 +349,9 @@ async fn main() -> Result<(), AmpError> {
     println!();
 
     // Fetch fresh category details
-    let category_details = client.get_category(category.id).await
+    let category_details = client
+        .get_category(category.id)
+        .await
         .map_err(|e| AmpError::api(format!("Failed to fetch category details: {}", e)))?;
 
     println!("📁 CATEGORY INFORMATION");
@@ -347,7 +361,10 @@ async fn main() -> Result<(), AmpError> {
         println!("   Description: {}", desc);
     }
     println!("   Total Assets: {}", category_details.assets.len());
-    println!("   Total Users: {}", category_details.registered_users.len());
+    println!(
+        "   Total Users: {}",
+        category_details.registered_users.len()
+    );
     println!();
 
     println!("🔗 CATEGORY MEMBERSHIPS");
@@ -356,8 +373,13 @@ async fn main() -> Result<(), AmpError> {
     for (idx, asset_uuid) in category_details.assets.iter().enumerate() {
         match client.get_asset(asset_uuid).await {
             Ok(a) => {
-                println!("     {}. {} ({}) - Transfer Restricted: {}", 
-                    idx + 1, a.name, a.ticker.as_deref().unwrap_or("N/A"), a.transfer_restricted);
+                println!(
+                    "     {}. {} ({}) - Transfer Restricted: {}",
+                    idx + 1,
+                    a.name,
+                    a.ticker.as_deref().unwrap_or("N/A"),
+                    a.transfer_restricted
+                );
             }
             Err(e) => {
                 println!("     {}. {} (error: {:?})", idx + 1, asset_uuid, e);

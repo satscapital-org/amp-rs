@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Look up the user associated with this GAID
     println!("Looking up user for GAID: {}", gaid);
-    
+
     match client.get_gaid_registered_user(&gaid).await {
         Ok(user) => {
             println!("\n=== User Information ===");
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Is Company: {}", user.is_company);
             println!("GAID: {}", user.gaid.as_deref().unwrap_or("None"));
             println!("Creator ID: {}", user.creator);
-            
+
             if !user.categories.is_empty() {
                 println!("\nCategories: {:?}", user.categories);
             } else {

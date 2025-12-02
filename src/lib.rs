@@ -28,8 +28,8 @@
 //! - Hardware Security Modules (HSMs)
 
 pub mod client;
-pub mod mocks;
 pub mod mock_client;
+pub mod mocks;
 pub mod model;
 pub mod signer;
 
