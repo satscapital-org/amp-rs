@@ -216,3 +216,69 @@ async fn test_token_methods() {
     assert_eq!(refreshed, "mock_token");
 }
 
+#[tokio::test]
+async fn test_get_asset_reissuances() {
+    // Create a reissuable asset
+    let reissuable_asset = Asset {
+        name: "Reissuable Asset".to_string(),
+        asset_uuid: "reissuable-uuid".to_string(),
+        issuer: 1,
+        asset_id: "reissuable_asset_id".to_string(),
+        reissuance_token_id: Some("reissuance_token_id_123".to_string()),
+        requirements: vec![],
+        ticker: Some("REIS".to_string()),
+        precision: 8,
+        domain: Some("reissuable.com".to_string()),
+        pubkey: Some("pubkey".to_string()),
+        is_registered: true,
+        is_authorized: true,
+        is_locked: false,
+        issuer_authorization_endpoint: None,
+        transfer_restricted: false,
+    };
+    
+    let client = MockApiClient::new()
+        .with_asset(reissuable_asset)
+        .build();
+    
+    let asset_uuid = "reissuable-uuid";
+    
+    // Initially, asset should have no reissuances
+    let reissuances = client.get_asset_reissuances(asset_uuid).await.unwrap();
+    assert_eq!(reissuances.len(), 0, "New asset should have no reissuances");
+    
+    // Perform a reissue
+    let reissue_request = amp_rs::model::ReissueRequest {
+        amount_to_reissue: 1_000_000_000,
+    };
+    let _reissue_response = client.reissue_request(asset_uuid, &reissue_request).await.unwrap();
+    let reissue_confirm = amp_rs::model::ReissueConfirmRequest {
+        details: serde_json::json!({}),
+        listissuances: vec![],
+        reissuance_output: serde_json::json!({}),
+    };
+    let _confirm_response = client.reissue_confirm(asset_uuid, &reissue_confirm).await.unwrap();
+    
+    // After reissue, asset should have reissuances
+    let reissuances = client.get_asset_reissuances(&asset_uuid).await.unwrap();
+    assert_eq!(reissuances.len(), 1, "Asset should have one reissuance after reissue_confirm");
+    
+    // Verify reissuance data
+    let reissuance = &reissuances[0];
+    assert!(!reissuance.txid.is_empty());
+    assert_eq!(reissuance.vout, 0);
+    assert!(!reissuance.destination_address.is_empty());
+    assert_eq!(reissuance.reissuance_amount, 1_000_000_000);
+    assert!(!reissuance.confirmed_in_block.is_empty());
+    assert!(!reissuance.created.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_asset_reissuances_nonexistent_asset() {
+    let client = MockApiClient::new();
+    
+    // Try to get reissuances for non-existent asset
+    let result = client.get_asset_reissuances("nonexistent-uuid").await;
+    assert!(result.is_err(), "Should error when asset doesn't exist");
+}
+

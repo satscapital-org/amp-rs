@@ -1135,6 +1135,42 @@ impl MockApiClient {
         })
     }
 
+    /// Gets asset reissuances
+    pub async fn get_asset_reissuances(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<Vec<crate::model::Reissuance>, AmpError> {
+        use crate::model::Reissuance;
+
+        // Check if asset exists
+        let _asset = self.get_asset(asset_uuid).await
+            .map_err(|e| AmpError::api(format!("Asset not found: {}", e)))?;
+
+        // Check if asset has been reissued by looking at summary
+        let summaries = self.inner.asset_summaries.lock().unwrap();
+        let has_reissuances = summaries
+            .get(asset_uuid)
+            .map(|s| s.reissued > 0)
+            .unwrap_or(false);
+
+        // If asset has reissuances, return mock data
+        if has_reissuances {
+            Ok(vec![
+                Reissuance {
+                    txid: "abc123def456789012345678901234567890123456789012345678901234".to_string(),
+                    vout: 0,
+                    destination_address: "lq1qqwxyz1234567890abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqr".to_string(),
+                    reissuance_amount: 1_000_000_000,
+                    confirmed_in_block: "block_hash_1234567890abcdef1234567890abcdef1234567890abcdef12345678".to_string(),
+                    created: "2024-01-15T10:30:00Z".to_string(),
+                },
+            ])
+        } else {
+            // No reissuances yet
+            Ok(vec![])
+        }
+    }
+
     // Burn methods
 
     /// Creates a burn request
