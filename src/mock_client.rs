@@ -58,6 +58,25 @@
 //! # }
 //! ```
 
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::unused_async,
+    clippy::significant_drop_tightening,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    clippy::doc_markdown,
+    clippy::redundant_clone,
+    clippy::needless_pass_by_value,
+    clippy::uninlined_format_args,
+    clippy::unnecessary_cast,
+    clippy::map_unwrap_or,
+    clippy::assigning_clones,
+    clippy::used_underscore_binding
+)]
+
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -253,7 +272,8 @@ impl MockApiClient {
     }
 
     /// Builder method to add an asset to the mock client
-    pub fn with_asset(mut self, asset: Asset) -> Self {
+    #[must_use]
+    pub fn with_asset(self, asset: Asset) -> Self {
         let asset_uuid = asset.asset_uuid.clone();
         self.inner
             .assets
@@ -276,8 +296,7 @@ impl MockApiClient {
             reissuance_tokens: asset
                 .reissuance_token_id
                 .as_ref()
-                .map(|_| 100_000)
-                .unwrap_or(0),
+                .map_or(0, |_| 100_000),
         };
         self.inner
             .asset_summaries
@@ -288,7 +307,8 @@ impl MockApiClient {
     }
 
     /// Builder method to add a user to the mock client
-    pub fn with_user(mut self, user: RegisteredUserResponse) -> Self {
+    #[must_use]
+    pub fn with_user(self, user: RegisteredUserResponse) -> Self {
         let user_id = user.id;
         let user_clone = RegisteredUserResponse {
             id: user.id,
@@ -305,7 +325,7 @@ impl MockApiClient {
                 .lock()
                 .unwrap()
                 .entry(user_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(gaid.clone());
             self.inner
                 .gaid_validations
@@ -317,7 +337,8 @@ impl MockApiClient {
     }
 
     /// Builder method to set GAID validation status
-    pub fn with_gaid_validation(mut self, gaid: &str, is_valid: bool) -> Self {
+    #[must_use]
+    pub fn with_gaid_validation(self, gaid: &str, is_valid: bool) -> Self {
         self.inner
             .gaid_validations
             .lock()
@@ -327,7 +348,8 @@ impl MockApiClient {
     }
 
     /// Builder method to set GAID address
-    pub fn with_gaid_address(mut self, gaid: &str, address: &str) -> Self {
+    #[must_use]
+    pub fn with_gaid_address(self, gaid: &str, address: &str) -> Self {
         self.inner
             .gaid_addresses
             .lock()
@@ -337,7 +359,8 @@ impl MockApiClient {
     }
 
     /// Builder method to set GAID balance
-    pub fn with_gaid_balance(mut self, gaid: &str, balance: Vec<GaidBalanceEntry>) -> Self {
+    #[must_use]
+    pub fn with_gaid_balance(self, gaid: &str, balance: Vec<GaidBalanceEntry>) -> Self {
         self.inner
             .gaid_balances
             .lock()
@@ -347,7 +370,8 @@ impl MockApiClient {
     }
 
     /// Builder method to add a category
-    pub fn with_category(mut self, category: CategoryResponse) -> Self {
+    #[must_use]
+    pub fn with_category(self, category: CategoryResponse) -> Self {
         let category_id = category.id;
         self.inner
             .categories
@@ -357,8 +381,9 @@ impl MockApiClient {
         self
     }
 
-    /// Finalizes the builder and returns the MockApiClient
-    pub fn build(self) -> Self {
+    /// Finalizes the builder and returns the `MockApiClient`
+    #[must_use]
+    pub const fn build(self) -> Self {
         self
     }
 
@@ -667,7 +692,7 @@ impl MockApiClient {
                 .lock()
                 .unwrap()
                 .entry(user_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(gaid.clone());
         }
 
@@ -735,7 +760,7 @@ impl MockApiClient {
         let mut user_gaids = self.inner.user_gaids.lock().unwrap();
         user_gaids
             .entry(user_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(request.gaid.clone());
         self.inner
             .gaid_validations
@@ -1105,7 +1130,7 @@ impl MockApiClient {
         let mut assignments_map = self.inner.asset_assignments.lock().unwrap();
         let assignments = assignments_map
             .entry(asset_uuid.to_string())
-            .or_insert_with(Vec::new);
+            .or_default();
 
         let mut created = Vec::new();
         for request in requests {
@@ -1125,7 +1150,7 @@ impl MockApiClient {
                 vesting_timestamp: request.vesting_timestamp,
                 has_vested: request
                     .vesting_timestamp
-                    .map_or(true, |ts| chrono::Utc::now().timestamp() >= ts),
+                    .is_none_or(|ts| chrono::Utc::now().timestamp() >= ts),
                 is_distributed: false,
                 creator: 1,
                 gaid: None,
@@ -1251,7 +1276,7 @@ impl MockApiClient {
     /// Gets asset distributions
     pub async fn get_asset_distributions(
         &self,
-        asset_uuid: &str,
+        _asset_uuid: &str,
     ) -> Result<Vec<Distribution>, AmpError> {
         // For now, return empty list - can be extended to track distributions per asset
         Ok(vec![])
