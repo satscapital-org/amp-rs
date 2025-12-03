@@ -3,7 +3,7 @@ use std::env;
 
 // Protected resources that should not be deleted
 const PROTECTED_CATEGORY_ID: i64 = 28273;
-const PROTECTED_USER_IDS: &[i64] = &[1194, 1203, 1880];
+const PROTECTED_USER_IDS: &[i64] = &[1194, 1203, 1880, 1936, 2137, 2148];
 
 // Test environment resources that should be preserved
 const TEST_CATEGORY_NAME: &str = "Test Environment Category";
@@ -14,15 +14,26 @@ const TEST_USER_GAIDS: &[&str] = &[
     "GA2M8u2rCJ3jP4YGuE8o4Po61ftwbQ",
     "GA3haAs7uhdrbHNdZvuiXtuD1HCSAG",
     "GA4MAzHdepvHUxNQ4Z2a5F5nuNe1Dv",
+    "GA4Bdf2hPtMajjT1uH5PvXPGgVAx2Z", // User 1194 - used in multiple live tests
+    "GA4UwSzJb5EbyeCk2VDG4euhyhkiNX", // Used in test_delete_asset_live
+    "GA2HsrczzwaFzdJiw5NJM8P4iWKQh1", // Used in multiple live tests
+    "GA3tJqC58PwiCjp4tPkCjNkPnVzLqn", // Used in live tests
+    "GAbYScu6jkWUND2jo3L4KJxyvo55d", // Used in multiple live tests
+    "GA3DS3emT12zDF4RGywBvJqZfhefNp", // User 1203 - used in multiple live tests
+    "GA44YYwPM8vuRMmjFL8i5kSqXhoTW2", // Used in mock and live tests
 ];
 const TEST_ASSET_NAME: &str = "Test Environment Asset";
 const PROTECTED_ASSET_UUIDS: &[&str] = &[
-    "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset
+    "fff0928b-f78e-4a2c-bfa0-2c70bb72d545", // Distribution test asset - used in test_get_asset_distribution_live
     "9bcd9987-9544-439f-80b3-6d76b072fd9b", // Asset ID: 02b5a290ff1ce9807551c297a6f87e99b4dda2e746e26e06415393c3c6721f87
     "2982e097-918e-4113-a4f9-afb86bd038", // Asset ID: 98912dd98abf410320ad2e6b4b2e9537f702d0d04ca575b22a7387233c0af9a2
     "b47d7afd-bc03-4850-83e4-e6a3428a13a0", // Asset ID: 04eebba5d2710d1e86aa6f12ef3ac8c2b20ba780d0d111c2358de2cbc89edcf6 Registered with Ticker
     "d9c37019-1287-4dbf-bcd9-f6a747f28fd6", // Asset ID: fbd776438be416a47a963d324b3f96b3239c88ed8814f8b4e5027b2e66c3fd78 Registered with Ticker
     "1d7245d2-7cbb-4092-9256-d9674c95684a", // New distribution asset (ID: 651f2acf48bd02d905e463cb1b57677e6459c0afc72c267114b28fc67a86c381)
+    "716cb816-6cc7-469d-a41f-f4ed1c0d2dce", // Used in test_get_gaid_asset_balance_live and test_get_gaid_balance_live
+    "5fd36bad-f0af-4b13-a0b5-fb1a91b751a4", // Asset referenced in live tests
+    "49d36560-78be-4bef-aa62-bf64967d3634", // Asset referenced in live tests
+    "550e8400-e29b-41d4-a716-446655440000", // Used in test_burn_confirm_live
 ];
 
 #[tokio::main]
