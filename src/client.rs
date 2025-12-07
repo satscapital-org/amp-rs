@@ -18,12 +18,13 @@ use secrecy::Secret;
 use std::str::FromStr;
 
 use crate::model::{
-    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary, Assignment,
-    Balance, BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
-    ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
-    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
-    ReceivedByAddress, RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest,
-    TokenResponse, TransactionDetail, TxInput, Unspent, Utxo,
+    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary,
+    AssetTransaction, AssetTransactionParams, Assignment, Balance, BroadcastResponse,
+    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
+    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
+    IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, ReceivedByAddress,
+    RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest, TokenResponse,
+    TransactionDetail, TxInput, Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -8867,6 +8868,141 @@ impl ApiClient {
             Method::GET,
             &["assets", asset_uuid, "activities"],
             Some(params),
+        )
+        .await
+    }
+
+    /// Gets all transactions for a specific asset.
+    ///
+    /// This method retrieves a list of all transactions associated with the specified asset,
+    /// including transfers, issuances, reissuances, and burns. The results can be filtered
+    /// and paginated using the provided query parameters.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to retrieve transactions for
+    /// * `params` - Optional query parameters for filtering and pagination
+    ///
+    /// # Returns
+    /// A vector of `AssetTransaction` objects containing transaction details including:
+    /// - Transaction ID and type
+    /// - Amount and confirmation status
+    /// - Block height and datetime
+    /// - Associated user and address information
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The query parameters are invalid
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # use amp_rs::model::AssetTransactionParams;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    ///
+    /// // Get all transactions for an asset
+    /// let params = AssetTransactionParams::default();
+    /// let txs = client.get_asset_transactions("asset-uuid-123", &params).await?;
+    ///
+    /// for tx in txs {
+    ///     println!("Transaction: {} - Type: {} - Amount: {}",
+    ///              tx.txid, tx.transaction_type, tx.amount);
+    /// }
+    ///
+    /// // Get transactions with filtering
+    /// let params = AssetTransactionParams {
+    ///     count: Some(10),
+    ///     sortorder: Some("desc".to_string()),
+    ///     transaction_type: Some("transfer".to_string()),
+    ///     ..Default::default()
+    /// };
+    /// let recent_transfers = client.get_asset_transactions("asset-uuid-123", &params).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// - [`get_asset_transaction`](Self::get_asset_transaction) - Get a specific transaction by txid
+    /// - [`get_asset_activities`](Self::get_asset_activities) - Get asset activities
+    pub async fn get_asset_transactions(
+        &self,
+        asset_uuid: &str,
+        params: &AssetTransactionParams,
+    ) -> Result<Vec<AssetTransaction>, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "txs"],
+            Some(params),
+        )
+        .await
+    }
+
+    /// Gets a specific transaction for an asset by transaction ID.
+    ///
+    /// This method retrieves detailed information about a specific transaction
+    /// associated with an asset, identified by its transaction ID (txid).
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `txid` - The transaction ID to retrieve
+    ///
+    /// # Returns
+    /// An `AssetTransaction` object containing detailed transaction information including:
+    /// - Transaction type and amount
+    /// - Confirmation status and block height
+    /// - Associated addresses and user information
+    /// - Blinding factors for confidential transactions
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The transaction ID is invalid or not found
+    /// - The transaction is not associated with the specified asset
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = ApiClient::new().await?;
+    ///
+    /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    /// let txid = "abc123def456789012345678901234567890123456789012345678901234abcd";
+    ///
+    /// let tx = client.get_asset_transaction(asset_uuid, txid).await?;
+    ///
+    /// println!("Transaction: {}", tx.txid);
+    /// println!("Type: {}", tx.transaction_type);
+    /// println!("Amount: {}", tx.amount);
+    /// if let Some(height) = tx.blockheight {
+    ///     println!("Block height: {}", height);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// - [`get_asset_transactions`](Self::get_asset_transactions) - List all transactions for an asset
+    /// - [`get_asset_activities`](Self::get_asset_activities) - Get asset activities
+    pub async fn get_asset_transaction(
+        &self,
+        asset_uuid: &str,
+        txid: &str,
+    ) -> Result<AssetTransaction, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "txs", txid],
+            None::<&()>,
         )
         .await
     }

@@ -330,6 +330,84 @@ pub struct AssetActivityParams {
     pub height_stop: Option<i64>,
 }
 
+/// Represents a transaction associated with an asset.
+///
+/// This struct contains detailed information about a blockchain transaction
+/// that involves a specific asset, including transfer details, confirmation status,
+/// and associated metadata.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AssetTransaction {
+    /// The transaction ID (txid) of the blockchain transaction
+    pub txid: String,
+    /// The type of transaction (e.g., "transfer", "issuance", "reissuance", "burn")
+    #[serde(rename = "type")]
+    pub transaction_type: String,
+    /// The amount of the asset involved in this transaction
+    pub amount: i64,
+    /// The datetime when the transaction was confirmed (ISO 8601 format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub datetime: Option<String>,
+    /// The block height at which this transaction was included
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blockheight: Option<i64>,
+    /// The confirmation status of the transaction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmations: Option<i64>,
+    /// The registered user ID associated with this transaction, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registered_user: Option<i64>,
+    /// Description of the transaction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// The output index (vout) within the transaction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vout: Option<i64>,
+    /// Asset blinder for confidential transactions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_blinder: Option<String>,
+    /// Amount blinder for confidential transactions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount_blinder: Option<String>,
+    /// The source address of the transaction, if applicable
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_address: Option<String>,
+    /// The destination address of the transaction, if applicable
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_address: Option<String>,
+    /// The GAID associated with this transaction, if any
+    #[serde(rename = "GAID", skip_serializing_if = "Option::is_none")]
+    pub gaid: Option<String>,
+}
+
+/// Query parameters for listing asset transactions.
+///
+/// This struct provides pagination and filtering options when querying
+/// the transaction history of an asset.
+#[derive(Debug, Serialize, Default, Clone)]
+pub struct AssetTransactionParams {
+    /// Starting offset for pagination (0-based)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<i64>,
+    /// Maximum number of transactions to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<i64>,
+    /// Column to sort by (e.g., "datetime", "blockheight", "amount")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sortcolumn: Option<String>,
+    /// Sort order: "asc" for ascending, "desc" for descending
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sortorder: Option<String>,
+    /// Filter by minimum block height (inclusive)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height_start: Option<i64>,
+    /// Filter by maximum block height (inclusive)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height_stop: Option<i64>,
+    /// Filter by transaction type (e.g., "transfer", "issuance")
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Ownership {
     pub owner: String,

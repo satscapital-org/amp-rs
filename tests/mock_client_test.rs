@@ -1,6 +1,6 @@
 //! Tests for MockApiClient
 
-use amp_rs::model::{Asset, CreateAssetAssignmentRequest};
+use amp_rs::model::{Asset, AssetTransaction, AssetTransactionParams, CreateAssetAssignmentRequest};
 use amp_rs::MockApiClient;
 
 #[tokio::test]
@@ -299,4 +299,206 @@ async fn test_get_asset_reissuances_nonexistent_asset() {
     // Try to get reissuances for non-existent asset
     let result = client.get_asset_reissuances("nonexistent-uuid").await;
     assert!(result.is_err(), "Should error when asset doesn't exist");
+}
+
+#[tokio::test]
+async fn test_get_asset_transactions() {
+    let client = MockApiClient::new();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets[0].asset_uuid.clone();
+
+    // Get transactions with default params
+    let params = AssetTransactionParams::default();
+    let transactions = client
+        .get_asset_transactions(&asset_uuid, &params)
+        .await
+        .unwrap();
+
+    // Should have at least the default issuance transaction
+    assert!(!transactions.is_empty(), "Should have at least one transaction");
+
+    // Verify transaction structure
+    let tx = &transactions[0];
+    assert!(!tx.txid.is_empty(), "Transaction should have a txid");
+    assert!(!tx.transaction_type.is_empty(), "Transaction should have a type");
+}
+
+#[tokio::test]
+async fn test_get_asset_transactions_with_filtering() {
+    let client = MockApiClient::new();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets[0].asset_uuid.clone();
+
+    // Filter by transaction type
+    let params = AssetTransactionParams {
+        transaction_type: Some("issuance".to_string()),
+        ..Default::default()
+    };
+    let transactions = client
+        .get_asset_transactions(&asset_uuid, &params)
+        .await
+        .unwrap();
+
+    // Should have issuance transaction
+    assert!(!transactions.is_empty());
+    assert!(transactions.iter().all(|tx| tx.transaction_type == "issuance"));
+}
+
+#[tokio::test]
+async fn test_get_asset_transactions_with_pagination() {
+    let client = MockApiClient::new();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets[0].asset_uuid.clone();
+
+    // Get transactions with pagination
+    let params = AssetTransactionParams {
+        start: Some(0),
+        count: Some(10),
+        ..Default::default()
+    };
+    let transactions = client
+        .get_asset_transactions(&asset_uuid, &params)
+        .await
+        .unwrap();
+
+    assert!(transactions.len() <= 10, "Should respect count limit");
+}
+
+#[tokio::test]
+async fn test_get_asset_transaction() {
+    let client = MockApiClient::new();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets[0].asset_uuid.clone();
+
+    // First get all transactions to find a valid txid
+    let params = AssetTransactionParams::default();
+    let transactions = client
+        .get_asset_transactions(&asset_uuid, &params)
+        .await
+        .unwrap();
+
+    assert!(!transactions.is_empty(), "Should have transactions to test with");
+
+    // Get specific transaction
+    let txid = &transactions[0].txid;
+    let tx = client.get_asset_transaction(&asset_uuid, txid).await.unwrap();
+
+    assert_eq!(tx.txid, *txid);
+    assert!(!tx.transaction_type.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_asset_transaction_not_found() {
+    let client = MockApiClient::new();
+    let assets = client.get_assets().await.unwrap();
+    let asset_uuid = assets[0].asset_uuid.clone();
+
+    // Try to get non-existent transaction
+    let result = client
+        .get_asset_transaction(&asset_uuid, "nonexistent-txid")
+        .await;
+
+    assert!(result.is_err(), "Should error when transaction not found");
+}
+
+#[tokio::test]
+async fn test_get_asset_transactions_nonexistent_asset() {
+    let client = MockApiClient::new();
+
+    // Try to get transactions for non-existent asset
+    let params = AssetTransactionParams::default();
+    let result = client
+        .get_asset_transactions("nonexistent-uuid", &params)
+        .await;
+
+    assert!(result.is_err(), "Should error when asset doesn't exist");
+}
+
+#[tokio::test]
+async fn test_with_asset_transaction_builder() {
+    let custom_tx = AssetTransaction {
+        txid: "custom-txid-12345".to_string(),
+        transaction_type: "transfer".to_string(),
+        amount: 50_000,
+        datetime: Some("2024-06-15T12:00:00Z".to_string()),
+        blockheight: Some(500),
+        confirmations: Some(10),
+        registered_user: Some(1),
+        description: Some("Test transfer".to_string()),
+        vout: Some(0),
+        asset_blinder: None,
+        amount_blinder: None,
+        from_address: Some("from_address".to_string()),
+        to_address: Some("to_address".to_string()),
+        gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+    };
+
+    let client = MockApiClient::new()
+        .with_asset_transaction("550e8400-e29b-41d4-a716-446655440000", custom_tx.clone())
+        .build();
+
+    // Should be able to get the custom transaction
+    let tx = client
+        .get_asset_transaction("550e8400-e29b-41d4-a716-446655440000", "custom-txid-12345")
+        .await
+        .unwrap();
+
+    assert_eq!(tx.txid, "custom-txid-12345");
+    assert_eq!(tx.transaction_type, "transfer");
+    assert_eq!(tx.amount, 50_000);
+    assert_eq!(tx.registered_user, Some(1));
+}
+
+#[tokio::test]
+async fn test_get_asset_transactions_sorting() {
+    let tx1 = AssetTransaction {
+        txid: "txid-1".to_string(),
+        transaction_type: "transfer".to_string(),
+        amount: 100,
+        datetime: Some("2024-01-01T00:00:00Z".to_string()),
+        blockheight: Some(1),
+        confirmations: Some(100),
+        registered_user: None,
+        description: None,
+        vout: Some(0),
+        asset_blinder: None,
+        amount_blinder: None,
+        from_address: None,
+        to_address: None,
+        gaid: None,
+    };
+
+    let tx2 = AssetTransaction {
+        txid: "txid-2".to_string(),
+        transaction_type: "transfer".to_string(),
+        amount: 200,
+        datetime: Some("2024-01-02T00:00:00Z".to_string()),
+        blockheight: Some(2),
+        confirmations: Some(99),
+        registered_user: None,
+        description: None,
+        vout: Some(0),
+        asset_blinder: None,
+        amount_blinder: None,
+        from_address: None,
+        to_address: None,
+        gaid: None,
+    };
+
+    let client = MockApiClient::new()
+        .with_asset_transaction("550e8400-e29b-41d4-a716-446655440000", tx1)
+        .with_asset_transaction("550e8400-e29b-41d4-a716-446655440000", tx2)
+        .build();
+
+    // Get with descending order
+    let params = AssetTransactionParams {
+        sortorder: Some("desc".to_string()),
+        ..Default::default()
+    };
+    let transactions = client
+        .get_asset_transactions("550e8400-e29b-41d4-a716-446655440000", &params)
+        .await
+        .unwrap();
+
+    assert!(transactions.len() >= 2);
 }

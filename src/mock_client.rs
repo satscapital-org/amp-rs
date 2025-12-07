@@ -108,6 +108,7 @@ struct MockApiClientInner {
     gaid_balances: Mutex<HashMap<String, Vec<GaidBalanceEntry>>>,
     asset_summaries: Mutex<HashMap<String, AssetSummary>>,
     asset_assignments: Mutex<HashMap<String, Vec<Assignment>>>,
+    asset_transactions: Mutex<HashMap<String, Vec<crate::model::AssetTransaction>>>,
     distributions: Mutex<HashMap<String, Distribution>>,
     next_user_id: AtomicI64,
     next_category_id: AtomicI64,
@@ -143,6 +144,7 @@ impl MockApiClient {
             gaid_balances: Mutex::new(HashMap::new()),
             asset_summaries: Mutex::new(HashMap::new()),
             asset_assignments: Mutex::new(HashMap::new()),
+            asset_transactions: Mutex::new(HashMap::new()),
             distributions: Mutex::new(HashMap::new()),
             next_user_id: AtomicI64::new(1),
             next_category_id: AtomicI64::new(1),
@@ -1414,6 +1416,201 @@ impl MockApiClient {
             // No reissuances yet
             Ok(vec![])
         }
+    }
+
+    // Transaction methods
+
+    /// Gets all transactions for an asset.
+    ///
+    /// Returns a list of transactions associated with the specified asset,
+    /// including mock data for transfers, issuances, and other transaction types.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to retrieve transactions for
+    /// * `params` - Query parameters for filtering and pagination
+    ///
+    /// # Returns
+    /// A vector of `AssetTransaction` objects
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// # use amp_rs::MockApiClient;
+    /// # use amp_rs::model::AssetTransactionParams;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = MockApiClient::new();
+    /// let params = AssetTransactionParams::default();
+    /// let txs = client.get_asset_transactions("asset-uuid", &params).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_transactions(
+        &self,
+        asset_uuid: &str,
+        params: &crate::model::AssetTransactionParams,
+    ) -> Result<Vec<crate::model::AssetTransaction>, Error> {
+        use crate::model::AssetTransaction;
+
+        // Check if asset exists
+        let _asset = self.get_asset(asset_uuid).await?;
+
+        // Get any stored transactions for this asset
+        let transactions = self.inner.asset_transactions.lock().unwrap();
+        let mut result = transactions
+            .get(asset_uuid)
+            .cloned()
+            .unwrap_or_default();
+
+        // If no stored transactions, generate some mock data based on asset state
+        if result.is_empty() {
+            // Create a default issuance transaction
+            let issuance_tx = AssetTransaction {
+                txid: format!("{:064x}", 1000),
+                transaction_type: "issuance".to_string(),
+                amount: 1_000_000_000_000,
+                datetime: Some("2024-01-01T00:00:00Z".to_string()),
+                blockheight: Some(1),
+                confirmations: Some(100),
+                registered_user: None,
+                description: Some("Initial issuance".to_string()),
+                vout: Some(0),
+                asset_blinder: Some(format!("{:064x}", 2000)),
+                amount_blinder: Some(format!("{:064x}", 2001)),
+                from_address: None,
+                to_address: Some("treasury_address_mock".to_string()),
+                gaid: None,
+            };
+            result.push(issuance_tx);
+        }
+
+        // Apply filtering based on params
+        if let Some(ref tx_type) = params.transaction_type {
+            result.retain(|tx| tx.transaction_type == *tx_type);
+        }
+
+        if let Some(height_start) = params.height_start {
+            result.retain(|tx| tx.blockheight.unwrap_or(0) >= height_start);
+        }
+
+        if let Some(height_stop) = params.height_stop {
+            result.retain(|tx| tx.blockheight.unwrap_or(0) <= height_stop);
+        }
+
+        // Apply sorting
+        if let Some(ref sortorder) = params.sortorder {
+            if sortorder == "desc" {
+                result.reverse();
+            }
+        }
+
+        // Apply pagination
+        let start = params.start.unwrap_or(0) as usize;
+        let count = params.count.unwrap_or(100) as usize;
+        
+        if start < result.len() {
+            result = result.into_iter().skip(start).take(count).collect();
+        } else {
+            result = vec![];
+        }
+
+        Ok(result)
+    }
+
+    /// Gets a specific transaction for an asset by transaction ID.
+    ///
+    /// Returns detailed information about a specific transaction associated
+    /// with the specified asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `txid` - The transaction ID to retrieve
+    ///
+    /// # Returns
+    /// An `AssetTransaction` object with detailed transaction information
+    ///
+    /// # Errors
+    /// Returns an error if the asset or transaction is not found
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// # use amp_rs::MockApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = MockApiClient::new();
+    /// let tx = client.get_asset_transaction("asset-uuid", "txid-123").await?;
+    /// println!("Transaction type: {}", tx.transaction_type);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_transaction(
+        &self,
+        asset_uuid: &str,
+        txid: &str,
+    ) -> Result<crate::model::AssetTransaction, Error> {
+        use crate::model::AssetTransaction;
+
+        // Check if asset exists
+        let _asset = self.get_asset(asset_uuid).await?;
+
+        // Look for the transaction in stored transactions
+        let transactions = self.inner.asset_transactions.lock().unwrap();
+        if let Some(asset_txs) = transactions.get(asset_uuid) {
+            if let Some(tx) = asset_txs.iter().find(|tx| tx.txid == txid) {
+                return Ok(tx.clone());
+            }
+        }
+
+        // If not found, check if it matches the default issuance txid pattern
+        let issuance_txid = format!("{:064x}", 1000);
+        if txid == issuance_txid {
+            return Ok(AssetTransaction {
+                txid: issuance_txid,
+                transaction_type: "issuance".to_string(),
+                amount: 1_000_000_000_000,
+                datetime: Some("2024-01-01T00:00:00Z".to_string()),
+                blockheight: Some(1),
+                confirmations: Some(100),
+                registered_user: None,
+                description: Some("Initial issuance".to_string()),
+                vout: Some(0),
+                asset_blinder: Some(format!("{:064x}", 2000)),
+                amount_blinder: Some(format!("{:064x}", 2001)),
+                from_address: None,
+                to_address: Some("treasury_address_mock".to_string()),
+                gaid: None,
+            });
+        }
+
+        Err(Error::RequestFailed(format!(
+            "Transaction not found: {} for asset {}",
+            txid, asset_uuid
+        )))
+    }
+
+    /// Builder method to add a transaction to an asset.
+    ///
+    /// This allows configuring mock transactions for testing purposes.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to add the transaction to
+    /// * `transaction` - The transaction to add
+    ///
+    /// # Returns
+    /// Self for method chaining
+    #[must_use]
+    pub fn with_asset_transaction(
+        self,
+        asset_uuid: &str,
+        transaction: crate::model::AssetTransaction,
+    ) -> Self {
+        self.inner
+            .asset_transactions
+            .lock()
+            .unwrap()
+            .entry(asset_uuid.to_string())
+            .or_default()
+            .push(transaction);
+        self
     }
 
     // Burn methods
