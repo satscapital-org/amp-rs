@@ -1496,8 +1496,8 @@ impl MockApiClient {
         }
 
         // Apply pagination
-        let start = params.start.unwrap_or(0) as usize;
-        let count = params.count.unwrap_or(100) as usize;
+        let start = usize::try_from(params.start.unwrap_or(0)).unwrap_or(0);
+        let count = usize::try_from(params.count.unwrap_or(100)).unwrap_or(100);
 
         if start < result.len() {
             result = result.into_iter().skip(start).take(count).collect();
