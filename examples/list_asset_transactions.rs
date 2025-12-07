@@ -78,14 +78,8 @@ fn print_transaction(index: usize, tx: &amp_rs::model::AssetTransaction) {
     }
 
     // Print totals
-    println!(
-        "  Total Input:        {}",
-        tx.total_input_amount()
-    );
-    println!(
-        "  Total Output:       {}",
-        tx.total_output_amount()
-    );
+    println!("  Total Input:        {}", tx.total_input_amount());
+    println!("  Total Output:       {}", tx.total_output_amount());
 
     // Print explorer URL (truncated)
     let url_preview = if tx.unblinded_url.len() > 60 {
@@ -147,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get asset transactions with parameters to fetch all
     let params = AssetTransactionParams {
-        count: Some(1000), // Fetch up to 1000 transactions
+        count: Some(1000),                   // Fetch up to 1000 transactions
         sortorder: Some("desc".to_string()), // Most recent first
         ..Default::default()
     };
