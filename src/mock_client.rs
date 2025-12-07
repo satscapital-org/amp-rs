@@ -82,6 +82,8 @@ use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use secrecy::ExposeSecret;
+
 use crate::client::{AmpError, Error};
 use crate::model::{
     AddressGaidResponse, Asset, AssetSummary, Assignment, Balance, BroadcastResponse,
@@ -109,7 +111,9 @@ struct MockApiClientInner {
     asset_summaries: Mutex<HashMap<String, AssetSummary>>,
     asset_assignments: Mutex<HashMap<String, Vec<Assignment>>>,
     asset_transactions: Mutex<HashMap<String, Vec<crate::model::AssetTransaction>>>,
+    asset_lost_outputs: Mutex<HashMap<String, crate::model::AssetLostOutputs>>,
     distributions: Mutex<HashMap<String, Distribution>>,
+    managers: Mutex<HashMap<i64, crate::model::Manager>>,
     next_user_id: AtomicI64,
     next_category_id: AtomicI64,
     next_asset_uuid: AtomicU64,
@@ -145,7 +149,9 @@ impl MockApiClient {
             asset_summaries: Mutex::new(HashMap::new()),
             asset_assignments: Mutex::new(HashMap::new()),
             asset_transactions: Mutex::new(HashMap::new()),
+            asset_lost_outputs: Mutex::new(HashMap::new()),
             distributions: Mutex::new(HashMap::new()),
+            managers: Mutex::new(HashMap::new()),
             next_user_id: AtomicI64::new(1),
             next_category_id: AtomicI64::new(1),
             next_asset_uuid: AtomicU64::new(1),
@@ -1610,6 +1616,185 @@ impl MockApiClient {
             .entry(asset_uuid.to_string())
             .or_default()
             .push(transaction);
+        self
+    }
+
+    /// Gets the lost outputs for a specific asset.
+    ///
+    /// Returns outputs that cannot be tracked by the AMP API, typically due to
+    /// missing blinder information.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset to query
+    ///
+    /// # Returns
+    /// Returns an `AssetLostOutputs` struct with lost outputs and reissuance lost outputs
+    ///
+    /// # Doc Test Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::MockApiClient;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = MockApiClient::new();
+    ///
+    /// // By default, returns empty lost outputs
+    /// let lost_outputs = client.get_asset_lost_outputs("550e8400-e29b-41d4-a716-446655440000").await?;
+    /// assert!(lost_outputs.lost_outputs.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_lost_outputs(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<crate::model::AssetLostOutputs, Error> {
+        use crate::model::AssetLostOutputs;
+
+        // Check if asset exists
+        let _ = self.get_asset(asset_uuid).await?;
+
+        // Check if lost outputs are configured
+        let lost_outputs_map = self.inner.asset_lost_outputs.lock().unwrap();
+        if let Some(lost_outputs) = lost_outputs_map.get(asset_uuid) {
+            return Ok(lost_outputs.clone());
+        }
+
+        // Return empty lost outputs by default
+        Ok(AssetLostOutputs {
+            lost_outputs: vec![],
+            reissuance_lost_outputs: vec![],
+        })
+    }
+
+    /// Builder method to configure lost outputs for an asset.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `lost_outputs` - The lost outputs configuration
+    ///
+    /// # Returns
+    /// Self for method chaining
+    #[must_use]
+    pub fn with_asset_lost_outputs(
+        self,
+        asset_uuid: &str,
+        lost_outputs: crate::model::AssetLostOutputs,
+    ) -> Self {
+        self.inner
+            .asset_lost_outputs
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.to_string(), lost_outputs);
+        self
+    }
+
+    /// Updates blinder keys for a specific asset output.
+    ///
+    /// This mock implementation verifies the asset exists and the request is valid.
+    ///
+    /// # Arguments
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `request` - The blinder update request
+    ///
+    /// # Doc Test Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::{MockApiClient, UpdateBlindersRequest};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = MockApiClient::new();
+    ///
+    /// let request = UpdateBlindersRequest {
+    ///     txid: "abcd1234".to_string(),
+    ///     vout: 0,
+    ///     asset_blinder: "00112233".to_string(),
+    ///     amount_blinder: "44556677".to_string(),
+    /// };
+    ///
+    /// client.update_asset_blinders("550e8400-e29b-41d4-a716-446655440000", &request).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn update_asset_blinders(
+        &self,
+        asset_uuid: &str,
+        _request: &crate::model::UpdateBlindersRequest,
+    ) -> Result<(), Error> {
+        // Check if asset exists
+        let _ = self.get_asset(asset_uuid).await?;
+
+        // In a real implementation, this would update the blinder information
+        // For the mock, we just verify the asset exists and return success
+        Ok(())
+    }
+
+    /// Changes the password for a specific manager.
+    ///
+    /// # Arguments
+    /// * `manager_id` - The ID of the manager
+    /// * `password` - The new password
+    ///
+    /// # Returns
+    /// Returns new credentials including username, password, and token
+    ///
+    /// # Doc Test Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::MockApiClient;
+    /// # use amp_rs::model::Manager;
+    /// # use secrecy::Secret;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let manager = Manager {
+    ///     username: "test_manager".to_string(),
+    ///     id: 1,
+    ///     is_locked: false,
+    ///     assets: vec![],
+    /// };
+    ///
+    /// let client = MockApiClient::new().with_manager(manager);
+    ///
+    /// let new_password = Secret::new("new_password".to_string());
+    /// let response = client.change_manager_password(1, new_password).await?;
+    /// assert_eq!(response.username, "test_manager");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn change_manager_password(
+        &self,
+        manager_id: i64,
+        password: secrecy::Secret<String>,
+    ) -> Result<crate::model::ChangePasswordResponse, Error> {
+        use crate::model::{ChangePasswordResponse, Password};
+
+        // Check if manager exists
+        let managers = self.inner.managers.lock().unwrap();
+        let manager = managers.get(&manager_id).ok_or_else(|| {
+            Error::RequestFailed(format!("Manager not found: {}", manager_id))
+        })?;
+
+        // Return new credentials
+        Ok(ChangePasswordResponse {
+            username: manager.username.clone(),
+            password: secrecy::Secret::new(Password(password.expose_secret().clone())),
+            token: secrecy::Secret::new("mock-token-12345".to_string()),
+        })
+    }
+
+    /// Builder method to add a manager for testing.
+    ///
+    /// # Arguments
+    /// * `manager` - The manager to add
+    ///
+    /// # Returns
+    /// Self for method chaining
+    #[must_use]
+    pub fn with_manager(self, manager: crate::model::Manager) -> Self {
+        self.inner
+            .managers
+            .lock()
+            .unwrap()
+            .insert(manager.id, manager);
         self
     }
 

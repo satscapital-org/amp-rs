@@ -4,6 +4,7 @@ use amp_rs::model::{
     Asset, AssetTransaction, AssetTransactionParams, CreateAssetAssignmentRequest,
 };
 use amp_rs::MockApiClient;
+use secrecy::ExposeSecret;
 
 #[tokio::test]
 async fn test_mock_client_creation() {
@@ -548,4 +549,167 @@ async fn test_get_asset_transactions_sorting() {
         .unwrap();
 
     assert!(transactions.len() >= 2);
+}
+
+#[tokio::test]
+async fn test_get_asset_lost_outputs() {
+    let client = MockApiClient::new();
+
+    // By default, should return empty lost outputs
+    let lost_outputs = client
+        .get_asset_lost_outputs("550e8400-e29b-41d4-a716-446655440000")
+        .await
+        .unwrap();
+
+    assert!(lost_outputs.lost_outputs.is_empty());
+    assert!(lost_outputs.reissuance_lost_outputs.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_asset_lost_outputs_with_data() {
+    use amp_rs::model::{AssetLostOutputs, Outpoint};
+
+    let lost_outputs = AssetLostOutputs {
+        lost_outputs: vec![
+            Outpoint {
+                txid: "abc123".to_string(),
+                vout: 0,
+            },
+            Outpoint {
+                txid: "def456".to_string(),
+                vout: 1,
+            },
+        ],
+        reissuance_lost_outputs: vec![Outpoint {
+            txid: "ghi789".to_string(),
+            vout: 0,
+        }],
+    };
+
+    let client = MockApiClient::new()
+        .with_asset_lost_outputs("550e8400-e29b-41d4-a716-446655440000", lost_outputs);
+
+    let result = client
+        .get_asset_lost_outputs("550e8400-e29b-41d4-a716-446655440000")
+        .await
+        .unwrap();
+
+    assert_eq!(result.lost_outputs.len(), 2);
+    assert_eq!(result.reissuance_lost_outputs.len(), 1);
+    assert_eq!(result.lost_outputs[0].txid, "abc123");
+}
+
+#[tokio::test]
+async fn test_get_asset_lost_outputs_nonexistent_asset() {
+    let client = MockApiClient::new();
+
+    let result = client.get_asset_lost_outputs("nonexistent").await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_update_asset_blinders() {
+    use amp_rs::UpdateBlindersRequest;
+
+    let client = MockApiClient::new();
+
+    let request = UpdateBlindersRequest {
+        txid: "abcd1234".to_string(),
+        vout: 0,
+        asset_blinder: "00112233".to_string(),
+        amount_blinder: "44556677".to_string(),
+    };
+
+    // Should succeed for valid asset
+    client
+        .update_asset_blinders("550e8400-e29b-41d4-a716-446655440000", &request)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_update_asset_blinders_nonexistent_asset() {
+    use amp_rs::UpdateBlindersRequest;
+
+    let client = MockApiClient::new();
+
+    let request = UpdateBlindersRequest {
+        txid: "abcd1234".to_string(),
+        vout: 0,
+        asset_blinder: "00112233".to_string(),
+        amount_blinder: "44556677".to_string(),
+    };
+
+    let result = client.update_asset_blinders("nonexistent", &request).await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_change_manager_password() {
+    use amp_rs::model::Manager;
+    use secrecy::Secret;
+
+    let manager = Manager {
+        username: "test_manager".to_string(),
+        id: 1,
+        is_locked: false,
+        assets: vec![],
+    };
+
+    let client = MockApiClient::new().with_manager(manager);
+
+    let new_password = Secret::new("new_password".to_string());
+    let response = client.change_manager_password(1, new_password).await.unwrap();
+
+    assert_eq!(response.username, "test_manager");
+    assert!(!response.token.expose_secret().is_empty());
+}
+
+#[tokio::test]
+async fn test_change_manager_password_nonexistent_manager() {
+    use secrecy::Secret;
+
+    let client = MockApiClient::new();
+
+    let new_password = Secret::new("new_password".to_string());
+    let result = client.change_manager_password(999, new_password).await;
+
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_with_manager_builder() {
+    use amp_rs::model::Manager;
+
+    let manager1 = Manager {
+        username: "manager1".to_string(),
+        id: 1,
+        is_locked: false,
+        assets: vec!["asset1".to_string()],
+    };
+
+    let manager2 = Manager {
+        username: "manager2".to_string(),
+        id: 2,
+        is_locked: true,
+        assets: vec![],
+    };
+
+    let client = MockApiClient::new()
+        .with_manager(manager1)
+        .with_manager(manager2);
+
+    // Verify both managers are accessible
+    use secrecy::Secret;
+    let response1 = client
+        .change_manager_password(1, Secret::new("pass1".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(response1.username, "manager1");
+
+    let response2 = client
+        .change_manager_password(2, Secret::new("pass2".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(response2.username, "manager2");
 }

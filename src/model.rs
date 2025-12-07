@@ -51,6 +51,14 @@ pub struct ChangePasswordResponse {
     pub token: Secret<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct UpdateBlindersRequest {
+    pub txid: String,
+    pub vout: i64,
+    pub asset_blinder: String,
+    pub amount_blinder: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Asset {
@@ -506,7 +514,7 @@ pub struct AssetBalanceResponse {
     pub reissuance_lost_outputs: LostOutputs,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AssetLostOutputs {
     pub lost_outputs: LostOutputs,
     pub reissuance_lost_outputs: LostOutputs,

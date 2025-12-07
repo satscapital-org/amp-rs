@@ -40,6 +40,6 @@ pub use model::{
     AssetTransactionParams, BurnConfirmRequest, BurnCreate, BurnRequest, BurnResponse,
     ConfirmDistributionRequest, DistributionResponse, DistributionTxData, ReceivedByAddress,
     Reissuance, ReissueConfirmRequest, ReissueRequest, ReissueRequestResponse, ReissueResponse,
-    TransactionDetail, TxInput, Unspent,
+    TransactionDetail, TxInput, Unspent, UpdateBlindersRequest,
 };
 pub use signer::{LwkSoftwareSigner, Signer, SignerError};

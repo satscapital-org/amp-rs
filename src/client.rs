@@ -18,13 +18,13 @@ use secrecy::Secret;
 use std::str::FromStr;
 
 use crate::model::{
-    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetSummary,
-    AssetTransaction, AssetTransactionParams, Assignment, Balance, BroadcastResponse,
-    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
-    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
-    IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, ReceivedByAddress,
-    RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest, TokenResponse,
-    TransactionDetail, TxInput, Unspent, Utxo,
+    Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetLostOutputs,
+    AssetSummary, AssetTransaction, AssetTransactionParams, Assignment, Balance,
+    BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
+    ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
+    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
+    ReceivedByAddress, RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest,
+    TokenResponse, TransactionDetail, TxInput, UpdateBlindersRequest, Unspent, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -9001,6 +9001,119 @@ impl ApiClient {
         .await
     }
 
+    /// Gets the lost outputs for a specific asset.
+    ///
+    /// Lost outputs are outputs that the AMP API is unable to track, typically due to
+    /// missing blinder information or other tracking issues. This endpoint returns both
+    /// regular lost outputs and reissuance token lost outputs.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset_uuid` - The UUID of the asset to query
+    ///
+    /// # Returns
+    ///
+    /// Returns an `AssetLostOutputs` struct containing:
+    /// - `lost_outputs`: Regular outputs that cannot be tracked
+    /// - `reissuance_lost_outputs`: Reissuance token outputs that cannot be tracked
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::ApiClient;
+    /// # use reqwest::Url;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let base_url = Url::parse("https://amp.blockstream.com/api")?;
+    /// let client = ApiClient::with_mock_token(base_url, "test_token".to_string())?;
+    /// let lost_outputs = client.get_asset_lost_outputs("bc2d31af-60d0-4346-bfba-11b045f92dff").await?;
+    /// println!("Lost outputs: {}", lost_outputs.lost_outputs.len());
+    /// println!("Reissuance lost outputs: {}", lost_outputs.reissuance_lost_outputs.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_lost_outputs(
+        &self,
+        asset_uuid: &str,
+    ) -> Result<AssetLostOutputs, Error> {
+        self.request_json(
+            Method::GET,
+            &["assets", asset_uuid, "lost-outputs"],
+            None::<&()>,
+        )
+        .await
+    }
+
+    /// Updates blinder keys for a specific asset output.
+    ///
+    /// This endpoint is used to provide missing blinder information for outputs,
+    /// typically for issuance outputs where the blinders were initially set to zeros.
+    /// The blinders are cryptographic secrets used in Confidential Transactions to
+    /// hide asset amounts and types.
+    ///
+    /// # Arguments
+    ///
+    /// * `asset_uuid` - The UUID of the asset
+    /// * `request` - The blinder update request containing:
+    ///   - `txid`: Transaction ID of the output
+    ///   - `vout`: Output index
+    ///   - `asset_blinder`: Asset blinding factor (32-byte hex string)
+    ///   - `amount_blinder`: Amount blinding factor (32-byte hex string)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The asset UUID is invalid or not found
+    /// - The transaction or output does not exist
+    /// - The blinder values are invalid
+    /// - Authentication fails or token is invalid
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::{ApiClient, UpdateBlindersRequest};
+    /// # use reqwest::Url;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let base_url = Url::parse("https://amp.blockstream.com/api")?;
+    /// let client = ApiClient::with_mock_token(base_url, "test_token".to_string())?;
+    ///
+    /// let request = UpdateBlindersRequest {
+    ///     txid: "abcd1234...".to_string(),
+    ///     vout: 0,
+    ///     asset_blinder: "00112233...".to_string(),
+    ///     amount_blinder: "44556677...".to_string(),
+    /// };
+    ///
+    /// client.update_asset_blinders("bc2d31af-60d0-4346-bfba-11b045f92dff", &request).await?;
+    /// println!("Blinders updated successfully");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn update_asset_blinders(
+        &self,
+        asset_uuid: &str,
+        request: &UpdateBlindersRequest,
+    ) -> Result<(), Error> {
+        self.request_empty(
+            Method::POST,
+            &["assets", asset_uuid, "update-blinders"],
+            Some(request),
+        )
+        .await
+    }
+
     /// # Errors
     /// Returns an error if:
     /// - The asset UUID is invalid or not found
@@ -12098,6 +12211,70 @@ impl ApiClient {
             Method::PUT,
             &["managers", &manager_id.to_string(), "unlock"],
             None::<&()>,
+        )
+        .await
+    }
+
+    /// Changes the password for a specific manager.
+    ///
+    /// This method updates the password for the specified manager and returns new credentials
+    /// including a new authentication token. The manager's username and new password are
+    /// returned in the response along with a new token that should be used for subsequent
+    /// API requests.
+    ///
+    /// # Arguments
+    ///
+    /// * `manager_id` - The ID of the manager whose password should be changed
+    /// * `password` - The new password to set for the manager
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ChangePasswordResponse` containing:
+    /// - `username`: The manager's username
+    /// - `password`: The new password (wrapped in `Secret`)
+    /// - `token`: A new authentication token (wrapped in `Secret`)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The manager ID is invalid or not found
+    /// - Authentication fails or token is invalid
+    /// - The caller lacks permissions to change this manager's password
+    /// - Network connectivity issues occur
+    /// - The server returns an error status
+    /// - The response cannot be parsed
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use amp_rs::ApiClient;
+    /// # use reqwest::Url;
+    /// # use secrecy::Secret;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let base_url = Url::parse("https://amp.blockstream.com/api")?;
+    /// let client = ApiClient::with_mock_token(base_url, "test_token".to_string())?;
+    ///
+    /// let new_password = Secret::new("new_secure_password".to_string());
+    /// let response = client.change_manager_password(123, new_password).await?;
+    ///
+    /// println!("Password changed for manager: {}", response.username);
+    /// // The response.token can be used for subsequent API calls
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn change_manager_password(
+        &self,
+        manager_id: i64,
+        password: Secret<String>,
+    ) -> Result<ChangePasswordResponse, Error> {
+        let request = ChangePasswordRequest {
+            password: Secret::new(Password(password.expose_secret().clone())),
+        };
+        self.request_json(
+            Method::POST,
+            &["managers", &manager_id.to_string(), "change-password"],
+            Some(request),
         )
         .await
     }

@@ -243,3 +243,43 @@ fn test_asset_transaction_params_skip_serializing_none() {
     assert!(!json.contains("sortcolumn"));
     assert!(!json.contains("height_start"));
 }
+
+#[test]
+fn test_update_blinders_request_serialization() {
+    use amp_rs::UpdateBlindersRequest;
+
+    let request = UpdateBlindersRequest {
+        txid: "abc123def456".to_string(),
+        vout: 0,
+        asset_blinder: "0011223344556677889900112233445566778899001122334455667788990011".to_string(),
+        amount_blinder: "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100".to_string(),
+    };
+
+    // Test serialization
+    let json = serde_json::to_string(&request).expect("Serialization failed");
+    assert!(json.contains("abc123def456"));
+    assert!(json.contains("\"vout\":0"));
+    assert!(json.contains("0011223344556677889900112233445566778899001122334455667788990011"));
+    assert!(json.contains("ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"));
+
+    // Verify the JSON structure
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON parsing failed");
+    assert_eq!(parsed["txid"], "abc123def456");
+    assert_eq!(parsed["vout"], 0);
+}
+
+#[test]
+fn test_update_blinders_request_with_different_vout() {
+    use amp_rs::UpdateBlindersRequest;
+
+    let request = UpdateBlindersRequest {
+        txid: "test_txid".to_string(),
+        vout: 5,
+        asset_blinder: "asset_blinder_hex".to_string(),
+        amount_blinder: "amount_blinder_hex".to_string(),
+    };
+
+    let json = serde_json::to_string(&request).expect("Serialization failed");
+    assert!(json.contains("\"vout\":5"));
+    assert!(json.contains("test_txid"));
+}

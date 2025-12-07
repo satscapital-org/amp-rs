@@ -1485,3 +1485,68 @@ pub fn mock_get_asset_balance_no_lost_outputs(server: &MockServer) {
             }));
     });
 }
+
+/// Sets up a mock for the `GET /assets/{asset_uuid}/lost-outputs` endpoint.
+///
+/// This mock returns empty lost outputs for the specified asset.
+pub fn mock_get_asset_lost_outputs(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/lost-outputs");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "lost_outputs": [],
+                "reissuance_lost_outputs": []
+            }));
+    });
+}
+
+/// Sets up a mock for the `GET /assets/{asset_uuid}/lost-outputs` endpoint with lost outputs.
+///
+/// This mock returns some example lost outputs for testing error conditions.
+pub fn mock_get_asset_lost_outputs_with_data(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(GET).path("/assets/mock_asset_uuid/lost-outputs");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "lost_outputs": [
+                    {"txid": "abc123", "vout": 0},
+                    {"txid": "def456", "vout": 1}
+                ],
+                "reissuance_lost_outputs": [
+                    {"txid": "ghi789", "vout": 0}
+                ]
+            }));
+    });
+}
+
+/// Sets up a mock for the `POST /assets/{asset_uuid}/update-blinders` endpoint.
+///
+/// This mock accepts blinder update requests and returns a 200 status.
+pub fn mock_update_asset_blinders(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/assets/mock_asset_uuid/update-blinders")
+            .header("content-type", "application/json");
+        then.status(200).body("");
+    });
+}
+
+/// Sets up a mock for the `POST /managers/{manager_id}/change-password` endpoint.
+///
+/// This mock accepts password change requests and returns new credentials.
+pub fn mock_change_manager_password(server: &MockServer) {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/managers/1/change-password")
+            .header("content-type", "application/json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "username": "test_manager",
+                "password": "new_password",
+                "token": "new_token_12345"
+            }));
+    });
+}

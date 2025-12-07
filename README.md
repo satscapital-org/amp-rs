@@ -226,14 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The following AMP API endpoints are not yet implemented in this client library. This list may not be exhaustive:
 
-### Asset Operations
-- `GET /api/assets/{assetUuid}/lost-outputs` - Get asset lost outputs
-- `POST /api/assets/{assetUuid}/update-blinders` - Update asset blinders
-
-### Manager Operations
-- `POST /api/managers/{managerId}/change-password` - Change manager password
-
-These and potentially other endpoints will be added in future releases. If you need any of these endpoints urgently, please open an issue on the project repository.
+If you need any missing endpoints, please open an issue on the project repository.
 
 ## Token Management
 
