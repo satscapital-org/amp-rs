@@ -8935,12 +8935,8 @@ impl ApiClient {
         asset_uuid: &str,
         params: &AssetTransactionParams,
     ) -> Result<Vec<AssetTransaction>, Error> {
-        self.request_json(
-            Method::GET,
-            &["assets", asset_uuid, "txs"],
-            Some(params),
-        )
-        .await
+        self.request_json(Method::GET, &["assets", asset_uuid, "txs"], Some(params))
+            .await
     }
 
     /// Gets a specific transaction for an asset by transaction ID.

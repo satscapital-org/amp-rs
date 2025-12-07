@@ -1,6 +1,8 @@
 //! Tests for MockApiClient
 
-use amp_rs::model::{Asset, AssetTransaction, AssetTransactionParams, CreateAssetAssignmentRequest};
+use amp_rs::model::{
+    Asset, AssetTransaction, AssetTransactionParams, CreateAssetAssignmentRequest,
+};
 use amp_rs::MockApiClient;
 
 #[tokio::test]
@@ -315,12 +317,18 @@ async fn test_get_asset_transactions() {
         .unwrap();
 
     // Should have at least the default issuance transaction
-    assert!(!transactions.is_empty(), "Should have at least one transaction");
+    assert!(
+        !transactions.is_empty(),
+        "Should have at least one transaction"
+    );
 
     // Verify transaction structure
     let tx = &transactions[0];
     assert!(!tx.txid.is_empty(), "Transaction should have a txid");
-    assert!(!tx.transaction_type.is_empty(), "Transaction should have a type");
+    assert!(
+        !tx.transaction_type.is_empty(),
+        "Transaction should have a type"
+    );
 }
 
 #[tokio::test]
@@ -341,7 +349,9 @@ async fn test_get_asset_transactions_with_filtering() {
 
     // Should have issuance transaction
     assert!(!transactions.is_empty());
-    assert!(transactions.iter().all(|tx| tx.transaction_type == "issuance"));
+    assert!(transactions
+        .iter()
+        .all(|tx| tx.transaction_type == "issuance"));
 }
 
 #[tokio::test]
@@ -377,11 +387,17 @@ async fn test_get_asset_transaction() {
         .await
         .unwrap();
 
-    assert!(!transactions.is_empty(), "Should have transactions to test with");
+    assert!(
+        !transactions.is_empty(),
+        "Should have transactions to test with"
+    );
 
     // Get specific transaction
     let txid = &transactions[0].txid;
-    let tx = client.get_asset_transaction(&asset_uuid, txid).await.unwrap();
+    let tx = client
+        .get_asset_transaction(&asset_uuid, txid)
+        .await
+        .unwrap();
 
     assert_eq!(tx.txid, *txid);
     assert!(!tx.transaction_type.is_empty());

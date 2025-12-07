@@ -32,36 +32,83 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║   Name:                 {}", asset.name);
     println!("║   Asset UUID:           {}", asset.asset_uuid);
     println!("║   Asset ID:             {}", asset.asset_id);
-    println!("║   Ticker:               {}", 
-        asset.ticker.as_ref().unwrap_or(&"(none)".to_string()));
-    println!("║   Precision:            {} decimal places", asset.precision);
+    println!(
+        "║   Ticker:               {}",
+        asset.ticker.as_ref().unwrap_or(&"(none)".to_string())
+    );
+    println!(
+        "║   Precision:            {} decimal places",
+        asset.precision
+    );
     println!("║");
     println!("║ Issuer Information:");
     println!("║   Issuer ID:            {}", asset.issuer);
-    println!("║   Domain:               {}", 
-        asset.domain.as_ref().unwrap_or(&"(none)".to_string()));
-    println!("║   Public Key:           {}", 
-        asset.pubkey.as_ref().map(|p| {
-            if p.len() > 50 {
-                format!("{}...", &p[..50])
-            } else {
-                p.clone()
-            }
-        }).unwrap_or("(none)".to_string()));
+    println!(
+        "║   Domain:               {}",
+        asset.domain.as_ref().unwrap_or(&"(none)".to_string())
+    );
+    println!(
+        "║   Public Key:           {}",
+        asset
+            .pubkey
+            .as_ref()
+            .map(|p| {
+                if p.len() > 50 {
+                    format!("{}...", &p[..50])
+                } else {
+                    p.clone()
+                }
+            })
+            .unwrap_or("(none)".to_string())
+    );
     println!("║");
     println!("║ Reissuance:");
-    println!("║   Reissuance Token ID:  {}", 
-        asset.reissuance_token_id.as_ref().unwrap_or(&"(none)".to_string()));
+    println!(
+        "║   Reissuance Token ID:  {}",
+        asset
+            .reissuance_token_id
+            .as_ref()
+            .unwrap_or(&"(none)".to_string())
+    );
     println!("║");
     println!("║ Status Flags:");
-    println!("║   Registered:           {}", if asset.is_registered { "✓ Yes" } else { "✗ No" });
-    println!("║   Authorized:           {}", if asset.is_authorized { "✓ Yes" } else { "✗ No" });
-    println!("║   Locked:               {}", if asset.is_locked { "✓ Yes" } else { "✗ No" });
-    println!("║   Transfer Restricted:  {}", if asset.transfer_restricted { "✓ Yes" } else { "✗ No" });
+    println!(
+        "║   Registered:           {}",
+        if asset.is_registered {
+            "✓ Yes"
+        } else {
+            "✗ No"
+        }
+    );
+    println!(
+        "║   Authorized:           {}",
+        if asset.is_authorized {
+            "✓ Yes"
+        } else {
+            "✗ No"
+        }
+    );
+    println!(
+        "║   Locked:               {}",
+        if asset.is_locked { "✓ Yes" } else { "✗ No" }
+    );
+    println!(
+        "║   Transfer Restricted:  {}",
+        if asset.transfer_restricted {
+            "✓ Yes"
+        } else {
+            "✗ No"
+        }
+    );
     println!("║");
     println!("║ Authorization:");
-    println!("║   Auth Endpoint:        {}", 
-        asset.issuer_authorization_endpoint.as_ref().unwrap_or(&"(none)".to_string()));
+    println!(
+        "║   Auth Endpoint:        {}",
+        asset
+            .issuer_authorization_endpoint
+            .as_ref()
+            .unwrap_or(&"(none)".to_string())
+    );
     println!("║");
     println!("║ Requirements:");
     if asset.requirements.is_empty() {

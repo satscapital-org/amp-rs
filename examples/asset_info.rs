@@ -43,7 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if asset_categories.is_empty() {
         println!("\nThis asset does not belong to any categories.");
     } else {
-        println!("\nThis asset belongs to {} category(ies):", asset_categories.len());
+        println!(
+            "\nThis asset belongs to {} category(ies):",
+            asset_categories.len()
+        );
         for category in asset_categories {
             println!("  - {} (ID: {})", category.name, category.id);
             if let Some(desc) = category.description {

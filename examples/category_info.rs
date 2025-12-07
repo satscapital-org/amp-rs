@@ -38,7 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Display registered users
-    println!("\n=== Registered Users ({}) ===", category.registered_users.len());
+    println!(
+        "\n=== Registered Users ({}) ===",
+        category.registered_users.len()
+    );
     if category.registered_users.is_empty() {
         println!("No users in this category.");
     } else {
@@ -50,7 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(gaid) = &user.gaid {
                         println!("    GAID: {}", gaid);
                     }
-                    println!("    Company: {}", if user.is_company { "Yes" } else { "No" });
+                    println!(
+                        "    Company: {}",
+                        if user.is_company { "Yes" } else { "No" }
+                    );
                 }
                 Err(e) => {
                     println!("  - User ID {} (error fetching details: {})", user_id, e);
@@ -73,11 +79,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(ticker) = &asset.ticker {
                         println!("    Ticker: {}", ticker);
                     }
-                    println!("    Registered: {}", if asset.is_registered { "Yes" } else { "No" });
+                    println!(
+                        "    Registered: {}",
+                        if asset.is_registered { "Yes" } else { "No" }
+                    );
                     println!("    Locked: {}", if asset.is_locked { "Yes" } else { "No" });
                 }
                 Err(e) => {
-                    println!("  - Asset UUID {} (error fetching details: {})", asset_uuid, e);
+                    println!(
+                        "  - Asset UUID {} (error fetching details: {})",
+                        asset_uuid, e
+                    );
                 }
             }
         }

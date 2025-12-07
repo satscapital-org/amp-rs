@@ -111,8 +111,7 @@ fn test_asset_transaction_optional_fields() {
         "amount": 1000
     }"#;
 
-    let tx: AssetTransaction =
-        serde_json::from_str(minimal_json).expect("Deserialization failed");
+    let tx: AssetTransaction = serde_json::from_str(minimal_json).expect("Deserialization failed");
 
     assert_eq!(tx.txid, "minimal-tx");
     assert_eq!(tx.transaction_type, "issuance");

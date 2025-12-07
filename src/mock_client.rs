@@ -295,10 +295,7 @@ impl MockApiClient {
             registered_users: 0,
             active_registered_users: 0,
             active_green_subaccounts: 0,
-            reissuance_tokens: asset
-                .reissuance_token_id
-                .as_ref()
-                .map_or(0, |_| 100_000),
+            reissuance_tokens: asset.reissuance_token_id.as_ref().map_or(0, |_| 100_000),
         };
         self.inner
             .asset_summaries
@@ -1130,9 +1127,7 @@ impl MockApiClient {
         let _asset = self.get_asset(asset_uuid).await?;
 
         let mut assignments_map = self.inner.asset_assignments.lock().unwrap();
-        let assignments = assignments_map
-            .entry(asset_uuid.to_string())
-            .or_default();
+        let assignments = assignments_map.entry(asset_uuid.to_string()).or_default();
 
         let mut created = Vec::new();
         for request in requests {
@@ -1456,10 +1451,7 @@ impl MockApiClient {
 
         // Get any stored transactions for this asset
         let transactions = self.inner.asset_transactions.lock().unwrap();
-        let mut result = transactions
-            .get(asset_uuid)
-            .cloned()
-            .unwrap_or_default();
+        let mut result = transactions.get(asset_uuid).cloned().unwrap_or_default();
 
         // If no stored transactions, generate some mock data based on asset state
         if result.is_empty() {
@@ -1506,7 +1498,7 @@ impl MockApiClient {
         // Apply pagination
         let start = params.start.unwrap_or(0) as usize;
         let count = params.count.unwrap_or(100) as usize;
-        
+
         if start < result.len() {
             result = result.into_iter().skip(start).take(count).collect();
         } else {

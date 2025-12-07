@@ -18,7 +18,7 @@ const TEST_USER_GAIDS: &[&str] = &[
     "GA4UwSzJb5EbyeCk2VDG4euhyhkiNX", // Used in test_delete_asset_live
     "GA2HsrczzwaFzdJiw5NJM8P4iWKQh1", // Used in multiple live tests
     "GA3tJqC58PwiCjp4tPkCjNkPnVzLqn", // Used in live tests
-    "GAbYScu6jkWUND2jo3L4KJxyvo55d", // Used in multiple live tests
+    "GAbYScu6jkWUND2jo3L4KJxyvo55d",  // Used in multiple live tests
     "GA3DS3emT12zDF4RGywBvJqZfhefNp", // User 1203 - used in multiple live tests
     "GA44YYwPM8vuRMmjFL8i5kSqXhoTW2", // Used in mock and live tests
     // Additional protected user GAIDs
@@ -261,7 +261,10 @@ async fn show_cleanup_preview(client: &ApiClient) -> Result<(), Box<dyn std::err
             println!(
                 "   Note: {} users protected by primary GAID, {} by user ID",
                 test_users_count,
-                users.iter().filter(|u| PROTECTED_USER_IDS.contains(&u.id)).count()
+                users
+                    .iter()
+                    .filter(|u| PROTECTED_USER_IDS.contains(&u.id))
+                    .count()
             );
             println!("   (Secondary GAIDs will also be checked during deletion)");
             if !deletable_users.is_empty() {
@@ -624,7 +627,9 @@ async fn delete_all_registered_users(client: &ApiClient) -> Result<(), Box<dyn s
         };
 
         let has_protected_gaid = all_user_gaids.iter().any(|user_gaid| {
-            TEST_USER_GAIDS.iter().any(|&protected| protected == user_gaid)
+            TEST_USER_GAIDS
+                .iter()
+                .any(|&protected| protected == user_gaid)
         });
 
         if has_protected_gaid {
