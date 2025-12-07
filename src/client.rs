@@ -19,12 +19,12 @@ use std::str::FromStr;
 
 use crate::model::{
     Activity, Asset, AssetActivityParams, AssetDistributionAssignment, AssetLostOutputs,
-    AssetSummary, AssetTransaction, AssetTransactionParams, Assignment, Balance,
-    BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
-    ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
-    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
-    ReceivedByAddress, RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest,
-    TokenResponse, TransactionDetail, TxInput, UpdateBlindersRequest, Unspent, Utxo,
+    AssetSummary, AssetTransaction, AssetTransactionParams, Assignment, Balance, BroadcastResponse,
+    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
+    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
+    IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, ReceivedByAddress,
+    RegisterAssetResponse, Reissuance, TokenData, TokenInfo, TokenRequest, TokenResponse,
+    TransactionDetail, TxInput, Unspent, UpdateBlindersRequest, Utxo,
 };
 use crate::signer::{Signer, SignerError};
 

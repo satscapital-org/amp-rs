@@ -659,7 +659,10 @@ async fn test_change_manager_password() {
     let client = MockApiClient::new().with_manager(manager);
 
     let new_password = Secret::new("new_password".to_string());
-    let response = client.change_manager_password(1, new_password).await.unwrap();
+    let response = client
+        .change_manager_password(1, new_password)
+        .await
+        .unwrap();
 
     assert_eq!(response.username, "test_manager");
     assert!(!response.token.expose_secret().is_empty());

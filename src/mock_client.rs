@@ -1769,9 +1769,9 @@ impl MockApiClient {
 
         // Check if manager exists
         let managers = self.inner.managers.lock().unwrap();
-        let manager = managers.get(&manager_id).ok_or_else(|| {
-            Error::RequestFailed(format!("Manager not found: {}", manager_id))
-        })?;
+        let manager = managers
+            .get(&manager_id)
+            .ok_or_else(|| Error::RequestFailed(format!("Manager not found: {}", manager_id)))?;
 
         // Return new credentials
         Ok(ChangePasswordResponse {

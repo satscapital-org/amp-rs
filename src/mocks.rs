@@ -1491,7 +1491,8 @@ pub fn mock_get_asset_balance_no_lost_outputs(server: &MockServer) {
 /// This mock returns empty lost outputs for the specified asset.
 pub fn mock_get_asset_lost_outputs(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/mock_asset_uuid/lost-outputs");
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/lost-outputs");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({
@@ -1506,7 +1507,8 @@ pub fn mock_get_asset_lost_outputs(server: &MockServer) {
 /// This mock returns some example lost outputs for testing error conditions.
 pub fn mock_get_asset_lost_outputs_with_data(server: &MockServer) {
     server.mock(|when, then| {
-        when.method(GET).path("/assets/mock_asset_uuid/lost-outputs");
+        when.method(GET)
+            .path("/assets/mock_asset_uuid/lost-outputs");
         then.status(200)
             .header("content-type", "application/json")
             .json_body(json!({

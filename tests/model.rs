@@ -251,8 +251,10 @@ fn test_update_blinders_request_serialization() {
     let request = UpdateBlindersRequest {
         txid: "abc123def456".to_string(),
         vout: 0,
-        asset_blinder: "0011223344556677889900112233445566778899001122334455667788990011".to_string(),
-        amount_blinder: "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100".to_string(),
+        asset_blinder: "0011223344556677889900112233445566778899001122334455667788990011"
+            .to_string(),
+        amount_blinder: "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+            .to_string(),
     };
 
     // Test serialization
