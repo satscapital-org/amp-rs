@@ -36,9 +36,10 @@ pub mod signer;
 pub use client::{AmpError, ApiClient, ElementsRpc, Error};
 pub use mock_client::MockApiClient;
 pub use model::{
-    AssetDistributionAssignment, AssetTransaction, AssetTransactionParams, BurnConfirmRequest,
-    BurnCreate, BurnRequest, BurnResponse, ConfirmDistributionRequest, DistributionResponse,
-    DistributionTxData, ReceivedByAddress, Reissuance, ReissueConfirmRequest, ReissueRequest,
-    ReissueRequestResponse, ReissueResponse, TransactionDetail, TxInput, Unspent,
+    AssetDistributionAssignment, AssetTransaction, AssetTransactionInput, AssetTransactionOutput,
+    AssetTransactionParams, BurnConfirmRequest, BurnCreate, BurnRequest, BurnResponse,
+    ConfirmDistributionRequest, DistributionResponse, DistributionTxData, ReceivedByAddress,
+    Reissuance, ReissueConfirmRequest, ReissueRequest, ReissueRequestResponse, ReissueResponse,
+    TransactionDetail, TxInput, Unspent,
 };
 pub use signer::{LwkSoftwareSigner, Signer, SignerError};

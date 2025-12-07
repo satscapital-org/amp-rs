@@ -61,29 +61,35 @@ fn test_create_asset_assignment_request_defaults() {
 
 #[test]
 fn test_asset_transaction_serialization() {
-    use amp_rs::model::AssetTransaction;
+    use amp_rs::model::{AssetTransaction, AssetTransactionOutput};
 
     let tx = AssetTransaction {
         txid: "abc123def456".to_string(),
-        transaction_type: "transfer".to_string(),
-        amount: 100_000,
-        datetime: Some("2024-06-15T12:00:00Z".to_string()),
-        blockheight: Some(500),
-        confirmations: Some(10),
-        registered_user: Some(1),
-        description: Some("Test transaction".to_string()),
-        vout: Some(0),
-        asset_blinder: Some("blinder123".to_string()),
-        amount_blinder: Some("blinder456".to_string()),
-        from_address: Some("from_addr".to_string()),
-        to_address: Some("to_addr".to_string()),
-        gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+        datetime: "2024-06-15T12:00:00Z".to_string(),
+        blockheight: 500,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: true,
+        inputs: vec![],
+        outputs: vec![AssetTransactionOutput {
+            asset_id: "test_asset_id".to_string(),
+            vout: 0,
+            amount: 100_000,
+            asset_blinder: "blinder123".to_string(),
+            amount_blinder: "blinder456".to_string(),
+            registered_user: Some(1),
+            gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+            is_treasury: false,
+            is_spent: false,
+            is_burnt: false,
+        }],
+        unblinded_url: "https://example.com/tx".to_string(),
     };
 
     // Test serialization
     let json = serde_json::to_string(&tx).expect("Serialization failed");
     assert!(json.contains("abc123def456"));
-    assert!(json.contains("\"type\":\"transfer\""));
+    assert!(json.contains("\"is_distribution\":true"));
     assert!(json.contains("100000"));
     assert!(json.contains("\"GAID\":\"GAbYScu6jkWUND2jo3L4KJxyvo55d\""));
 
@@ -91,37 +97,74 @@ fn test_asset_transaction_serialization() {
     let deserialized: AssetTransaction =
         serde_json::from_str(&json).expect("Deserialization failed");
     assert_eq!(deserialized.txid, "abc123def456");
-    assert_eq!(deserialized.transaction_type, "transfer");
-    assert_eq!(deserialized.amount, 100_000);
-    assert_eq!(deserialized.registered_user, Some(1));
+    assert_eq!(deserialized.transaction_type(), "distribution");
+    assert_eq!(deserialized.total_output_amount(), 100_000);
+    assert_eq!(deserialized.outputs[0].registered_user, Some(1));
     assert_eq!(
-        deserialized.gaid,
+        deserialized.outputs[0].gaid,
         Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string())
     );
 }
 
 #[test]
-fn test_asset_transaction_optional_fields() {
+fn test_asset_transaction_type_method() {
     use amp_rs::model::AssetTransaction;
 
-    // Minimal transaction with only required fields
-    let minimal_json = r#"{
-        "txid": "minimal-tx",
-        "type": "issuance",
-        "amount": 1000
-    }"#;
+    // Test issuance
+    let issuance_tx = AssetTransaction {
+        txid: "tx1".to_string(),
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 1,
+        is_issuance: true,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![],
+        unblinded_url: "https://example.com".to_string(),
+    };
+    assert_eq!(issuance_tx.transaction_type(), "issuance");
 
-    let tx: AssetTransaction = serde_json::from_str(minimal_json).expect("Deserialization failed");
+    // Test reissuance
+    let reissuance_tx = AssetTransaction {
+        txid: "tx2".to_string(),
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 2,
+        is_issuance: false,
+        is_reissuance: true,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![],
+        unblinded_url: "https://example.com".to_string(),
+    };
+    assert_eq!(reissuance_tx.transaction_type(), "reissuance");
 
-    assert_eq!(tx.txid, "minimal-tx");
-    assert_eq!(tx.transaction_type, "issuance");
-    assert_eq!(tx.amount, 1000);
-    assert!(tx.datetime.is_none());
-    assert!(tx.blockheight.is_none());
-    assert!(tx.confirmations.is_none());
-    assert!(tx.registered_user.is_none());
-    assert!(tx.description.is_none());
-    assert!(tx.gaid.is_none());
+    // Test distribution
+    let distribution_tx = AssetTransaction {
+        txid: "tx3".to_string(),
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 3,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: true,
+        inputs: vec![],
+        outputs: vec![],
+        unblinded_url: "https://example.com".to_string(),
+    };
+    assert_eq!(distribution_tx.transaction_type(), "distribution");
+
+    // Test transfer (none of the flags set)
+    let transfer_tx = AssetTransaction {
+        txid: "tx4".to_string(),
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 4,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![],
+        unblinded_url: "https://example.com".to_string(),
+    };
+    assert_eq!(transfer_tx.transaction_type(), "transfer");
 }
 
 #[test]
@@ -130,25 +173,20 @@ fn test_asset_transaction_clone() {
 
     let tx = AssetTransaction {
         txid: "test-txid".to_string(),
-        transaction_type: "burn".to_string(),
-        amount: 50_000,
-        datetime: Some("2024-01-01T00:00:00Z".to_string()),
-        blockheight: Some(100),
-        confirmations: Some(6),
-        registered_user: None,
-        description: None,
-        vout: Some(1),
-        asset_blinder: None,
-        amount_blinder: None,
-        from_address: None,
-        to_address: None,
-        gaid: None,
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 100,
+        is_issuance: true,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![],
+        unblinded_url: "https://example.com".to_string(),
     };
 
     let cloned = tx.clone();
     assert_eq!(tx.txid, cloned.txid);
-    assert_eq!(tx.transaction_type, cloned.transaction_type);
-    assert_eq!(tx.amount, cloned.amount);
+    assert_eq!(tx.transaction_type(), cloned.transaction_type());
+    assert_eq!(tx.blockheight, cloned.blockheight);
 }
 
 #[test]
@@ -162,7 +200,6 @@ fn test_asset_transaction_params_serialization() {
         sortorder: Some("desc".to_string()),
         height_start: Some(1000),
         height_stop: Some(2000),
-        transaction_type: Some("transfer".to_string()),
     };
 
     // Test serialization
@@ -173,7 +210,6 @@ fn test_asset_transaction_params_serialization() {
     assert!(json.contains("\"sortorder\":\"desc\""));
     assert!(json.contains("\"height_start\":1000"));
     assert!(json.contains("\"height_stop\":2000"));
-    assert!(json.contains("\"type\":\"transfer\""));
 }
 
 #[test]
@@ -188,7 +224,6 @@ fn test_asset_transaction_params_default() {
     assert!(params.sortorder.is_none());
     assert!(params.height_start.is_none());
     assert!(params.height_stop.is_none());
-    assert!(params.transaction_type.is_none());
 }
 
 #[test]

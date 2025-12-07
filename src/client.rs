@@ -8911,18 +8911,18 @@ impl ApiClient {
     /// let txs = client.get_asset_transactions("asset-uuid-123", &params).await?;
     ///
     /// for tx in txs {
-    ///     println!("Transaction: {} - Type: {} - Amount: {}",
-    ///              tx.txid, tx.transaction_type, tx.amount);
+    ///     println!("Transaction: {} - Type: {} - Outputs: {}",
+    ///              tx.txid, tx.transaction_type(), tx.outputs.len());
     /// }
     ///
-    /// // Get transactions with filtering
+    /// // Get transactions with filtering by block height
     /// let params = AssetTransactionParams {
     ///     count: Some(10),
     ///     sortorder: Some("desc".to_string()),
-    ///     transaction_type: Some("transfer".to_string()),
+    ///     height_start: Some(1000),
     ///     ..Default::default()
     /// };
-    /// let recent_transfers = client.get_asset_transactions("asset-uuid-123", &params).await?;
+    /// let recent_txs = client.get_asset_transactions("asset-uuid-123", &params).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -8978,11 +8978,9 @@ impl ApiClient {
     /// let tx = client.get_asset_transaction(asset_uuid, txid).await?;
     ///
     /// println!("Transaction: {}", tx.txid);
-    /// println!("Type: {}", tx.transaction_type);
-    /// println!("Amount: {}", tx.amount);
-    /// if let Some(height) = tx.blockheight {
-    ///     println!("Block height: {}", height);
-    /// }
+    /// println!("Type: {}", tx.transaction_type());
+    /// println!("Block height: {}", tx.blockheight);
+    /// println!("Outputs: {}", tx.outputs.len());
     /// # Ok(())
     /// # }
     /// ```

@@ -227,8 +227,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 The following AMP API endpoints are not yet implemented in this client library. This list may not be exhaustive:
 
 ### Asset Operations
-- `GET /api/assets/{assetUuid}/txs` - Get asset transactions
-- `GET /api/assets/{assetUuid}/txs/{txid}` - Get specific asset transaction
 - `GET /api/assets/{assetUuid}/lost-outputs` - Get asset lost outputs
 - `POST /api/assets/{assetUuid}/update-blinders` - Update asset blinders
 

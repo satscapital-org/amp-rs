@@ -330,53 +330,119 @@ pub struct AssetActivityParams {
     pub height_stop: Option<i64>,
 }
 
+/// Represents an input in an asset transaction.
+///
+/// Contains details about a transaction input including the previous output
+/// being spent, amounts, and blinding factors.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AssetTransactionInput {
+    /// The asset ID
+    pub asset_id: String,
+    /// The input index within the transaction
+    pub vin: i64,
+    /// The previous transaction ID being spent
+    pub prev_txid: String,
+    /// The previous output index being spent
+    pub prev_vout: i64,
+    /// The amount being spent
+    pub amount: i64,
+    /// Asset blinder for confidential transactions
+    pub asset_blinder: String,
+    /// Amount blinder for confidential transactions
+    pub amount_blinder: String,
+    /// The registered user ID associated with this input, if any
+    pub registered_user: Option<i64>,
+    /// The GAID associated with this input, if any
+    #[serde(rename = "GAID")]
+    pub gaid: Option<String>,
+    /// Whether this input is from a treasury address
+    pub is_treasury: bool,
+}
+
+/// Represents an output in an asset transaction.
+///
+/// Contains details about a transaction output including the destination,
+/// amounts, blinding factors, and status.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AssetTransactionOutput {
+    /// The asset ID
+    pub asset_id: String,
+    /// The output index within the transaction
+    pub vout: i64,
+    /// The output amount
+    pub amount: i64,
+    /// Asset blinder for confidential transactions
+    pub asset_blinder: String,
+    /// Amount blinder for confidential transactions
+    pub amount_blinder: String,
+    /// The registered user ID associated with this output, if any
+    pub registered_user: Option<i64>,
+    /// The GAID associated with this output, if any
+    #[serde(rename = "GAID")]
+    pub gaid: Option<String>,
+    /// Whether this output is to a treasury address
+    pub is_treasury: bool,
+    /// Whether this output has been spent
+    pub is_spent: bool,
+    /// Whether this output has been burnt
+    pub is_burnt: bool,
+}
+
 /// Represents a transaction associated with an asset.
 ///
 /// This struct contains detailed information about a blockchain transaction
-/// that involves a specific asset, including transfer details, confirmation status,
-/// and associated metadata.
+/// that involves a specific asset, including inputs, outputs, and transaction type flags.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AssetTransaction {
     /// The transaction ID (txid) of the blockchain transaction
     pub txid: String,
-    /// The type of transaction (e.g., "transfer", "issuance", "reissuance", "burn")
-    #[serde(rename = "type")]
-    pub transaction_type: String,
-    /// The amount of the asset involved in this transaction
-    pub amount: i64,
     /// The datetime when the transaction was confirmed (ISO 8601 format)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub datetime: Option<String>,
+    pub datetime: String,
     /// The block height at which this transaction was included
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub blockheight: Option<i64>,
-    /// The confirmation status of the transaction
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub confirmations: Option<i64>,
-    /// The registered user ID associated with this transaction, if any
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub registered_user: Option<i64>,
-    /// Description of the transaction
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// The output index (vout) within the transaction
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub vout: Option<i64>,
-    /// Asset blinder for confidential transactions
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub asset_blinder: Option<String>,
-    /// Amount blinder for confidential transactions
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub amount_blinder: Option<String>,
-    /// The source address of the transaction, if applicable
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_address: Option<String>,
-    /// The destination address of the transaction, if applicable
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub to_address: Option<String>,
-    /// The GAID associated with this transaction, if any
-    #[serde(rename = "GAID", skip_serializing_if = "Option::is_none")]
-    pub gaid: Option<String>,
+    pub blockheight: i64,
+    /// Whether this transaction is an issuance
+    pub is_issuance: bool,
+    /// Whether this transaction is a reissuance
+    pub is_reissuance: bool,
+    /// Whether this transaction is a distribution
+    pub is_distribution: bool,
+    /// The transaction inputs
+    pub inputs: Vec<AssetTransactionInput>,
+    /// The transaction outputs
+    pub outputs: Vec<AssetTransactionOutput>,
+    /// URL to view the unblinded transaction on a block explorer
+    pub unblinded_url: String,
+}
+
+impl AssetTransaction {
+    /// Returns a human-readable transaction type string.
+    ///
+    /// Derives the type from the boolean flags `is_issuance`, `is_reissuance`,
+    /// and `is_distribution`.
+    #[must_use]
+    pub const fn transaction_type(&self) -> &'static str {
+        if self.is_issuance {
+            "issuance"
+        } else if self.is_reissuance {
+            "reissuance"
+        } else if self.is_distribution {
+            "distribution"
+        } else {
+            "transfer"
+        }
+    }
+
+    /// Returns the total output amount for this transaction.
+    #[must_use]
+    pub fn total_output_amount(&self) -> i64 {
+        self.outputs.iter().map(|o| o.amount).sum()
+    }
+
+    /// Returns the total input amount for this transaction.
+    #[must_use]
+    pub fn total_input_amount(&self) -> i64 {
+        self.inputs.iter().map(|i| i.amount).sum()
+    }
 }
 
 /// Query parameters for listing asset transactions.
@@ -391,7 +457,7 @@ pub struct AssetTransactionParams {
     /// Maximum number of transactions to return
     #[serde(skip_serializing_if = "Option::is_none")]
     pub count: Option<i64>,
-    /// Column to sort by (e.g., "datetime", "blockheight", "amount")
+    /// Column to sort by (e.g., "datetime", "blockheight")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sortcolumn: Option<String>,
     /// Sort order: "asc" for ascending, "desc" for descending
@@ -403,9 +469,6 @@ pub struct AssetTransactionParams {
     /// Filter by maximum block height (inclusive)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub height_stop: Option<i64>,
-    /// Filter by transaction type (e.g., "transfer", "issuance")
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

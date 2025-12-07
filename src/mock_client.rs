@@ -1444,10 +1444,10 @@ impl MockApiClient {
         asset_uuid: &str,
         params: &crate::model::AssetTransactionParams,
     ) -> Result<Vec<crate::model::AssetTransaction>, Error> {
-        use crate::model::AssetTransaction;
+        use crate::model::{AssetTransaction, AssetTransactionOutput};
 
         // Check if asset exists
-        let _asset = self.get_asset(asset_uuid).await?;
+        let asset = self.get_asset(asset_uuid).await?;
 
         // Get any stored transactions for this asset
         let transactions = self.inner.asset_transactions.lock().unwrap();
@@ -1458,34 +1458,36 @@ impl MockApiClient {
             // Create a default issuance transaction
             let issuance_tx = AssetTransaction {
                 txid: format!("{:064x}", 1000),
-                transaction_type: "issuance".to_string(),
-                amount: 1_000_000_000_000,
-                datetime: Some("2024-01-01T00:00:00Z".to_string()),
-                blockheight: Some(1),
-                confirmations: Some(100),
-                registered_user: None,
-                description: Some("Initial issuance".to_string()),
-                vout: Some(0),
-                asset_blinder: Some(format!("{:064x}", 2000)),
-                amount_blinder: Some(format!("{:064x}", 2001)),
-                from_address: None,
-                to_address: Some("treasury_address_mock".to_string()),
-                gaid: None,
+                datetime: "2024-01-01T00:00:00Z".to_string(),
+                blockheight: 1,
+                is_issuance: true,
+                is_reissuance: false,
+                is_distribution: false,
+                inputs: vec![],
+                outputs: vec![AssetTransactionOutput {
+                    asset_id: asset.asset_id.clone(),
+                    vout: 0,
+                    amount: 1_000_000_000_000,
+                    asset_blinder: format!("{:064x}", 2000),
+                    amount_blinder: format!("{:064x}", 2001),
+                    registered_user: None,
+                    gaid: None,
+                    is_treasury: true,
+                    is_spent: false,
+                    is_burnt: false,
+                }],
+                unblinded_url: "https://blockstream.info/liquidtestnet/tx/mock".to_string(),
             };
             result.push(issuance_tx);
         }
 
         // Apply filtering based on params
-        if let Some(ref tx_type) = params.transaction_type {
-            result.retain(|tx| tx.transaction_type == *tx_type);
-        }
-
         if let Some(height_start) = params.height_start {
-            result.retain(|tx| tx.blockheight.unwrap_or(0) >= height_start);
+            result.retain(|tx| tx.blockheight >= height_start);
         }
 
         if let Some(height_stop) = params.height_stop {
-            result.retain(|tx| tx.blockheight.unwrap_or(0) <= height_stop);
+            result.retain(|tx| tx.blockheight <= height_stop);
         }
 
         // Apply sorting
@@ -1530,7 +1532,7 @@ impl MockApiClient {
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = MockApiClient::new();
     /// let tx = client.get_asset_transaction("asset-uuid", "txid-123").await?;
-    /// println!("Transaction type: {}", tx.transaction_type);
+    /// println!("Transaction type: {}", tx.transaction_type());
     /// # Ok(())
     /// # }
     /// ```
@@ -1539,10 +1541,10 @@ impl MockApiClient {
         asset_uuid: &str,
         txid: &str,
     ) -> Result<crate::model::AssetTransaction, Error> {
-        use crate::model::AssetTransaction;
+        use crate::model::{AssetTransaction, AssetTransactionOutput};
 
         // Check if asset exists
-        let _asset = self.get_asset(asset_uuid).await?;
+        let asset = self.get_asset(asset_uuid).await?;
 
         // Look for the transaction in stored transactions
         let transactions = self.inner.asset_transactions.lock().unwrap();
@@ -1557,19 +1559,25 @@ impl MockApiClient {
         if txid == issuance_txid {
             return Ok(AssetTransaction {
                 txid: issuance_txid,
-                transaction_type: "issuance".to_string(),
-                amount: 1_000_000_000_000,
-                datetime: Some("2024-01-01T00:00:00Z".to_string()),
-                blockheight: Some(1),
-                confirmations: Some(100),
-                registered_user: None,
-                description: Some("Initial issuance".to_string()),
-                vout: Some(0),
-                asset_blinder: Some(format!("{:064x}", 2000)),
-                amount_blinder: Some(format!("{:064x}", 2001)),
-                from_address: None,
-                to_address: Some("treasury_address_mock".to_string()),
-                gaid: None,
+                datetime: "2024-01-01T00:00:00Z".to_string(),
+                blockheight: 1,
+                is_issuance: true,
+                is_reissuance: false,
+                is_distribution: false,
+                inputs: vec![],
+                outputs: vec![AssetTransactionOutput {
+                    asset_id: asset.asset_id,
+                    vout: 0,
+                    amount: 1_000_000_000_000,
+                    asset_blinder: format!("{:064x}", 2000),
+                    amount_blinder: format!("{:064x}", 2001),
+                    registered_user: None,
+                    gaid: None,
+                    is_treasury: true,
+                    is_spent: false,
+                    is_burnt: false,
+                }],
+                unblinded_url: "https://blockstream.info/liquidtestnet/tx/mock".to_string(),
             });
         }
 

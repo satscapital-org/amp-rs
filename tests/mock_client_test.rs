@@ -326,7 +326,7 @@ async fn test_get_asset_transactions() {
     let tx = &transactions[0];
     assert!(!tx.txid.is_empty(), "Transaction should have a txid");
     assert!(
-        !tx.transaction_type.is_empty(),
+        !tx.transaction_type().is_empty(),
         "Transaction should have a type"
     );
 }
@@ -337,9 +337,9 @@ async fn test_get_asset_transactions_with_filtering() {
     let assets = client.get_assets().await.unwrap();
     let asset_uuid = assets[0].asset_uuid.clone();
 
-    // Filter by transaction type
+    // Filter by block height (the API doesn't support type filtering directly)
     let params = AssetTransactionParams {
-        transaction_type: Some("issuance".to_string()),
+        height_start: Some(1),
         ..Default::default()
     };
     let transactions = client
@@ -347,11 +347,9 @@ async fn test_get_asset_transactions_with_filtering() {
         .await
         .unwrap();
 
-    // Should have issuance transaction
+    // Should have issuance transaction (default mock has blockheight 1)
     assert!(!transactions.is_empty());
-    assert!(transactions
-        .iter()
-        .all(|tx| tx.transaction_type == "issuance"));
+    assert!(transactions.iter().all(|tx| tx.blockheight >= 1));
 }
 
 #[tokio::test]
@@ -400,7 +398,7 @@ async fn test_get_asset_transaction() {
         .unwrap();
 
     assert_eq!(tx.txid, *txid);
-    assert!(!tx.transaction_type.is_empty());
+    assert!(!tx.transaction_type().is_empty());
 }
 
 #[tokio::test]
@@ -432,21 +430,40 @@ async fn test_get_asset_transactions_nonexistent_asset() {
 
 #[tokio::test]
 async fn test_with_asset_transaction_builder() {
+    use amp_rs::model::{AssetTransactionInput, AssetTransactionOutput};
+
     let custom_tx = AssetTransaction {
         txid: "custom-txid-12345".to_string(),
-        transaction_type: "transfer".to_string(),
-        amount: 50_000,
-        datetime: Some("2024-06-15T12:00:00Z".to_string()),
-        blockheight: Some(500),
-        confirmations: Some(10),
-        registered_user: Some(1),
-        description: Some("Test transfer".to_string()),
-        vout: Some(0),
-        asset_blinder: None,
-        amount_blinder: None,
-        from_address: Some("from_address".to_string()),
-        to_address: Some("to_address".to_string()),
-        gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+        datetime: "2024-06-15T12:00:00Z".to_string(),
+        blockheight: 500,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![AssetTransactionInput {
+            asset_id: "test_asset_id".to_string(),
+            vin: 0,
+            prev_txid: "prev_txid".to_string(),
+            prev_vout: 0,
+            amount: 50_000,
+            asset_blinder: "0".repeat(64),
+            amount_blinder: "0".repeat(64),
+            registered_user: Some(1),
+            gaid: Some("GAbYScu6jkWUND2jo3L4KJxyvo55d".to_string()),
+            is_treasury: false,
+        }],
+        outputs: vec![AssetTransactionOutput {
+            asset_id: "test_asset_id".to_string(),
+            vout: 0,
+            amount: 50_000,
+            asset_blinder: "0".repeat(64),
+            amount_blinder: "0".repeat(64),
+            registered_user: Some(2),
+            gaid: Some("GAnotherGAID12345".to_string()),
+            is_treasury: false,
+            is_spent: false,
+            is_burnt: false,
+        }],
+        unblinded_url: "https://example.com/tx".to_string(),
     };
 
     let client = MockApiClient::new()
@@ -460,45 +477,59 @@ async fn test_with_asset_transaction_builder() {
         .unwrap();
 
     assert_eq!(tx.txid, "custom-txid-12345");
-    assert_eq!(tx.transaction_type, "transfer");
-    assert_eq!(tx.amount, 50_000);
-    assert_eq!(tx.registered_user, Some(1));
+    assert_eq!(tx.transaction_type(), "transfer");
+    assert_eq!(tx.total_output_amount(), 50_000);
+    assert_eq!(tx.inputs[0].registered_user, Some(1));
 }
 
 #[tokio::test]
 async fn test_get_asset_transactions_sorting() {
+    use amp_rs::model::AssetTransactionOutput;
+
     let tx1 = AssetTransaction {
         txid: "txid-1".to_string(),
-        transaction_type: "transfer".to_string(),
-        amount: 100,
-        datetime: Some("2024-01-01T00:00:00Z".to_string()),
-        blockheight: Some(1),
-        confirmations: Some(100),
-        registered_user: None,
-        description: None,
-        vout: Some(0),
-        asset_blinder: None,
-        amount_blinder: None,
-        from_address: None,
-        to_address: None,
-        gaid: None,
+        datetime: "2024-01-01T00:00:00Z".to_string(),
+        blockheight: 1,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![AssetTransactionOutput {
+            asset_id: "test_asset".to_string(),
+            vout: 0,
+            amount: 100,
+            asset_blinder: "0".repeat(64),
+            amount_blinder: "0".repeat(64),
+            registered_user: None,
+            gaid: None,
+            is_treasury: false,
+            is_spent: false,
+            is_burnt: false,
+        }],
+        unblinded_url: "https://example.com/tx1".to_string(),
     };
 
     let tx2 = AssetTransaction {
         txid: "txid-2".to_string(),
-        transaction_type: "transfer".to_string(),
-        amount: 200,
-        datetime: Some("2024-01-02T00:00:00Z".to_string()),
-        blockheight: Some(2),
-        confirmations: Some(99),
-        registered_user: None,
-        description: None,
-        vout: Some(0),
-        asset_blinder: None,
-        amount_blinder: None,
-        from_address: None,
-        to_address: None,
-        gaid: None,
+        datetime: "2024-01-02T00:00:00Z".to_string(),
+        blockheight: 2,
+        is_issuance: false,
+        is_reissuance: false,
+        is_distribution: false,
+        inputs: vec![],
+        outputs: vec![AssetTransactionOutput {
+            asset_id: "test_asset".to_string(),
+            vout: 0,
+            amount: 200,
+            asset_blinder: "0".repeat(64),
+            amount_blinder: "0".repeat(64),
+            registered_user: None,
+            gaid: None,
+            is_treasury: false,
+            is_spent: false,
+            is_burnt: false,
+        }],
+        unblinded_url: "https://example.com/tx2".to_string(),
     };
 
     let client = MockApiClient::new()
