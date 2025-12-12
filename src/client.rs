@@ -10031,7 +10031,7 @@ impl ApiClient {
 
         // Convert GaidBalanceEntry to Ownership format
         Ok(Ownership {
-            owner: gaid.to_string(),
+            owner: Some(gaid.to_string()),
             amount: balance_entry.balance,
             gaid: Some(gaid.to_string()),
         })

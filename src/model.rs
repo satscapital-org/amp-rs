@@ -481,7 +481,7 @@ pub struct AssetTransactionParams {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Ownership {
-    pub owner: String,
+    pub owner: Option<String>,
     pub amount: i64,
     #[serde(rename = "GAID")]
     pub gaid: Option<String>,
