@@ -28,12 +28,14 @@
 //! - Hardware Security Modules (HSMs)
 
 pub mod client;
+pub mod client_trait;
 pub mod mock_client;
 pub mod mocks;
 pub mod model;
 pub mod signer;
 
 pub use client::{AmpError, ApiClient, ElementsRpc, Error};
+pub use client_trait::AmpClient;
 pub use mock_client::MockApiClient;
 pub use model::{
     AssetDistributionAssignment, AssetTransaction, AssetTransactionInput, AssetTransactionOutput,

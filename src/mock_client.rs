@@ -86,10 +86,10 @@ use secrecy::ExposeSecret;
 
 use crate::client::{AmpError, Error};
 use crate::model::{
-    AddressGaidResponse, Asset, AssetSummary, Assignment, Balance, BroadcastResponse,
+    Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetSummary, Assignment, Balance, BroadcastResponse,
     CategoryResponse, CreateAssetAssignmentRequest, Distribution, EditAssetRequest,
-    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, RegisterAssetResponse,
-    RegisteredUserResponse, ValidateGaidResponse,
+    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Ownership, RegisterAssetResponse,
+    RegisteredUserResponse, Reissuance, ValidateGaidResponse,
 };
 
 /// Mock API Client that provides the same interface as ApiClient
@@ -1906,5 +1906,79 @@ impl MockApiClient {
         _request: &crate::model::GaidRequest,
     ) -> Result<(), Error> {
         Ok(())
+    }
+}
+
+// ============================================================================
+// AmpClient Trait Implementation
+// ============================================================================
+
+use crate::client_trait::AmpClient;
+
+#[async_trait::async_trait]
+impl AmpClient for MockApiClient {
+    async fn get_assets(&self) -> Result<Vec<Asset>, Error> {
+        self.get_assets().await
+    }
+    
+    async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
+        self.get_asset(asset_uuid).await
+    }
+    
+    async fn get_asset_ownerships(
+        &self,
+        asset_uuid: &str,
+        height: Option<i64>,
+    ) -> Result<Vec<Ownership>, Error> {
+        self.get_asset_ownerships(asset_uuid, height).await
+    }
+    
+    async fn get_asset_activities(
+        &self,
+        asset_uuid: &str,
+        params: &AssetActivityParams,
+    ) -> Result<Vec<Activity>, Error> {
+        self.get_asset_activities(asset_uuid, params).await
+    }
+    
+    async fn get_asset_summary(&self, asset_uuid: &str) -> Result<AssetSummary, Error> {
+        self.get_asset_summary(asset_uuid).await
+    }
+    
+    async fn get_asset_reissuances(&self, asset_uuid: &str) -> Result<Vec<Reissuance>, Error> {
+        self.get_asset_reissuances(asset_uuid).await
+            .map_err(|e| Error::RequestFailed(e.to_string()))
+    }
+    
+    async fn get_registered_users(&self) -> Result<Vec<RegisteredUserResponse>, Error> {
+        self.get_registered_users().await
+    }
+    
+    async fn get_registered_user(&self, registered_id: i64) -> Result<RegisteredUserResponse, Error> {
+        self.get_registered_user(registered_id).await
+    }
+    
+    async fn get_registered_user_gaids(&self, registered_id: i64) -> Result<Vec<String>, Error> {
+        self.get_registered_user_gaids(registered_id).await
+    }
+    
+    async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
+        self.get_categories().await
+    }
+    
+    async fn get_category(&self, registered_id: i64) -> Result<CategoryResponse, Error> {
+        self.get_category(registered_id).await
+    }
+    
+    async fn get_gaid_address(&self, gaid: &str) -> Result<AddressGaidResponse, Error> {
+        self.get_gaid_address(gaid).await
+    }
+    
+    async fn get_gaid_balance(&self, gaid: &str) -> Result<Vec<GaidBalanceEntry>, Error> {
+        self.get_gaid_balance(gaid).await
+    }
+    
+    async fn validate_gaid(&self, gaid: &str) -> Result<ValidateGaidResponse, Error> {
+        self.validate_gaid(gaid).await
     }
 }
