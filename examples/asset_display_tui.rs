@@ -817,13 +817,14 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
         .enumerate()
     {
         let percentage_of_supply = (*amount as f64 / total_circulation as f64) * 100.0;
-        let is_issuer = owner == &data.issuer_id.to_string();
+        let owner_str = owner.as_ref().map(|s| s.as_str()).unwrap_or("Unknown");
+        let is_issuer = Some(data.issuer_id.to_string()) == *owner;
 
         // Format owner display (truncate if too long)
-        let owner_display = if owner.len() > 45 {
-            format!("{}...{}", &owner[..20], &owner[owner.len() - 20..])
+        let owner_display = if owner_str.len() > 45 {
+            format!("{}...{}", &owner_str[..20], &owner_str[owner_str.len() - 20..])
         } else {
-            owner.clone()
+            owner_str.to_string()
         };
 
         // Create holder info lines
