@@ -306,7 +306,7 @@ pub struct RegisteredUserSummary {
     pub balance: i64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Activity {
     #[serde(rename = "type")]
     pub activity_type: String,

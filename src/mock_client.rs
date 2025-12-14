@@ -113,6 +113,7 @@ struct MockApiClientInner {
     asset_transactions: Mutex<HashMap<String, Vec<crate::model::AssetTransaction>>>,
     asset_lost_outputs: Mutex<HashMap<String, crate::model::AssetLostOutputs>>,
     asset_ownerships: Mutex<HashMap<String, Vec<Ownership>>>,
+    asset_activities: Mutex<HashMap<String, Vec<Activity>>>,
     distributions: Mutex<HashMap<String, Distribution>>,
     managers: Mutex<HashMap<i64, crate::model::Manager>>,
     next_user_id: AtomicI64,
@@ -152,6 +153,7 @@ impl MockApiClient {
             asset_transactions: Mutex::new(HashMap::new()),
             asset_lost_outputs: Mutex::new(HashMap::new()),
             asset_ownerships: Mutex::new(HashMap::new()),
+            asset_activities: Mutex::new(HashMap::new()),
             distributions: Mutex::new(HashMap::new()),
             managers: Mutex::new(HashMap::new()),
             next_user_id: AtomicI64::new(1),
@@ -449,6 +451,44 @@ impl MockApiClient {
         self
     }
 
+    /// Builder method to set asset activities
+    ///
+    /// This replaces any existing activities for the asset.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use amp_rs::{MockApiClient, model::Activity};
+    ///
+    /// let activities = vec![
+    ///     Activity {
+    ///         activity_type: "issuance".to_string(),
+    ///         datetime: "2024-01-01T00:00:00Z".to_string(),
+    ///         description: "Initial issuance".to_string(),
+    ///         txid: "tx1".to_string(),
+    ///         vout: 0,
+    ///         blockheight: 100,
+    ///         asset_blinder: "".to_string(),
+    ///         amount_blinder: "".to_string(),
+    ///         registered_user: None,
+    ///         name: None,
+    ///         ticker: None,
+    ///         amount: Some(10000),
+    ///     },
+    /// ];
+    ///
+    /// let client = MockApiClient::new()
+    ///     .with_asset_activities("asset-uuid", activities);
+    /// ```
+    #[must_use]
+    pub fn with_asset_activities(self, asset_uuid: &str, activities: Vec<Activity>) -> Self {
+        self.inner
+            .asset_activities
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.to_string(), activities);
+        self
+    }
+
     /// Finalizes the builder and returns the `MockApiClient`
     #[must_use]
     pub const fn build(self) -> Self {
@@ -718,6 +758,51 @@ impl MockApiClient {
             .get(asset_uuid)
             .cloned()
             .unwrap_or_default())
+    }
+
+    /// Gets asset activities
+    ///
+    /// Returns the configured activities for the asset, or an empty vector if none configured.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use amp_rs::{MockApiClient, model::{Activity, AssetActivityParams}};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let activities = vec![
+    ///     Activity {
+    ///         activity_type: "issuance".to_string(),
+    ///         datetime: "2024-01-01T00:00:00Z".to_string(),
+    ///         description: "Initial issuance".to_string(),
+    ///         txid: "tx1".to_string(),
+    ///         vout: 0,
+    ///         blockheight: 100,
+    ///         asset_blinder: "".to_string(),
+    ///         amount_blinder: "".to_string(),
+    ///         registered_user: None,
+    ///         name: None,
+    ///         ticker: None,
+    ///         amount: Some(10000),
+    ///     },
+    /// ];
+    ///
+    /// let client = MockApiClient::new()
+    ///     .with_asset_activities("asset-uuid", activities);
+    ///
+    /// let params = AssetActivityParams::default();
+    /// let result = client.get_asset_activities("asset-uuid", &params).await?;
+    /// assert_eq!(result.len(), 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_activities(
+        &self,
+        asset_uuid: &str,
+        _params: &AssetActivityParams,
+    ) -> Result<Vec<Activity>, Error> {
+        let activities = self.inner.asset_activities.lock().unwrap();
+        Ok(activities.get(asset_uuid).cloned().unwrap_or_default())
     }
 
     /// Gets asset memo
