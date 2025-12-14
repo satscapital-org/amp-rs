@@ -18,13 +18,14 @@ use secrecy::Secret;
 use std::str::FromStr;
 
 use crate::model::{
-    Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetDistributionAssignment, AssetLostOutputs,
-    AssetSummary, AssetTransaction, AssetTransactionParams, Assignment, Balance, BroadcastResponse,
-    CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse, ChangePasswordRequest,
-    ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest, GaidBalanceEntry,
-    IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password, ReceivedByAddress,
-    RegisterAssetResponse, RegisteredUserResponse, Reissuance, TokenData, TokenInfo, TokenRequest, TokenResponse,
-    TransactionDetail, TxInput, Unspent, UpdateBlindersRequest, Utxo, ValidateGaidResponse,
+    Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetDistributionAssignment,
+    AssetLostOutputs, AssetSummary, AssetTransaction, AssetTransactionParams, Assignment, Balance,
+    BroadcastResponse, CategoriesRequest, CategoryAdd, CategoryEdit, CategoryResponse,
+    ChangePasswordRequest, ChangePasswordResponse, CreateAssetAssignmentRequest, EditAssetRequest,
+    GaidBalanceEntry, IssuanceRequest, IssuanceResponse, Outpoint, Ownership, Password,
+    ReceivedByAddress, RegisterAssetResponse, RegisteredUserResponse, Reissuance, TokenData,
+    TokenInfo, TokenRequest, TokenResponse, TransactionDetail, TxInput, Unspent,
+    UpdateBlindersRequest, Utxo, ValidateGaidResponse,
 };
 use crate::signer::{Signer, SignerError};
 
@@ -15038,7 +15039,6 @@ mod tests {
     }
 }
 
-
 // ============================================================================
 // AmpClient Trait Implementation
 // ============================================================================
@@ -15050,11 +15050,11 @@ impl AmpClient for ApiClient {
     async fn get_assets(&self) -> Result<Vec<Asset>, Error> {
         self.get_assets().await
     }
-    
+
     async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error> {
         self.get_asset(asset_uuid).await
     }
-    
+
     async fn get_asset_ownerships(
         &self,
         asset_uuid: &str,
@@ -15062,7 +15062,7 @@ impl AmpClient for ApiClient {
     ) -> Result<Vec<Ownership>, Error> {
         self.get_asset_ownerships(asset_uuid, height).await
     }
-    
+
     async fn get_asset_activities(
         &self,
         asset_uuid: &str,
@@ -15070,99 +15070,106 @@ impl AmpClient for ApiClient {
     ) -> Result<Vec<Activity>, Error> {
         self.get_asset_activities(asset_uuid, params).await
     }
-    
+
     async fn get_asset_summary(&self, asset_uuid: &str) -> Result<AssetSummary, Error> {
         self.get_asset_summary(asset_uuid).await
     }
-    
+
     async fn get_asset_reissuances(&self, asset_uuid: &str) -> Result<Vec<Reissuance>, Error> {
         self.get_asset_reissuances(asset_uuid).await
     }
-    
+
     async fn get_registered_users(&self) -> Result<Vec<RegisteredUserResponse>, Error> {
         self.get_registered_users().await
     }
-    
-    async fn get_registered_user(&self, registered_id: i64) -> Result<RegisteredUserResponse, Error> {
+
+    async fn get_registered_user(
+        &self,
+        registered_id: i64,
+    ) -> Result<RegisteredUserResponse, Error> {
         self.get_registered_user(registered_id).await
     }
-    
+
     async fn get_registered_user_gaids(&self, registered_id: i64) -> Result<Vec<String>, Error> {
         self.get_registered_user_gaids(registered_id).await
     }
-    
+
     async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error> {
         self.get_categories().await
     }
-    
+
     async fn get_category(&self, registered_id: i64) -> Result<CategoryResponse, Error> {
         self.get_category(registered_id).await
     }
-    
+
     async fn get_gaid_address(&self, gaid: &str) -> Result<AddressGaidResponse, Error> {
         self.get_gaid_address(gaid).await
     }
-    
+
     async fn get_gaid_balance(&self, gaid: &str) -> Result<Vec<GaidBalanceEntry>, Error> {
         self.get_gaid_balance(gaid).await
     }
-    
+
     async fn validate_gaid(&self, gaid: &str) -> Result<ValidateGaidResponse, Error> {
         self.validate_gaid(gaid).await
     }
-    
+
     // Write methods
-    
+
     async fn register_asset(&self, asset_uuid: &str) -> Result<RegisterAssetResponse, Error> {
         self.register_asset(asset_uuid).await
     }
-    
+
     async fn add_registered_user(
         &self,
         new_user: &crate::model::RegisteredUserAdd,
     ) -> Result<RegisteredUserResponse, Error> {
         self.add_registered_user(new_user).await
     }
-    
+
     async fn edit_registered_user(
         &self,
         registered_user_id: i64,
         edit_data: &crate::model::RegisteredUserEdit,
     ) -> Result<RegisteredUserResponse, Error> {
-        self.edit_registered_user(registered_user_id, edit_data).await
+        self.edit_registered_user(registered_user_id, edit_data)
+            .await
     }
-    
+
     async fn add_gaid_to_registered_user(
         &self,
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error> {
-        self.add_gaid_to_registered_user(registered_user_id, gaid).await
+        self.add_gaid_to_registered_user(registered_user_id, gaid)
+            .await
     }
-    
+
     async fn add_category(
         &self,
         new_category: &crate::model::CategoryAdd,
     ) -> Result<CategoryResponse, Error> {
         self.add_category(new_category).await
     }
-    
+
     async fn add_registered_user_to_category(
         &self,
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        self.add_registered_user_to_category(category_id, user_id).await
+        self.add_registered_user_to_category(category_id, user_id)
+            .await
     }
-    
+
     async fn remove_registered_user_from_category(
         &self,
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        self.remove_registered_user_from_category(category_id, user_id).await
+        self.remove_registered_user_from_category(category_id, user_id)
+            .await
     }
-    
+
     async fn add_asset_to_category(
         &self,
         category_id: i64,

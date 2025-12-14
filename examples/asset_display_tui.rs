@@ -822,7 +822,11 @@ fn render_holders_list(f: &mut Frame, area: Rect, data: &AssetDisplayData) {
 
         // Format owner display (truncate if too long)
         let owner_display = if owner_str.len() > 45 {
-            format!("{}...{}", &owner_str[..20], &owner_str[owner_str.len() - 20..])
+            format!(
+                "{}...{}",
+                &owner_str[..20],
+                &owner_str[owner_str.len() - 20..]
+            )
         } else {
             owner_str.to_string()
         };

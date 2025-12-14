@@ -479,8 +479,7 @@ pub struct AssetTransactionParams {
     pub height_stop: Option<i64>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[derive(Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Ownership {
     pub owner: Option<String>,
     pub amount: i64,

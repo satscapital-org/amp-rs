@@ -3767,7 +3767,10 @@ async fn test_get_gaid_asset_balance_mock() {
 
     // The client converts GaidBalanceEntry to Ownership, so check the converted values
     assert_eq!(ownership.amount, 100000); // This comes from balance field
-    assert_eq!(ownership.owner, Some("GA44YYwPM8vuRMmjFL8i5kSqXhoTW2".to_string())); // This is set to the GAID
+    assert_eq!(
+        ownership.owner,
+        Some("GA44YYwPM8vuRMmjFL8i5kSqXhoTW2".to_string())
+    ); // This is set to the GAID
     assert_eq!(
         ownership.gaid,
         Some("GA44YYwPM8vuRMmjFL8i5kSqXhoTW2".to_string())

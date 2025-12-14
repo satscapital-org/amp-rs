@@ -9,7 +9,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get asset UUID from command line argument
     let asset_uuid = env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Usage: cargo run --example list_asset_holders <ASSET_UUID>");
-        eprintln!("Example: cargo run --example list_asset_holders c0c24227-732b-4980-86b6-f2048ad21cd1");
+        eprintln!(
+            "Example: cargo run --example list_asset_holders c0c24227-732b-4980-86b6-f2048ad21cd1"
+        );
         std::process::exit(1);
     });
 
@@ -32,8 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Fetching asset summary...");
     let summary = client.get_asset_summary(&asset_uuid).await?;
     let circulation = summary.issued + summary.reissued - summary.burned;
-    println!("Asset Circulation: {} (issued: {}, reissued: {}, burned: {})", 
-        circulation, summary.issued, summary.reissued, summary.burned);
+    println!(
+        "Asset Circulation: {} (issued: {}, reissued: {}, burned: {})",
+        circulation, summary.issued, summary.reissued, summary.burned
+    );
     println!();
 
     // Get all ownerships (holders) for this asset
@@ -60,17 +64,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Display each holder
     for (idx, ownership) in ownerships.iter().enumerate() {
         println!("Holder #{}", idx + 1);
-        
+
         if let Some(owner) = &ownership.owner {
             println!("  Owner: {}", owner);
         } else {
             println!("  Owner: (none)");
         }
-        
+
         if let Some(gaid) = &ownership.gaid {
             println!("  GAID: {}", gaid);
         }
-        
+
         println!("  Amount: {}", ownership.amount);
 
         total_amount += ownership.amount;
@@ -84,13 +88,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Total Amount Owned: {}", total_amount);
     println!("  Asset Circulation: {}", circulation);
     println!();
-    
+
     // Validation
     if total_amount == circulation {
         println!("✓ VALIDATION PASSED: Ownerships sum matches circulation");
     } else {
-        println!("✗ VALIDATION FAILED: Ownerships sum ({}) does NOT match circulation ({})", 
-            total_amount, circulation);
+        println!(
+            "✗ VALIDATION FAILED: Ownerships sum ({}) does NOT match circulation ({})",
+            total_amount, circulation
+        );
         println!("  Difference: {}", circulation - total_amount);
     }
 

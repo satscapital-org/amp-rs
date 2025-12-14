@@ -3,11 +3,11 @@
 //! This trait defines the core methods needed by service layers.
 //! Both production ApiClient and test MockApiClient implement this trait.
 
+use crate::{model::*, Error};
 use async_trait::async_trait;
-use crate::{Error, model::*};
 
 /// Trait for AMP API client implementations
-/// 
+///
 /// This trait defines the core methods needed by service layers.
 /// Both production ApiClient and test MockApiClient implement this trait,
 /// enabling tests to use MockApiClient directly with service methods.
@@ -17,105 +17,108 @@ use crate::{Error, model::*};
 #[async_trait]
 pub trait AmpClient: Send + Sync {
     // Asset methods
-    
+
     /// Get all assets from the AMP API
     async fn get_assets(&self) -> Result<Vec<Asset>, Error>;
-    
+
     /// Get a specific asset by UUID
     async fn get_asset(&self, asset_uuid: &str) -> Result<Asset, Error>;
-    
+
     /// Get asset ownerships for a specific asset
     async fn get_asset_ownerships(
         &self,
         asset_uuid: &str,
         height: Option<i64>,
     ) -> Result<Vec<Ownership>, Error>;
-    
+
     /// Get asset activities for a specific asset
     async fn get_asset_activities(
         &self,
         asset_uuid: &str,
         params: &AssetActivityParams,
     ) -> Result<Vec<Activity>, Error>;
-    
+
     /// Get asset summary for a specific asset
     async fn get_asset_summary(&self, asset_uuid: &str) -> Result<AssetSummary, Error>;
-    
+
     /// Get asset reissuances for a specific asset
     async fn get_asset_reissuances(&self, asset_uuid: &str) -> Result<Vec<Reissuance>, Error>;
-    
+
     // User methods
-    
+
     /// Get all registered users
     async fn get_registered_users(&self) -> Result<Vec<RegisteredUserResponse>, Error>;
-    
+
     /// Get a specific registered user by ID
-    async fn get_registered_user(&self, registered_id: i64) -> Result<RegisteredUserResponse, Error>;
-    
+    async fn get_registered_user(
+        &self,
+        registered_id: i64,
+    ) -> Result<RegisteredUserResponse, Error>;
+
     /// Get GAIDs associated with a registered user
     async fn get_registered_user_gaids(&self, registered_id: i64) -> Result<Vec<String>, Error>;
-    
+
     // Category methods
-    
+
     /// Get all categories
     async fn get_categories(&self) -> Result<Vec<CategoryResponse>, Error>;
-    
+
     /// Get a specific category by ID
     async fn get_category(&self, registered_id: i64) -> Result<CategoryResponse, Error>;
-    
+
     // GAID methods
-    
+
     /// Validate a GAID
     async fn validate_gaid(&self, gaid: &str) -> Result<ValidateGaidResponse, Error>;
-    
+
     /// Get the address for a specific GAID
     async fn get_gaid_address(&self, gaid: &str) -> Result<AddressGaidResponse, Error>;
-    
+
     /// Get the balance for a specific GAID
     async fn get_gaid_balance(&self, gaid: &str) -> Result<Vec<GaidBalanceEntry>, Error>;
-    
+
     // Write methods (for create/update operations)
-    
+
     /// Register an asset
     async fn register_asset(&self, asset_uuid: &str) -> Result<RegisterAssetResponse, Error>;
-    
+
     /// Add a new registered user
     async fn add_registered_user(
         &self,
         new_user: &RegisteredUserAdd,
     ) -> Result<RegisteredUserResponse, Error>;
-    
+
     /// Edit a registered user
     async fn edit_registered_user(
         &self,
         registered_user_id: i64,
         edit_data: &RegisteredUserEdit,
     ) -> Result<RegisteredUserResponse, Error>;
-    
+
     /// Add a GAID to a registered user
     async fn add_gaid_to_registered_user(
         &self,
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error>;
-    
+
     /// Add a new category
     async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error>;
-    
+
     /// Add a registered user to a category
     async fn add_registered_user_to_category(
         &self,
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error>;
-    
+
     /// Remove a registered user from a category
     async fn remove_registered_user_from_category(
         &self,
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error>;
-    
+
     /// Add an asset to a category
     async fn add_asset_to_category(
         &self,
@@ -125,7 +128,7 @@ pub trait AmpClient: Send + Sync {
 }
 
 /// Blanket implementation of AmpClient for Box<T>
-/// 
+///
 /// This allows `Box<dyn AmpClient + Send + Sync>` to be used in generic contexts
 /// that expect `&impl AmpClient`, enabling dependency injection of mock clients.
 #[async_trait]
@@ -166,7 +169,10 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         (**self).get_registered_users().await
     }
 
-    async fn get_registered_user(&self, registered_id: i64) -> Result<RegisteredUserResponse, Error> {
+    async fn get_registered_user(
+        &self,
+        registered_id: i64,
+    ) -> Result<RegisteredUserResponse, Error> {
         (**self).get_registered_user(registered_id).await
     }
 
@@ -210,7 +216,9 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         registered_user_id: i64,
         edit_data: &RegisteredUserEdit,
     ) -> Result<RegisteredUserResponse, Error> {
-        (**self).edit_registered_user(registered_user_id, edit_data).await
+        (**self)
+            .edit_registered_user(registered_user_id, edit_data)
+            .await
     }
 
     async fn add_gaid_to_registered_user(
@@ -218,7 +226,9 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error> {
-        (**self).add_gaid_to_registered_user(registered_user_id, gaid).await
+        (**self)
+            .add_gaid_to_registered_user(registered_user_id, gaid)
+            .await
     }
 
     async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error> {
@@ -230,7 +240,9 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        (**self).add_registered_user_to_category(category_id, user_id).await
+        (**self)
+            .add_registered_user_to_category(category_id, user_id)
+            .await
     }
 
     async fn remove_registered_user_from_category(
@@ -238,7 +250,9 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        (**self).remove_registered_user_from_category(category_id, user_id).await
+        (**self)
+            .remove_registered_user_from_category(category_id, user_id)
+            .await
     }
 
     async fn add_asset_to_category(
@@ -246,12 +260,14 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
         category_id: i64,
         asset_uuid: &str,
     ) -> Result<CategoryResponse, Error> {
-        (**self).add_asset_to_category(category_id, asset_uuid).await
+        (**self)
+            .add_asset_to_category(category_id, asset_uuid)
+            .await
     }
 }
 
 /// Blanket implementation of AmpClient for Arc<T>
-/// 
+///
 /// This allows `Arc<dyn AmpClient + Send + Sync>` to be used in generic contexts
 /// that expect `&impl AmpClient`. The Arc wrapper enables cheap cloning for
 /// spawning background tasks without requiring the underlying client to implement Clone.
@@ -293,7 +309,10 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         (**self).get_registered_users().await
     }
 
-    async fn get_registered_user(&self, registered_id: i64) -> Result<RegisteredUserResponse, Error> {
+    async fn get_registered_user(
+        &self,
+        registered_id: i64,
+    ) -> Result<RegisteredUserResponse, Error> {
         (**self).get_registered_user(registered_id).await
     }
 
@@ -337,7 +356,9 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         registered_user_id: i64,
         edit_data: &RegisteredUserEdit,
     ) -> Result<RegisteredUserResponse, Error> {
-        (**self).edit_registered_user(registered_user_id, edit_data).await
+        (**self)
+            .edit_registered_user(registered_user_id, edit_data)
+            .await
     }
 
     async fn add_gaid_to_registered_user(
@@ -345,7 +366,9 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         registered_user_id: i64,
         gaid: &str,
     ) -> Result<(), Error> {
-        (**self).add_gaid_to_registered_user(registered_user_id, gaid).await
+        (**self)
+            .add_gaid_to_registered_user(registered_user_id, gaid)
+            .await
     }
 
     async fn add_category(&self, new_category: &CategoryAdd) -> Result<CategoryResponse, Error> {
@@ -357,7 +380,9 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        (**self).add_registered_user_to_category(category_id, user_id).await
+        (**self)
+            .add_registered_user_to_category(category_id, user_id)
+            .await
     }
 
     async fn remove_registered_user_from_category(
@@ -365,7 +390,9 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         category_id: i64,
         user_id: i64,
     ) -> Result<CategoryResponse, Error> {
-        (**self).remove_registered_user_from_category(category_id, user_id).await
+        (**self)
+            .remove_registered_user_from_category(category_id, user_id)
+            .await
     }
 
     async fn add_asset_to_category(
@@ -373,6 +400,8 @@ impl<T: AmpClient + ?Sized> AmpClient for std::sync::Arc<T> {
         category_id: i64,
         asset_uuid: &str,
     ) -> Result<CategoryResponse, Error> {
-        (**self).add_asset_to_category(category_id, asset_uuid).await
+        (**self)
+            .add_asset_to_category(category_id, asset_uuid)
+            .await
     }
 }

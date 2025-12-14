@@ -1,4 +1,4 @@
-use amp_rs::{ApiClient, model::EditAssetRequest};
+use amp_rs::{model::EditAssetRequest, ApiClient};
 use std::env;
 
 #[tokio::main]
