@@ -716,3 +716,281 @@ async fn test_with_manager_builder() {
         .unwrap();
     assert_eq!(response2.username, "manager2");
 }
+
+// ============================================================================
+// Asset Ownership Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_asset_ownerships_empty_default() {
+    let client = MockApiClient::new();
+    let ownerships = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(ownerships.len(), 0);
+}
+
+#[tokio::test]
+async fn test_with_asset_ownerships_single() {
+    use amp_rs::model::Ownership;
+
+    let ownerships = vec![Ownership {
+        owner: Some("GAID:GA_TEST".to_string()),
+        gaid: Some("GA_TEST".to_string()),
+        amount: 1000,
+    }];
+
+    let client = MockApiClient::new().with_asset_ownerships("test-asset", ownerships);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].amount, 1000);
+    assert_eq!(result[0].gaid, Some("GA_TEST".to_string()));
+}
+
+#[tokio::test]
+async fn test_with_asset_ownerships_multiple() {
+    use amp_rs::model::Ownership;
+
+    let ownerships = vec![
+        Ownership {
+            owner: None,
+            gaid: Some("GA_1".to_string()),
+            amount: 1000,
+        },
+        Ownership {
+            owner: None,
+            gaid: Some("GA_2".to_string()),
+            amount: 2000,
+        },
+        Ownership {
+            owner: None,
+            gaid: Some("GA_3".to_string()),
+            amount: 3000,
+        },
+    ];
+
+    let client = MockApiClient::new().with_asset_ownerships("test-asset", ownerships);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0].amount, 1000);
+    assert_eq!(result[1].amount, 2000);
+    assert_eq!(result[2].amount, 3000);
+}
+
+#[tokio::test]
+async fn test_with_ownership_single() {
+    use amp_rs::model::Ownership;
+
+    let ownership = Ownership {
+        owner: None,
+        gaid: Some("GA_TEST".to_string()),
+        amount: 5000,
+    };
+
+    let client = MockApiClient::new().with_ownership("test-asset", ownership);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].amount, 5000);
+}
+
+#[tokio::test]
+async fn test_with_ownership_multiple_calls() {
+    use amp_rs::model::Ownership;
+
+    let client = MockApiClient::new()
+        .with_ownership(
+            "test-asset",
+            Ownership {
+                gaid: Some("GA_1".to_string()),
+                owner: None,
+                amount: 1000,
+            },
+        )
+        .with_ownership(
+            "test-asset",
+            Ownership {
+                gaid: Some("GA_2".to_string()),
+                owner: None,
+                amount: 2000,
+            },
+        )
+        .with_ownership(
+            "test-asset",
+            Ownership {
+                gaid: Some("GA_3".to_string()),
+                owner: None,
+                amount: 3000,
+            },
+        );
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 3);
+}
+
+#[tokio::test]
+async fn test_with_ownership_null_owner() {
+    use amp_rs::model::Ownership;
+
+    let ownership = Ownership {
+        owner: None,
+        gaid: Some("GA_UNRESOLVED".to_string()),
+        amount: 10000,
+    };
+
+    let client = MockApiClient::new().with_ownership("test-asset", ownership);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert!(result[0].owner.is_none());
+}
+
+#[tokio::test]
+async fn test_with_ownership_issuer_entry() {
+    use amp_rs::model::Ownership;
+
+    let ownership = Ownership {
+        owner: Some("ISSUER".to_string()),
+        gaid: None,
+        amount: 50000,
+    };
+
+    let client = MockApiClient::new().with_ownership("test-asset", ownership);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].owner, Some("ISSUER".to_string()));
+    assert!(result[0].gaid.is_none());
+}
+
+#[tokio::test]
+async fn test_with_ownership_same_gaid_multiple_times() {
+    use amp_rs::model::Ownership;
+
+    let client = MockApiClient::new()
+        .with_ownership(
+            "test-asset",
+            Ownership {
+                gaid: Some("GA_SAME".to_string()),
+                owner: None,
+                amount: 1000,
+            },
+        )
+        .with_ownership(
+            "test-asset",
+            Ownership {
+                gaid: Some("GA_SAME".to_string()),
+                owner: None,
+                amount: 500,
+            },
+        );
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 2);
+    // Both entries should be present (not accumulated)
+    assert_eq!(result[0].amount, 1000);
+    assert_eq!(result[1].amount, 500);
+}
+
+#[tokio::test]
+async fn test_ownerships_for_different_assets() {
+    use amp_rs::model::Ownership;
+
+    let client = MockApiClient::new()
+        .with_ownership(
+            "asset-1",
+            Ownership {
+                gaid: Some("GA_1".to_string()),
+                owner: None,
+                amount: 1000,
+            },
+        )
+        .with_ownership(
+            "asset-2",
+            Ownership {
+                gaid: Some("GA_2".to_string()),
+                owner: None,
+                amount: 2000,
+            },
+        );
+
+    let result1 = client.get_asset_ownerships("asset-1", None).await.unwrap();
+    let result2 = client.get_asset_ownerships("asset-2", None).await.unwrap();
+
+    assert_eq!(result1.len(), 1);
+    assert_eq!(result2.len(), 1);
+    assert_eq!(result1[0].amount, 1000);
+    assert_eq!(result2[0].amount, 2000);
+}
+
+#[tokio::test]
+async fn test_with_asset_ownerships_overwrites() {
+    use amp_rs::model::Ownership;
+
+    let initial = vec![Ownership {
+        gaid: Some("GA_OLD".to_string()),
+        owner: None,
+        amount: 999,
+    }];
+
+    let updated = vec![Ownership {
+        gaid: Some("GA_NEW".to_string()),
+        owner: None,
+        amount: 5000,
+    }];
+
+    let client = MockApiClient::new()
+        .with_asset_ownerships("test-asset", initial)
+        .with_asset_ownerships("test-asset", updated);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].gaid, Some("GA_NEW".to_string()));
+    assert_eq!(result[0].amount, 5000);
+}
+
+#[tokio::test]
+async fn test_ownership_with_large_amounts() {
+    use amp_rs::model::Ownership;
+
+    let ownership = Ownership {
+        owner: None,
+        gaid: Some("GA_LARGE".to_string()),
+        amount: i64::MAX,
+    };
+
+    let client = MockApiClient::new().with_ownership("test-asset", ownership);
+
+    let result = client
+        .get_asset_ownerships("test-asset", None)
+        .await
+        .unwrap();
+    assert_eq!(result[0].amount, i64::MAX);
+}

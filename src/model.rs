@@ -480,6 +480,7 @@ pub struct AssetTransactionParams {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone)]
 pub struct Ownership {
     pub owner: Option<String>,
     pub amount: i64,

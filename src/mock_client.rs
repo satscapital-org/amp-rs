@@ -112,6 +112,7 @@ struct MockApiClientInner {
     asset_assignments: Mutex<HashMap<String, Vec<Assignment>>>,
     asset_transactions: Mutex<HashMap<String, Vec<crate::model::AssetTransaction>>>,
     asset_lost_outputs: Mutex<HashMap<String, crate::model::AssetLostOutputs>>,
+    asset_ownerships: Mutex<HashMap<String, Vec<Ownership>>>,
     distributions: Mutex<HashMap<String, Distribution>>,
     managers: Mutex<HashMap<i64, crate::model::Manager>>,
     next_user_id: AtomicI64,
@@ -150,6 +151,7 @@ impl MockApiClient {
             asset_assignments: Mutex::new(HashMap::new()),
             asset_transactions: Mutex::new(HashMap::new()),
             asset_lost_outputs: Mutex::new(HashMap::new()),
+            asset_ownerships: Mutex::new(HashMap::new()),
             distributions: Mutex::new(HashMap::new()),
             managers: Mutex::new(HashMap::new()),
             next_user_id: AtomicI64::new(1),
@@ -383,6 +385,67 @@ impl MockApiClient {
             .lock()
             .unwrap()
             .insert(category_id, category);
+        self
+    }
+
+    /// Builder method to set all ownerships for an asset
+    ///
+    /// This replaces any existing ownerships for the asset.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use amp_rs::{MockApiClient, model::Ownership};
+    ///
+    /// let ownerships = vec![
+    ///     Ownership {
+    ///         owner: None,
+    ///         gaid: Some("GA_TEST".to_string()),
+    ///         amount: 1000,
+    ///     },
+    /// ];
+    ///
+    /// let client = MockApiClient::new()
+    ///     .with_asset_ownerships("asset-uuid", ownerships);
+    /// ```
+    #[must_use]
+    pub fn with_asset_ownerships(self, asset_uuid: &str, ownerships: Vec<Ownership>) -> Self {
+        self.inner
+            .asset_ownerships
+            .lock()
+            .unwrap()
+            .insert(asset_uuid.to_string(), ownerships);
+        self
+    }
+
+    /// Builder method to add a single ownership entry to an asset
+    ///
+    /// Multiple calls with the same asset_uuid will append to the ownership list.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use amp_rs::{MockApiClient, model::Ownership};
+    ///
+    /// let client = MockApiClient::new()
+    ///     .with_ownership("asset-uuid", Ownership {
+    ///         owner: None,
+    ///         gaid: Some("GA_1".to_string()),
+    ///         amount: 1000,
+    ///     })
+    ///     .with_ownership("asset-uuid", Ownership {
+    ///         owner: None,
+    ///         gaid: Some("GA_2".to_string()),
+    ///         amount: 2000,
+    ///     });
+    /// ```
+    #[must_use]
+    pub fn with_ownership(self, asset_uuid: &str, ownership: Ownership) -> Self {
+        self.inner
+            .asset_ownerships
+            .lock()
+            .unwrap()
+            .entry(asset_uuid.to_string())
+            .or_insert_with(Vec::new)
+            .push(ownership);
         self
     }
 
@@ -621,6 +684,40 @@ impl MockApiClient {
     /// Gets asset balance
     pub async fn get_asset_balance(&self, _asset_uuid: &str) -> Result<Balance, Error> {
         Ok(vec![]) // Empty balance by default
+    }
+
+    /// Gets asset ownerships
+    ///
+    /// Returns the configured ownerships for the asset, or an empty vector if none configured.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use amp_rs::{MockApiClient, model::Ownership};
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = MockApiClient::new()
+    ///     .with_ownership("asset-uuid", Ownership {
+    ///         owner: None,
+    ///         gaid: Some("GA_TEST".to_string()),
+    ///         amount: 1000,
+    ///     });
+    ///
+    /// let ownerships = client.get_asset_ownerships("asset-uuid", None).await?;
+    /// assert_eq!(ownerships.len(), 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_asset_ownerships(
+        &self,
+        asset_uuid: &str,
+        _height: Option<i64>,
+    ) -> Result<Vec<Ownership>, Error> {
+        let ownerships = self.inner.asset_ownerships.lock().unwrap();
+        Ok(ownerships
+            .get(asset_uuid)
+            .cloned()
+            .unwrap_or_default())
     }
 
     /// Gets asset memo

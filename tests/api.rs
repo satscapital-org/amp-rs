@@ -3767,7 +3767,7 @@ async fn test_get_gaid_asset_balance_mock() {
 
     // The client converts GaidBalanceEntry to Ownership, so check the converted values
     assert_eq!(ownership.amount, 100000); // This comes from balance field
-    assert_eq!(ownership.owner, "GA44YYwPM8vuRMmjFL8i5kSqXhoTW2"); // This is set to the GAID
+    assert_eq!(ownership.owner, Some("GA44YYwPM8vuRMmjFL8i5kSqXhoTW2".to_string())); // This is set to the GAID
     assert_eq!(
         ownership.gaid,
         Some("GA44YYwPM8vuRMmjFL8i5kSqXhoTW2".to_string())
@@ -4595,7 +4595,7 @@ async fn test_get_gaid_asset_balance_live() {
                 "✓ Confirmed balance is 0 for GAID {} and asset {}",
                 test_gaid, test_asset_uuid
             );
-            println!("✓ Owner field correctly set to: {}", ownership.owner);
+            println!("✓ Owner field correctly set to: {:?}", ownership.owner);
 
             // Log the GAID field if present
             if let Some(gaid) = &ownership.gaid {

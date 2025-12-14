@@ -59,7 +59,7 @@ struct AssetDisplayData {
     registered_users: i64,
     active_registered_users: i64,
     // Ownership data
-    holders: Vec<(String, i64, Option<String>)>, // (owner user_id, amount, optional GAID)
+    holders: Vec<(Option<String>, i64, Option<String>)>, // (owner user_id, amount, optional GAID)
 }
 
 #[derive(Clone, PartialEq)]
@@ -175,15 +175,15 @@ async fn fetch_asset_data() -> Result<AssetDisplayData, Box<dyn std::error::Erro
 
     // Convert ownership data to holders list and sort with issuer first
     let issuer_id_str = asset.issuer.to_string();
-    let mut holders: Vec<(String, i64, Option<String>)> = ownerships
+    let mut holders: Vec<(Option<String>, i64, Option<String>)> = ownerships
         .into_iter()
         .map(|o| (o.owner, o.amount, o.gaid))
         .collect();
 
     // Sort holders to put issuer first, then by balance descending
     holders.sort_by(|a, b| {
-        let a_is_issuer = a.0 == issuer_id_str;
-        let b_is_issuer = b.0 == issuer_id_str;
+        let a_is_issuer = a.0.as_ref().map(|s| s.as_str()) == Some(issuer_id_str.as_str());
+        let b_is_issuer = b.0.as_ref().map(|s| s.as_str()) == Some(issuer_id_str.as_str());
 
         match (a_is_issuer, b_is_issuer) {
             (true, false) => std::cmp::Ordering::Less, // Issuer comes first
