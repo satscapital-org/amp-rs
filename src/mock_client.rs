@@ -446,7 +446,7 @@ impl MockApiClient {
             .lock()
             .unwrap()
             .entry(asset_uuid.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(ownership);
         self
     }

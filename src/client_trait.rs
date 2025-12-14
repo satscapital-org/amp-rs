@@ -1,16 +1,24 @@
 //! Trait for AMP API client implementations
 //!
 //! This trait defines the core methods needed by service layers.
-//! Both production ApiClient and test MockApiClient implement this trait.
+//! Both production `ApiClient` and test `MockApiClient` implement this trait.
 
-use crate::{model::*, Error};
+use crate::{
+    model::{
+        Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetSummary,
+        CategoryAdd, CategoryResponse, GaidBalanceEntry, Ownership,
+        RegisterAssetResponse, RegisteredUserAdd, RegisteredUserEdit,
+        RegisteredUserResponse, Reissuance, ValidateGaidResponse,
+    },
+    Error,
+};
 use async_trait::async_trait;
 
 /// Trait for AMP API client implementations
 ///
 /// This trait defines the core methods needed by service layers.
-/// Both production ApiClient and test MockApiClient implement this trait,
-/// enabling tests to use MockApiClient directly with service methods.
+/// Both production `ApiClient` and test `MockApiClient` implement this trait,
+/// enabling tests to use `MockApiClient` directly with service methods.
 ///
 /// Blanket implementations are provided for `Box<T>` and `Arc<T>` where `T: AmpClient + ?Sized`,
 /// allowing `Box<dyn AmpClient>` and `Arc<dyn AmpClient>` to be used wherever `AmpClient` is expected.
@@ -127,7 +135,7 @@ pub trait AmpClient: Send + Sync {
     ) -> Result<CategoryResponse, Error>;
 }
 
-/// Blanket implementation of AmpClient for Box<T>
+/// Blanket implementation of `AmpClient` for `Box<T>`
 ///
 /// This allows `Box<dyn AmpClient + Send + Sync>` to be used in generic contexts
 /// that expect `&impl AmpClient`, enabling dependency injection of mock clients.
@@ -266,7 +274,7 @@ impl<T: AmpClient + ?Sized> AmpClient for Box<T> {
     }
 }
 
-/// Blanket implementation of AmpClient for Arc<T>
+/// Blanket implementation of `AmpClient` for `Arc<T>`
 ///
 /// This allows `Arc<dyn AmpClient + Send + Sync>` to be used in generic contexts
 /// that expect `&impl AmpClient`. The Arc wrapper enables cheap cloning for
