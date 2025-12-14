@@ -470,9 +470,7 @@ impl MockApiClient {
     ///         asset_blinder: "".to_string(),
     ///         amount_blinder: "".to_string(),
     ///         registered_user: None,
-    ///         name: None,
-    ///         ticker: None,
-    ///         amount: Some(10000),
+    ///         amount: 10000,
     ///     },
     /// ];
     ///
@@ -781,9 +779,7 @@ impl MockApiClient {
     ///         asset_blinder: "".to_string(),
     ///         amount_blinder: "".to_string(),
     ///         registered_user: None,
-    ///         name: None,
-    ///         ticker: None,
-    ///         amount: Some(10000),
+    ///         amount: 10000,
     ///     },
     /// ];
     ///
@@ -2162,5 +2158,69 @@ impl AmpClient for MockApiClient {
     
     async fn validate_gaid(&self, gaid: &str) -> Result<ValidateGaidResponse, Error> {
         self.validate_gaid(gaid).await
+    }
+    
+    // Write methods
+    
+    async fn register_asset(&self, asset_uuid: &str) -> Result<RegisterAssetResponse, Error> {
+        self.register_asset(asset_uuid).await
+    }
+    
+    async fn add_registered_user(
+        &self,
+        new_user: &crate::model::RegisteredUserAdd,
+    ) -> Result<RegisteredUserResponse, Error> {
+        self.add_registered_user(new_user).await
+    }
+    
+    async fn edit_registered_user(
+        &self,
+        registered_user_id: i64,
+        edit_data: &crate::model::RegisteredUserEdit,
+    ) -> Result<RegisteredUserResponse, Error> {
+        self.edit_registered_user(registered_user_id, edit_data).await
+    }
+    
+    async fn add_gaid_to_registered_user(
+        &self,
+        registered_user_id: i64,
+        gaid: &str,
+    ) -> Result<(), Error> {
+        // Wrap the string in a GaidRequest
+        let request = crate::model::GaidRequest { gaid: gaid.to_string() };
+        self.add_gaid_to_registered_user(registered_user_id, &request).await
+    }
+    
+    async fn add_category(
+        &self,
+        new_category: &crate::model::CategoryAdd,
+    ) -> Result<CategoryResponse, Error> {
+        self.add_category(new_category).await
+    }
+    
+    async fn add_registered_user_to_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<CategoryResponse, Error> {
+        self.add_registered_user_to_category(category_id, user_id).await?;
+        self.get_category(category_id).await
+    }
+    
+    async fn remove_registered_user_from_category(
+        &self,
+        category_id: i64,
+        user_id: i64,
+    ) -> Result<CategoryResponse, Error> {
+        self.remove_registered_user_from_category(category_id, user_id).await?;
+        self.get_category(category_id).await
+    }
+    
+    async fn add_asset_to_category(
+        &self,
+        category_id: i64,
+        asset_uuid: &str,
+    ) -> Result<CategoryResponse, Error> {
+        self.add_asset_to_category(category_id, asset_uuid).await
     }
 }

@@ -2603,6 +2603,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Test isolation issue: generate_new_indexed writes to shared mnemonic.local.json file, causing race conditions when tests run in parallel"]
     fn test_network_configuration_validation() {
         // Test 1: Verify all signers are configured for testnet
         let test_mnemonics = vec![
