@@ -5983,6 +5983,81 @@ mod elements_rpc_tests {
         mock.assert();
     }
 
+    #[tokio::test]
+    async fn test_get_transaction_from_wallet_success() {
+        let server = MockServer::start();
+
+        let wallet_name = "test_wallet";
+        let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
+
+        // Mock the load_wallet call first
+        let load_wallet_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "name": wallet_name,
+                        "warning": ""
+                    }
+                }));
+        });
+
+        // Mock the get_transaction call to wallet-specific endpoint
+        let mock_response = serde_json::json!({
+            "jsonrpc": "1.0",
+            "id": "amp-client",
+            "result": {
+                "txid": txid,
+                "confirmations": 6,
+                "blockheight": 12345,
+                "hex": "0200000000010abc123def456789...",
+                "blockhash": "def456abc123789def456abc123789def456abc123789def456abc123789def456ab",
+                "blocktime": 1640995200,
+                "time": 1640995200,
+                "timereceived": 1640995180
+            }
+        });
+
+        let get_transaction_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("//wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "gettransaction",
+                    "params": [txid, true]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(mock_response);
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_transaction_from_wallet(wallet_name, txid).await;
+
+        assert!(result.is_ok());
+        let tx_detail = result.unwrap();
+        assert_eq!(tx_detail.txid, txid);
+        assert_eq!(tx_detail.confirmations, 6);
+        assert_eq!(tx_detail.blockheight, Some(12345));
+        assert_eq!(tx_detail.blocktime, Some(1640995200));
+
+        load_wallet_mock.assert();
+        get_transaction_mock.assert();
+    }
+
     // Error handling tests
 
     #[tokio::test]
