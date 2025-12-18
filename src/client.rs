@@ -2311,10 +2311,20 @@ impl ElementsRpc {
         Ok(txid)
     }
 
-    /// Retrieves detailed information about a transaction
+    /// Retrieves transaction details from the Elements node's default wallet
+    ///
+    /// This method queries through the node's default RPC endpoint. Use this when:
+    /// - Your Elements node has a default wallet configured, OR
+    /// - You're querying non-confidential transactions
+    ///
+    /// For confidential transactions where you need a specific wallet's blinding keys
+    /// to unblind the transaction, use [`get_transaction_from_wallet`] instead.
     ///
     /// # Arguments
-    /// * `txid` - The transaction ID to retrieve
+    /// * `txid` - Transaction ID to retrieve
+    ///
+    /// # Returns
+    /// Returns transaction details including confirmations
     ///
     /// # Errors
     /// Returns an error if the RPC call fails or transaction is not found
@@ -2330,6 +2340,9 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # See Also
+    /// * [`get_transaction_from_wallet`] - For querying through a specific wallet
     pub async fn get_transaction(&self, txid: &str) -> Result<TransactionDetail, AmpError> {
         tracing::debug!("Retrieving transaction details for: {}", txid);
 
@@ -2343,6 +2356,115 @@ impl ElementsRpc {
         tracing::debug!(
             "Retrieved transaction {} with {} confirmations",
             txid,
+            tx_detail.confirmations
+        );
+
+        Ok(tx_detail)
+    }
+
+    /// Retrieves transaction details from a specific wallet in Elements
+    ///
+    /// This method queries through a wallet-specific RPC endpoint (`/wallet/{name}`). Use this when:
+    /// - You need to query confidential transactions (the wallet holds blinding keys to unblind them)
+    /// - Your Elements node doesn't have a default wallet configured
+    /// - You're working with multiple wallets and need to specify which one to query
+    ///
+    /// For simpler setups where the node has a default wallet configured,
+    /// you can use [`get_transaction`] instead.
+    ///
+    /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to query through
+    /// * `txid` - Transaction ID to retrieve
+    ///
+    /// # Returns
+    /// Returns transaction details including confirmations
+    ///
+    /// # Errors
+    /// Returns an error if the transaction is not found, wallet not loaded, or RPC call fails
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use amp_rs::ElementsRpc;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rpc = ElementsRpc::from_env()?;
+    /// let wallet_name = "amp_elements_wallet";
+    /// let tx_detail = rpc.get_transaction_from_wallet(wallet_name, "abc123...").await?;
+    /// println!("Transaction has {} confirmations", tx_detail.confirmations);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # See Also
+    /// * [`get_transaction`] - For nodes with a default wallet configured
+    pub async fn get_transaction_from_wallet(
+        &self,
+        wallet_name: &str,
+        txid: &str,
+    ) -> Result<TransactionDetail, AmpError> {
+        tracing::debug!(
+            "Retrieving transaction details for {} from wallet {}",
+            txid,
+            wallet_name
+        );
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
+
+        let params = serde_json::json!([txid, true]); // true for verbose output
+
+        // Create RPC request
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "gettransaction".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read response body".to_string());
+            return Err(AmpError::rpc(format!(
+                "RPC request failed with status: {} - Body: {}",
+                status, body
+            )));
+        }
+
+        let rpc_response: RpcResponse<TransactionDetail> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "RPC error getting transaction: {} (code: {})",
+                error.message, error.code
+            )));
+        }
+
+        let tx_detail = rpc_response.result.ok_or_else(|| {
+            AmpError::rpc(format!("No transaction details returned for {txid}"))
+        })?;
+
+        tracing::debug!(
+            "Retrieved transaction {} from wallet {} with {} confirmations",
+            txid,
+            wallet_name,
             tx_detail.confirmations
         );
 

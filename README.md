@@ -495,6 +495,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Transaction Queries
+
+The `ElementsRpc` client provides two methods for retrieving transaction details, depending on your node configuration:
+
+#### Using the Default Wallet
+
+If your Elements node has a default wallet configured, use the simpler `get_transaction` method:
+
+```rust
+use amp_rs::ElementsRpc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rpc = ElementsRpc::from_env()?;
+    
+    // Query using the node's default wallet
+    let tx_detail = rpc.get_transaction("abc123...").await?;
+    println!("Confirmations: {}", tx_detail.confirmations);
+    
+    Ok(())
+}
+```
+
+#### Using a Specific Wallet
+
+For confidential transactions or when working with multiple wallets, use `get_transaction_from_wallet` to query through a specific wallet. This is necessary when the wallet holds the blinding keys needed to unblind confidential transaction data:
+
+```rust
+use amp_rs::ElementsRpc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rpc = ElementsRpc::from_env()?;
+    let wallet_name = "amp_elements_wallet";
+    
+    // Query through a specific wallet (required for confidential tx)
+    let tx_detail = rpc.get_transaction_from_wallet(wallet_name, "abc123...").await?;
+    println!("Confirmations: {}", tx_detail.confirmations);
+    
+    Ok(())
+}
+```
+
+**When to use which:**
+
+| Scenario | Method |
+|----------|--------|
+| Node has default wallet configured | `get_transaction()` |
+| Querying confidential transactions | `get_transaction_from_wallet()` |
+| Working with multiple wallets | `get_transaction_from_wallet()` |
+| No default wallet on node | `get_transaction_from_wallet()` |
+
 ### Reissue an Asset
 
 Reissuance allows you to expand the supply of a reissuable asset. The asset must have been created with `is_reissuable: true` and you must have reissuance tokens available in your wallet.
