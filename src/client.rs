@@ -1368,7 +1368,7 @@ impl ElementsRpc {
                     );
 
                     // Fallback: try to get transaction details
-                    match self.get_transaction(&utxo.txid).await {
+                    match self.get_transaction_from_wallet(wallet_name, &utxo.txid).await {
                         Ok(tx_detail) => {
                             tracing::debug!(
                                 "Retrieved transaction details for {} as fallback",
@@ -2617,6 +2617,7 @@ impl ElementsRpc {
     /// The method includes a configurable timeout to prevent indefinite waiting.
     ///
     /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to query through
     /// * `txid` - The transaction ID to monitor for confirmations
     /// * `min_confirmations` - Minimum number of confirmations required (default: 2)
     /// * `timeout_minutes` - Timeout in minutes (default: 10)
@@ -2634,18 +2635,20 @@ impl ElementsRpc {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// let tx_detail = rpc.wait_for_confirmations("abc123...", Some(2), Some(10)).await?;
+    /// let wallet_name = "test_wallet";
+    /// let tx_detail = rpc.wait_for_confirmations(wallet_name, "abc123...", Some(2), Some(10)).await?;
     /// println!("Transaction confirmed with {} confirmations", tx_detail.confirmations);
     /// # Ok(())
     /// # }
     /// ```
     pub async fn wait_for_confirmations(
         &self,
+        wallet_name: &str,
         txid: &str,
         min_confirmations: Option<u32>,
         timeout_minutes: Option<u64>,
     ) -> Result<TransactionDetail, AmpError> {
-        self.wait_for_confirmations_with_interval(txid, min_confirmations, timeout_minutes, None)
+        self.wait_for_confirmations_with_interval(wallet_name, txid, min_confirmations, timeout_minutes, None)
             .await
     }
 
@@ -2661,6 +2664,7 @@ impl ElementsRpc {
     #[allow(clippy::cognitive_complexity)]
     pub async fn wait_for_confirmations_with_interval(
         &self,
+        wallet_name: &str,
         txid: &str,
         min_confirmations: Option<u32>,
         timeout_minutes: Option<u64>,
@@ -2696,7 +2700,7 @@ impl ElementsRpc {
             }
 
             // Get current transaction details
-            match self.get_transaction(txid).await {
+            match self.get_transaction_from_wallet(wallet_name, txid).await {
                 Ok(tx_detail) => {
                     tracing::debug!(
                         "Transaction {} has {} confirmations (need {})",
@@ -6831,22 +6835,30 @@ mod elements_rpc_tests {
     async fn test_wait_for_confirmations_success() {
         let server = MockServer::start();
 
+        let wallet_name = "test_wallet";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
 
-        // First call returns 1 confirmation (not enough)
-        let _mock_response_1 = serde_json::json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "result": {
-                "txid": txid,
-                "confirmations": 1,
-                "blockheight": 12345,
-                "hex": "0200000000010abc123def456789...",
-                "blockhash": "def456abc123789def456abc123789def456abc123789def456abc123789def456ab",
-                "blocktime": 1640995200,
-                "time": 1640995200,
-                "timereceived": 1640995180
-            }
+        // Mock load_wallet first
+        let load_wallet_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "name": wallet_name,
+                        "warning": ""
+                    }
+                }));
         });
 
         // Second call returns 2 confirmations (sufficient)
@@ -6868,7 +6880,7 @@ mod elements_rpc_tests {
         // Create a mock that returns 2 confirmations immediately (simpler test)
         let mock = server.mock(|when, then| {
             when.method(POST)
-                .path("/")
+                .path("//wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -6885,7 +6897,7 @@ mod elements_rpc_tests {
 
         // Use fast polling (1 second) for testing
         let result = rpc
-            .wait_for_confirmations_with_interval(txid, Some(2), Some(1), Some(1))
+            .wait_for_confirmations_with_interval(wallet_name, txid, Some(2), Some(1), Some(1))
             .await;
 
         assert!(result.is_ok());
@@ -6893,7 +6905,8 @@ mod elements_rpc_tests {
         assert_eq!(tx_detail.confirmations, 2);
         assert_eq!(tx_detail.txid, txid);
 
-        // Mock should have been called once
+        // Mocks should have been called
+        load_wallet_mock.assert();
         mock.assert();
     }
 
@@ -6901,7 +6914,31 @@ mod elements_rpc_tests {
     async fn test_wait_for_confirmations_timeout() {
         let server = MockServer::start();
 
+        let wallet_name = "test_wallet";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
+
+        // Mock load_wallet first
+        let _load_wallet_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "name": wallet_name,
+                        "warning": ""
+                    }
+                }));
+        });
 
         // Always return insufficient confirmations
         let mock_response = serde_json::json!({
@@ -6921,7 +6958,7 @@ mod elements_rpc_tests {
 
         let _mock = server.mock(|when, then| {
             when.method(POST)
-                .path("/")
+                .path("//wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -6938,7 +6975,7 @@ mod elements_rpc_tests {
 
         // Use a very short timeout for testing (0 = 3 seconds) and fast polling (1 second)
         let result = rpc
-            .wait_for_confirmations_with_interval(txid, Some(2), Some(0), Some(1))
+            .wait_for_confirmations_with_interval(wallet_name, txid, Some(2), Some(0), Some(1))
             .await;
 
         assert!(result.is_err());
@@ -6959,7 +6996,31 @@ mod elements_rpc_tests {
     async fn test_wait_for_confirmations_immediate_success() {
         let server = MockServer::start();
 
+        let wallet_name = "test_wallet";
         let txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
+
+        // Mock load_wallet first
+        let _load_wallet_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "name": wallet_name,
+                        "warning": ""
+                    }
+                }));
+        });
 
         // Transaction already has sufficient confirmations
         let mock_response = serde_json::json!({
@@ -6979,7 +7040,7 @@ mod elements_rpc_tests {
 
         let mock = server.mock(|when, then| {
             when.method(POST)
-                .path("/")
+                .path("//wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -6994,7 +7055,7 @@ mod elements_rpc_tests {
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-        let result = rpc.wait_for_confirmations(txid, Some(2), Some(10)).await;
+        let result = rpc.wait_for_confirmations(wallet_name, txid, Some(2), Some(10)).await;
 
         assert!(result.is_ok());
         let tx_detail = result.unwrap();
@@ -12955,7 +13016,7 @@ impl ApiClient {
         // Step 9: Wait for confirmations
         tracing::debug!("Step 9: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
         let confirmation_start = std::time::Instant::now();
-        let tx_detail = node_rpc.wait_for_confirmations(&txid, Some(2), Some(10)).await
+        let tx_detail = node_rpc.wait_for_confirmations(wallet_name, &txid, Some(2), Some(10)).await
             .map_err(|e| {
                 let elapsed = confirmation_start.elapsed();
                 tracing::error!(
@@ -13102,6 +13163,7 @@ impl ApiClient {
     /// * `asset_uuid` - The UUID of the asset to reissue (must be valid UUID format)
     /// * `amount_to_reissue` - The amount to reissue (in satoshis for the asset)
     /// * `node_rpc` - `ElementsRpc` client for blockchain operations
+    /// * `wallet_name` - Name of the Elements wallet to use for transaction queries
     /// * `signer` - Signer implementation for future support (currently not used, node RPC signs)
     ///
     /// # Returns
@@ -13129,8 +13191,9 @@ impl ApiClient {
     ///
     /// let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     /// let amount = 1000000; // 0.01 of an asset with 8 decimals
+    /// let wallet_name = "test_wallet";
     ///
-    /// client.reissue_asset(asset_uuid, amount, &elements_rpc, &signer).await?;
+    /// client.reissue_asset(asset_uuid, amount, &elements_rpc, wallet_name, &signer).await?;
     /// println!("Reissuance completed successfully");
     /// # Ok(())
     /// # }
@@ -13145,6 +13208,7 @@ impl ApiClient {
         asset_uuid: &str,
         amount_to_reissue: i64,
         node_rpc: &ElementsRpc,
+        wallet_name: &str,
         signer: &dyn Signer,
     ) -> Result<(), AmpError> {
         let reissue_span = tracing::info_span!(
@@ -13372,7 +13436,7 @@ impl ApiClient {
 
         // First, wait for 1 confirmation before spawning treasury address task
         node_rpc
-            .wait_for_confirmations(txid, Some(1), Some(10))
+            .wait_for_confirmations(wallet_name, txid, Some(1), Some(10))
             .await
             .map_err(|e| {
                 let elapsed = confirmation_start.elapsed();
@@ -13396,6 +13460,7 @@ impl ApiClient {
         let txid_clone = txid.to_string();
         let client_clone = self.clone();
         let node_rpc_clone = node_rpc.clone();
+        let wallet_name_clone = wallet_name.to_string();
 
         tokio::spawn(async move {
             if let Err(e) = client_clone
@@ -13403,6 +13468,7 @@ impl ApiClient {
                     &asset_uuid_clone,
                     &txid_clone,
                     &node_rpc_clone,
+                    &wallet_name_clone,
                 )
                 .await
             {
@@ -13416,7 +13482,7 @@ impl ApiClient {
 
         // Continue waiting for the full 2 confirmations
         let _tx_detail = node_rpc
-            .wait_for_confirmations(txid, Some(2), Some(10))
+            .wait_for_confirmations(wallet_name, txid, Some(2), Some(10))
             .await
             .map_err(|e| {
                 let elapsed = confirmation_start.elapsed();
@@ -13452,7 +13518,7 @@ impl ApiClient {
         tracing::debug!("Step 13: Retrieving transaction details and issuance information");
 
         // Get transaction details
-        let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
+        let tx_detail = node_rpc.get_transaction_from_wallet(wallet_name, txid).await.map_err(|e| {
             tracing::error!("Failed to get transaction details: {}", e);
             AmpError::rpc(format!("Failed to get transaction details: {e}"))
                 .with_context("Step 13: Transaction details retrieval")
@@ -13546,6 +13612,7 @@ impl ApiClient {
         asset_uuid: &str,
         txid: &str,
         node_rpc: &ElementsRpc,
+        wallet_name: &str,
     ) -> Result<(), AmpError> {
         tracing::info!(
             "[Treasury Address Task] Starting extraction for asset {} from txid {}",
@@ -13570,7 +13637,7 @@ impl ApiClient {
         );
 
         // Get transaction details
-        let tx_detail = node_rpc.get_transaction(txid).await.map_err(|e| {
+        let tx_detail = node_rpc.get_transaction_from_wallet(wallet_name, txid).await.map_err(|e| {
             tracing::error!(
                 "[Treasury Address Task] Failed to get transaction details: {}",
                 e
@@ -13966,7 +14033,7 @@ impl ApiClient {
         tracing::debug!("Step 13: Waiting for blockchain confirmations (minimum 2 confirmations, 10-minute timeout)");
         let confirmation_start = std::time::Instant::now();
         let _tx_detail = node_rpc
-            .wait_for_confirmations(&txid, Some(2), Some(10))
+            .wait_for_confirmations(wallet_name, &txid, Some(2), Some(10))
             .await
             .map_err(|e| {
                 let elapsed = confirmation_start.elapsed();

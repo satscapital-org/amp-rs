@@ -499,9 +499,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The `ElementsRpc` client provides two methods for retrieving transaction details, depending on your node configuration:
 
-#### Using the Default Wallet
+#### Using the Default Wallet (Deprecated)
 
-If your Elements node has a default wallet configured, use the simpler `get_transaction` method:
+> **Note:** The `get_transaction()` method without a wallet name is now deprecated in favor of `get_transaction_from_wallet()` for better support of confidential transactions. Most methods in the crate now require explicit wallet names.
+
+If your Elements node has a default wallet configured, you can still use the simpler `get_transaction` method for basic queries:
 
 ```rust
 use amp_rs::ElementsRpc;
@@ -510,7 +512,7 @@ use amp_rs::ElementsRpc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rpc = ElementsRpc::from_env()?;
     
-    // Query using the node's default wallet
+    // Query using the node's default wallet (deprecated pattern)
     let tx_detail = rpc.get_transaction("abc123...").await?;
     println!("Confirmations: {}", tx_detail.confirmations);
     
@@ -518,7 +520,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-#### Using a Specific Wallet
+#### Using a Specific Wallet (Recommended)
 
 For confidential transactions or when working with multiple wallets, use `get_transaction_from_wallet` to query through a specific wallet. This is necessary when the wallet holds the blinding keys needed to unblind confidential transaction data:
 
@@ -542,10 +544,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Scenario | Method |
 |----------|--------|
-| Node has default wallet configured | `get_transaction()` |
+| **Recommended for all use cases** | `get_transaction_from_wallet()` |
 | Querying confidential transactions | `get_transaction_from_wallet()` |
 | Working with multiple wallets | `get_transaction_from_wallet()` |
 | No default wallet on node | `get_transaction_from_wallet()` |
+| Legacy code with default wallet | `get_transaction()` (deprecated) |
 
 ### Reissue an Asset
 
@@ -562,8 +565,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let asset_uuid = "550e8400-e29b-41d4-a716-446655440000";
     let amount_to_reissue = 1_000_000_000; // 10 whole units (for 8-decimal precision)
+    let wallet_name = "amp_elements_wallet";
 
-    client.reissue_asset(asset_uuid, amount_to_reissue, &elements_rpc, &signer).await?;
+    client.reissue_asset(asset_uuid, amount_to_reissue, &elements_rpc, wallet_name, &signer).await?;
     println!("Reissuance completed successfully");
 
     Ok(())

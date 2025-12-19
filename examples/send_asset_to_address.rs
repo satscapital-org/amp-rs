@@ -185,7 +185,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 5: Wait for confirmations (optional)
     println!("\n⏳ Step 5: Waiting for confirmations (2 confirmations, 10-minute timeout)");
     match elements_rpc
-        .wait_for_confirmations(&txid, Some(2), Some(10))
+        .wait_for_confirmations(WALLET_NAME, &txid, Some(2), Some(10))
         .await
     {
         Ok(tx_detail) => {

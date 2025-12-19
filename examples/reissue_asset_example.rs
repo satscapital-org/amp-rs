@@ -39,6 +39,7 @@ use std::env;
 
 const REISSUANCE_AMOUNT_WHOLE_UNITS: i64 = 10; // 10 whole units
 const ASSET_PRECISION: i64 = 8; // 8 decimal places
+const WALLET_NAME: &str = "amp_elements_wallet_static_for_funding";
 /// Default asset UUID for reissuance (created by create_issue_authorize_reissuable_asset example)
 const DEFAULT_ASSET_UUID: &str = "15e6c571-be37-4074-9d02-89724e8d5aca";
 
@@ -206,7 +207,7 @@ async fn main() -> Result<(), AmpError> {
     let reissue_start = std::time::Instant::now();
 
     client
-        .reissue_asset(&asset_uuid, reissuance_amount_satoshis, &elements_rpc, &signer)
+        .reissue_asset(&asset_uuid, reissuance_amount_satoshis, &elements_rpc, WALLET_NAME, &signer)
         .await
         .map_err(|e| {
             AmpError::api(format!(

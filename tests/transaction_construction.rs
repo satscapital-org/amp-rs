@@ -163,12 +163,34 @@ fn create_listunspent_mock(
 /// Helper function to create mock RPC response for gettransaction
 fn create_gettransaction_mock(
     server: &MockServer,
+    wallet_name: &str,
     txid: &str,
     confirmations: u32,
     blockheight: Option<u64>,
 ) {
+    // Mock load_wallet first
     server.mock(|when, then| {
         when.method(POST).path("/").json_body(json!({
+            "jsonrpc": "1.0",
+            "id": "amp-client",
+            "method": "loadwallet",
+            "params": [wallet_name]
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {
+                    "name": wallet_name,
+                    "warning": ""
+                }
+            }));
+    });
+
+    // Mock gettransaction to wallet-specific endpoint
+    server.mock(|when, then| {
+        when.method(POST).path("//wallet/test_wallet").json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
             "method": "gettransaction",
@@ -892,12 +914,12 @@ async fn test_confirmation_polling_success_immediate() {
     let txid = "test_txid_immediate_confirmation";
 
     // Mock get_transaction to return transaction with sufficient confirmations immediately
-    create_gettransaction_mock(&server, txid, 3, Some(12345));
+    create_gettransaction_mock(&server, "test_wallet", txid, 3, Some(12345));
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with 2 required confirmations - should succeed immediately
-    let result = rpc.wait_for_confirmations(txid, Some(2), Some(1)).await;
+    let result = rpc.wait_for_confirmations("test_wallet", txid, Some(2), Some(1)).await;
 
     if result.is_err() {
         println!("Error: {:?}", result.as_ref().unwrap_err());
@@ -915,13 +937,13 @@ async fn test_confirmation_polling_success_after_wait() {
     let txid = "test_txid_delayed_confirmation";
 
     // Mock get_transaction to return sufficient confirmations
-    create_gettransaction_mock(&server, txid, 2, Some(12345));
+    create_gettransaction_mock(&server, "test_wallet", txid, 2, Some(12345));
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with fast polling interval to speed up test
     let result = rpc
-        .wait_for_confirmations_with_interval(txid, Some(2), Some(1), Some(1))
+        .wait_for_confirmations_with_interval("test_wallet", txid, Some(2), Some(1), Some(1))
         .await;
 
     assert!(result.is_ok());
@@ -936,13 +958,13 @@ async fn test_confirmation_polling_timeout() {
     let txid = "test_txid_timeout";
 
     // Mock get_transaction to always return 0 confirmations
-    create_gettransaction_mock(&server, txid, 0, None);
+    create_gettransaction_mock(&server, "test_wallet", txid, 0, None);
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with very short timeout and fast polling
     let result = rpc
-        .wait_for_confirmations_with_interval(txid, Some(2), Some(0), Some(1))
+        .wait_for_confirmations_with_interval("test_wallet", txid, Some(2), Some(0), Some(1))
         .await;
 
     assert!(result.is_err());
@@ -961,13 +983,13 @@ async fn test_confirmation_polling_rpc_errors_with_recovery() {
     let txid = "test_txid_rpc_errors";
 
     // Mock successful response - the polling logic handles RPC errors by continuing to poll
-    create_gettransaction_mock(&server, txid, 3, Some(12345));
+    create_gettransaction_mock(&server, "test_wallet", txid, 3, Some(12345));
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Should succeed with sufficient confirmations
     let result = rpc
-        .wait_for_confirmations_with_interval(txid, Some(2), Some(1), Some(1))
+        .wait_for_confirmations_with_interval("test_wallet", txid, Some(2), Some(1), Some(1))
         .await;
 
     assert!(result.is_ok());
@@ -982,12 +1004,12 @@ async fn test_confirmation_polling_default_parameters() {
     let txid = "test_txid_defaults";
 
     // Mock get_transaction to return exactly 2 confirmations (default minimum)
-    create_gettransaction_mock(&server, txid, 2, Some(12345));
+    create_gettransaction_mock(&server, "test_wallet", txid, 2, Some(12345));
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with default parameters (None values)
-    let result = rpc.wait_for_confirmations(txid, None, None).await;
+    let result = rpc.wait_for_confirmations("test_wallet", txid, None, None).await;
 
     assert!(result.is_ok());
     let tx_detail = result.unwrap();
@@ -1000,20 +1022,20 @@ async fn test_confirmation_polling_custom_minimum_confirmations() {
     let txid = "test_txid_custom_min";
 
     // Mock get_transaction to return 5 confirmations
-    create_gettransaction_mock(&server, txid, 5, Some(12345));
+    create_gettransaction_mock(&server, "test_wallet", txid, 5, Some(12345));
 
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with custom minimum confirmations (6) - should timeout since we only have 5
     let result = rpc
-        .wait_for_confirmations_with_interval(txid, Some(6), Some(0), Some(1))
+        .wait_for_confirmations_with_interval("test_wallet", txid, Some(6), Some(0), Some(1))
         .await;
 
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), AmpError::Timeout(_)));
 
     // Test with lower minimum confirmations (3) - should succeed
-    let result = rpc.wait_for_confirmations(txid, Some(3), Some(1)).await;
+    let result = rpc.wait_for_confirmations("test_wallet", txid, Some(3), Some(1)).await;
 
     assert!(result.is_ok());
     let tx_detail = result.unwrap();
@@ -1516,7 +1538,7 @@ async fn test_confirmation_timeout_error_message_format() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     let result = rpc
-        .wait_for_confirmations_with_interval(txid, Some(2), Some(0), Some(1))
+        .wait_for_confirmations_with_interval("test_wallet", txid, Some(2), Some(0), Some(1))
         .await;
 
     assert!(result.is_err());

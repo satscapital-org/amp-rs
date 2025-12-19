@@ -33,6 +33,9 @@ use serial_test::serial;
 use std::env;
 use tracing_subscriber;
 
+/// Wallet name to use for all tests
+const WALLET_NAME: &str = "test_wallet";
+
 /// Helper function to conditionally print based on nocapture mode
 fn print_if_nocapture(msg: &str) {
     let should_print = std::env::args().any(|arg| arg == "--nocapture");
@@ -130,7 +133,6 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
     print_if_nocapture(&format!("✅ Signer created: {}...", &mnemonic[..50]));
 
     // Setup test asset
-    const WALLET_NAME: &str = "test_wallet";
     print_if_nocapture("\n📦 Setting up reissuable test asset...");
     let (asset_uuid, asset_name, _asset_ticker) =
         setup_reissuable_test_asset(&api_client, &elements_rpc, WALLET_NAME).await?;
@@ -155,7 +157,7 @@ async fn test_reissue_asset_end_to_end() -> Result<(), Box<dyn std::error::Error
 
     let reissue_start = std::time::Instant::now();
     let reissue_result = api_client
-        .reissue_asset(&asset_uuid, amount_to_reissue, &elements_rpc, &signer)
+        .reissue_asset(&asset_uuid, amount_to_reissue, &elements_rpc, WALLET_NAME, &signer)
         .await;
 
     match reissue_result {
@@ -216,7 +218,7 @@ async fn test_reissue_asset_invalid_uuid() -> Result<(), Box<dyn std::error::Err
     let (_, signer) = LwkSoftwareSigner::generate_new_indexed(501)?;
 
     let result = api_client
-        .reissue_asset("invalid-uuid-format", 1000000000, &elements_rpc, &signer)
+        .reissue_asset("invalid-uuid-format", 1000000000, &elements_rpc, WALLET_NAME, &signer)
         .await;
 
     match result {
@@ -279,6 +281,7 @@ async fn test_reissue_asset_zero_amount() -> Result<(), Box<dyn std::error::Erro
             "00000000-0000-0000-0000-000000000000",
             0,
             &elements_rpc,
+            WALLET_NAME,
             &signer,
         )
         .await;
