@@ -2440,8 +2440,7 @@ impl ElementsRpc {
                 .await
                 .unwrap_or_else(|_| "Unable to read response body".to_string());
             return Err(AmpError::rpc(format!(
-                "RPC request failed with status: {} - Body: {}",
-                status, body
+                "RPC request failed with status: {status} - Body: {body}"
             )));
         }
 
