@@ -190,12 +190,14 @@ fn create_gettransaction_mock(
 
     // Mock gettransaction to wallet-specific endpoint
     server.mock(|when, then| {
-        when.method(POST).path("//wallet/test_wallet").json_body(json!({
-            "jsonrpc": "1.0",
-            "id": "amp-client",
-            "method": "gettransaction",
-            "params": [txid, true]
-        }));
+        when.method(POST)
+            .path("//wallet/test_wallet")
+            .json_body(json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "method": "gettransaction",
+                "params": [txid, true]
+            }));
         then.status(200).json_body(json!({
             "jsonrpc": "1.0",
             "id": "amp-client",
@@ -919,7 +921,9 @@ async fn test_confirmation_polling_success_immediate() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with 2 required confirmations - should succeed immediately
-    let result = rpc.wait_for_confirmations("test_wallet", txid, Some(2), Some(1)).await;
+    let result = rpc
+        .wait_for_confirmations("test_wallet", txid, Some(2), Some(1))
+        .await;
 
     if result.is_err() {
         println!("Error: {:?}", result.as_ref().unwrap_err());
@@ -1009,7 +1013,9 @@ async fn test_confirmation_polling_default_parameters() {
     let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
     // Test with default parameters (None values)
-    let result = rpc.wait_for_confirmations("test_wallet", txid, None, None).await;
+    let result = rpc
+        .wait_for_confirmations("test_wallet", txid, None, None)
+        .await;
 
     assert!(result.is_ok());
     let tx_detail = result.unwrap();
@@ -1035,7 +1041,9 @@ async fn test_confirmation_polling_custom_minimum_confirmations() {
     assert!(matches!(result.unwrap_err(), AmpError::Timeout(_)));
 
     // Test with lower minimum confirmations (3) - should succeed
-    let result = rpc.wait_for_confirmations("test_wallet", txid, Some(3), Some(1)).await;
+    let result = rpc
+        .wait_for_confirmations("test_wallet", txid, Some(3), Some(1))
+        .await;
 
     assert!(result.is_ok());
     let tx_detail = result.unwrap();

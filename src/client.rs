@@ -1368,7 +1368,10 @@ impl ElementsRpc {
                     );
 
                     // Fallback: try to get transaction details
-                    match self.get_transaction_from_wallet(wallet_name, &utxo.txid).await {
+                    match self
+                        .get_transaction_from_wallet(wallet_name, &utxo.txid)
+                        .await
+                    {
                         Ok(tx_detail) => {
                             tracing::debug!(
                                 "Retrieved transaction details for {} as fallback",
@@ -2648,8 +2651,14 @@ impl ElementsRpc {
         min_confirmations: Option<u32>,
         timeout_minutes: Option<u64>,
     ) -> Result<TransactionDetail, AmpError> {
-        self.wait_for_confirmations_with_interval(wallet_name, txid, min_confirmations, timeout_minutes, None)
-            .await
+        self.wait_for_confirmations_with_interval(
+            wallet_name,
+            txid,
+            min_confirmations,
+            timeout_minutes,
+            None,
+        )
+        .await
     }
 
     /// Internal method for waiting for confirmations with configurable poll interval
@@ -7055,7 +7064,9 @@ mod elements_rpc_tests {
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
 
-        let result = rpc.wait_for_confirmations(wallet_name, txid, Some(2), Some(10)).await;
+        let result = rpc
+            .wait_for_confirmations(wallet_name, txid, Some(2), Some(10))
+            .await;
 
         assert!(result.is_ok());
         let tx_detail = result.unwrap();
@@ -13518,11 +13529,14 @@ impl ApiClient {
         tracing::debug!("Step 13: Retrieving transaction details and issuance information");
 
         // Get transaction details
-        let tx_detail = node_rpc.get_transaction_from_wallet(wallet_name, txid).await.map_err(|e| {
-            tracing::error!("Failed to get transaction details: {}", e);
-            AmpError::rpc(format!("Failed to get transaction details: {e}"))
-                .with_context("Step 13: Transaction details retrieval")
-        })?;
+        let tx_detail = node_rpc
+            .get_transaction_from_wallet(wallet_name, txid)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get transaction details: {}", e);
+                AmpError::rpc(format!("Failed to get transaction details: {e}"))
+                    .with_context("Step 13: Transaction details retrieval")
+            })?;
 
         // Convert details to JSON Value
         let details = serde_json::to_value(tx_detail.details).map_err(|e| {
@@ -13637,13 +13651,16 @@ impl ApiClient {
         );
 
         // Get transaction details
-        let tx_detail = node_rpc.get_transaction_from_wallet(wallet_name, txid).await.map_err(|e| {
-            tracing::error!(
-                "[Treasury Address Task] Failed to get transaction details: {}",
+        let tx_detail = node_rpc
+            .get_transaction_from_wallet(wallet_name, txid)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "[Treasury Address Task] Failed to get transaction details: {}",
+                    e
+                );
                 e
-            );
-            e
-        })?;
+            })?;
 
         // Find the reissuance token change address
         let mut change_address: Option<String> = None;

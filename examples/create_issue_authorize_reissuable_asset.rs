@@ -201,7 +201,10 @@ async fn main() -> Result<(), AmpError> {
             )));
         }
 
-        match elements_rpc.get_transaction_from_wallet(WALLET_NAME, txid).await {
+        match elements_rpc
+            .get_transaction_from_wallet(WALLET_NAME, txid)
+            .await
+        {
             Ok(tx_detail) => {
                 println!(
                     "📊 Transaction found with {} confirmations",
