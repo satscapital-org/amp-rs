@@ -2457,9 +2457,9 @@ impl ElementsRpc {
             )));
         }
 
-        let tx_detail = rpc_response.result.ok_or_else(|| {
-            AmpError::rpc(format!("No transaction details returned for {txid}"))
-        })?;
+        let tx_detail = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc(format!("No transaction details returned for {txid}")))?;
 
         tracing::debug!(
             "Retrieved transaction {} from wallet {} with {} confirmations",

@@ -29,7 +29,8 @@ const ASSET_UUID: &str = "bc2d31af-60d0-4346-bfba-11b045f92dff";
 const SOURCE_ADDRESS: &str = "8svsRZNydZFhZYLorxoSQ3UtR5X96SdBsf";
 
 /// Destination address (confidential address to send to)
-const DESTINATION_ADDRESS: &str = "vjTups9DKkNDyv6jxWy3ZYVXMvmjAdZ3NAyyhX18mMF8EmH66a64sbkTczYyxoq1cV5RTTwwUWCmfExj";
+const DESTINATION_ADDRESS: &str =
+    "vjTups9DKkNDyv6jxWy3ZYVXMvmjAdZ3NAyyhX18mMF8EmH66a64sbkTczYyxoq1cV5RTTwwUWCmfExj";
 
 /// Wallet name containing the source address
 const WALLET_NAME: &str = "amp_elements_wallet_static_for_funding";
@@ -86,14 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Asset found:");
     println!("   Name: {}", asset.name);
     println!("   Asset ID: {}", asset.asset_id);
-    println!(
-        "   Ticker: {}",
-        asset.ticker.as_deref().unwrap_or("N/A")
-    );
-    println!(
-        "   Precision: {} decimal places",
-        asset.precision
-    );
+    println!("   Ticker: {}", asset.ticker.as_deref().unwrap_or("N/A"));
+    println!("   Precision: {} decimal places", asset.precision);
 
     let asset_id = &asset.asset_id;
 
@@ -103,7 +98,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .list_unspent_for_wallet(WALLET_NAME, Some(asset_id))
         .await?;
 
-    println!("✅ Found {} total UTXOs for this asset in wallet", all_utxos.len());
+    println!(
+        "✅ Found {} total UTXOs for this asset in wallet",
+        all_utxos.len()
+    );
 
     // Filter UTXOs by source address
     let source_utxos: Vec<_> = all_utxos
@@ -112,10 +110,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     if source_utxos.is_empty() {
-        println!("❌ No UTXOs found for address {} with asset {}", SOURCE_ADDRESS, asset_id);
+        println!(
+            "❌ No UTXOs found for address {} with asset {}",
+            SOURCE_ADDRESS, asset_id
+        );
         println!("   Available UTXOs are at the following addresses:");
         for utxo in &all_utxos {
-            println!("     - {} (amount: {}, spendable: {})", utxo.address, utxo.amount, utxo.spendable);
+            println!(
+                "     - {} (amount: {}, spendable: {})",
+                utxo.address, utxo.amount, utxo.spendable
+            );
         }
         return Err("No funds at source address".into());
     }
@@ -124,7 +128,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_amount = 0.0;
     for (i, utxo) in source_utxos.iter().enumerate() {
         println!("   {}. TXID: {}:{}", i + 1, utxo.txid, utxo.vout);
-        println!("      Amount: {} ({})", utxo.amount, if utxo.spendable { "spendable" } else { "not spendable" });
+        println!(
+            "      Amount: {} ({})",
+            utxo.amount,
+            if utxo.spendable {
+                "spendable"
+            } else {
+                "not spendable"
+            }
+        );
         println!("      Confirmations: {:?}", utxo.confirmations);
         total_amount += utxo.amount;
     }
@@ -158,12 +170,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             WALLET_NAME,
             address_amounts,
             asset_amounts,
-            Some(1),                        // min_conf: 1 to ensure we use confirmed UTXOs
-            Some("Transfer all asset"),     // comment
-            None,                           // subtract_fee_from: pay fee separately
-            Some(false),                    // replaceable: false for final transaction
-            Some(1),                        // conf_target: 1 block
-            Some("UNSET"),                  // estimate_mode
+            Some(1),                    // min_conf: 1 to ensure we use confirmed UTXOs
+            Some("Transfer all asset"), // comment
+            None,                       // subtract_fee_from: pay fee separately
+            Some(false),                // replaceable: false for final transaction
+            Some(1),                    // conf_target: 1 block
+            Some("UNSET"),              // estimate_mode
         )
         .await?;
 
@@ -172,7 +184,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 5: Wait for confirmations (optional)
     println!("\n⏳ Step 5: Waiting for confirmations (2 confirmations, 10-minute timeout)");
-    match elements_rpc.wait_for_confirmations(&txid, Some(2), Some(10)).await {
+    match elements_rpc
+        .wait_for_confirmations(&txid, Some(2), Some(10))
+        .await
+    {
         Ok(tx_detail) => {
             println!("✅ Transaction confirmed!");
             println!("   Confirmations: {}", tx_detail.confirmations);

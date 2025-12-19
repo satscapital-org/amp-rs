@@ -5,10 +5,9 @@
 
 use crate::{
     model::{
-        Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetSummary,
-        CategoryAdd, CategoryResponse, GaidBalanceEntry, Ownership,
-        RegisterAssetResponse, RegisteredUserAdd, RegisteredUserEdit,
-        RegisteredUserResponse, Reissuance, ValidateGaidResponse,
+        Activity, AddressGaidResponse, Asset, AssetActivityParams, AssetSummary, CategoryAdd,
+        CategoryResponse, GaidBalanceEntry, Ownership, RegisterAssetResponse, RegisteredUserAdd,
+        RegisteredUserEdit, RegisteredUserResponse, Reissuance, ValidateGaidResponse,
     },
     Error,
 };

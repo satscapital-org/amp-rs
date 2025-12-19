@@ -92,16 +92,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Asset found:");
     println!("   Name: {}", asset.name);
     println!("   Asset ID: {}", asset.asset_id);
-    println!(
-        "   Ticker: {}",
-        asset.ticker.as_deref().unwrap_or("N/A")
-    );
+    println!("   Ticker: {}", asset.ticker.as_deref().unwrap_or("N/A"));
     println!("   Domain: {}", asset.domain.as_deref().unwrap_or("N/A"));
 
     let asset_id = &asset.asset_id;
 
     // Step 2: Get unspent outputs from the wallet for this asset
-    println!("\n📋 Step 2: Listing unspent outputs from wallet '{}'", WALLET_NAME);
+    println!(
+        "\n📋 Step 2: Listing unspent outputs from wallet '{}'",
+        WALLET_NAME
+    );
     let utxos = elements_rpc
         .list_unspent_for_wallet(WALLET_NAME, Some(asset_id))
         .await?;
@@ -110,7 +110,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if utxos.is_empty() {
         println!("ℹ️  No UTXOs found in wallet for this asset");
-        println!("   This is normal if the asset hasn't been issued yet or all outputs have been spent.");
+        println!(
+            "   This is normal if the asset hasn't been issued yet or all outputs have been spent."
+        );
         return Ok(());
     }
 
@@ -118,25 +120,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📋 Step 3: Extracting addresses from UTXOs");
     let utxo_addresses: HashSet<String> = utxos.iter().map(|utxo| utxo.address.clone()).collect();
 
-    println!("✅ Found {} unique addresses in wallet", utxo_addresses.len());
+    println!(
+        "✅ Found {} unique addresses in wallet",
+        utxo_addresses.len()
+    );
     println!("🔐 Converting to confidential addresses...");
-    
+
     let mut wallet_addresses: HashSet<String> = HashSet::new();
     for address in utxo_addresses.iter() {
-        match elements_rpc.get_confidential_address(WALLET_NAME, address).await {
+        match elements_rpc
+            .get_confidential_address(WALLET_NAME, address)
+            .await
+        {
             Ok(confidential_address) => {
                 println!("   ✓ {} -> {}", address, confidential_address);
                 wallet_addresses.insert(confidential_address);
             }
             Err(e) => {
-                println!("   ⚠️  Failed to get confidential address for {}: {}", address, e);
+                println!(
+                    "   ⚠️  Failed to get confidential address for {}: {}",
+                    address, e
+                );
                 println!("      Using original address instead");
                 wallet_addresses.insert(address.clone());
             }
         }
     }
-    
-    println!("✅ Resolved {} confidential addresses", wallet_addresses.len());
+
+    println!(
+        "✅ Resolved {} confidential addresses",
+        wallet_addresses.len()
+    );
 
     // Step 4: Get current treasury addresses from AMP
     println!("\n📋 Step 4: Getting current treasury addresses from AMP");
@@ -177,7 +191,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
         {
             Ok(()) => {
-                println!("✅ Successfully removed {} unconfidential addresses", unconfidential_addresses_to_remove.len());
+                println!(
+                    "✅ Successfully removed {} unconfidential addresses",
+                    unconfidential_addresses_to_remove.len()
+                );
             }
             Err(e) => {
                 println!("❌ Failed to remove unconfidential addresses: {}", e);
@@ -205,7 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if missing_addresses.is_empty() {
         println!("✅ All wallet addresses are already in the treasury address list!");
-        
+
         if !unconfidential_addresses_to_remove.is_empty() {
             // Summary for removal-only case
             println!("\n📊 Summary");
@@ -215,7 +232,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Wallet: {}", WALLET_NAME);
             println!("UTXOs found: {}", utxos.len());
             println!("Unique addresses in wallet: {}", wallet_addresses.len());
-            println!("Unconfidential addresses removed: {}", unconfidential_addresses_to_remove.len());
+            println!(
+                "Unconfidential addresses removed: {}",
+                unconfidential_addresses_to_remove.len()
+            );
             println!("Confidential addresses added: 0");
             println!(
                 "Total treasury addresses: {}",
@@ -243,7 +263,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
     {
         Ok(()) => {
-            println!("✅ Successfully added {} addresses to treasury", missing_addresses.len());
+            println!(
+                "✅ Successfully added {} addresses to treasury",
+                missing_addresses.len()
+            );
         }
         Err(e) => {
             println!("❌ Failed to add addresses to treasury: {}", e);
@@ -268,7 +291,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Wallet: {}", WALLET_NAME);
     println!("UTXOs found: {}", utxos.len());
     println!("Unique addresses in wallet: {}", wallet_addresses.len());
-    println!("Unconfidential addresses removed: {}", unconfidential_addresses_to_remove.len());
+    println!(
+        "Unconfidential addresses removed: {}",
+        unconfidential_addresses_to_remove.len()
+    );
     println!("Confidential addresses added: {}", missing_addresses.len());
     println!(
         "Total treasury addresses: {}",
