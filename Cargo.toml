@@ -58,6 +58,14 @@ path = "examples/burn_asset_example.rs"
 name = "asset_display_tui"
 path = "examples/asset_display_tui.rs"
 
+[[example]]
+name = "sync_treasury_addresses"
+path = "examples/sync_treasury_addresses.rs"
+
+[[example]]
+name = "send_asset_to_address"
+path = "examples/send_asset_to_address.rs"
+
 [dependencies]
 reqwest = { version = "0.11", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }

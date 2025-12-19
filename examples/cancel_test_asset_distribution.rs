@@ -7,7 +7,11 @@
 //! ## Usage
 //!
 //! ```bash
+//! # Use default asset UUID
 //! cargo run --example cancel_test_asset_distribution
+//!
+//! # Specify a different asset UUID
+//! cargo run --example cancel_test_asset_distribution <asset-uuid>
 //! ```
 //!
 //! ## Environment Variables
@@ -35,6 +39,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set environment for live testing
     env::set_var("AMP_TESTS", "live");
 
+    // Get asset UUID from command line or use default
+    let default_asset_uuid = "f0ec41dd-80a3-456c-9047-3e0c643e3d7a";
+    let args: Vec<String> = env::args().collect();
+    let asset_uuid = if args.len() > 1 {
+        println!("📌 Using asset UUID from command line: {}", args[1]);
+        &args[1]
+    } else {
+        println!("📌 Using default asset UUID: {}", default_asset_uuid);
+        default_asset_uuid
+    };
+
     // Create API client
     println!("🌐 Creating AMP API client");
     let client = ApiClient::new().await?;
@@ -43,8 +58,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client.get_strategy_type()
     );
 
-    // Target the asset with UTXOs that we found
-    let asset_uuid = "f0ec41dd-80a3-456c-9047-3e0c643e3d7a";
     println!("\n🎯 Targeting test asset: {}", asset_uuid);
 
     // Get all distributions for this asset
