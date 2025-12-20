@@ -191,7 +191,7 @@ fn create_gettransaction_mock(
     // Mock gettransaction to wallet-specific endpoint
     server.mock(|when, then| {
         when.method(POST)
-            .path("//wallet/test_wallet")
+            .path(&format!("/wallet/{}", wallet_name))
             .json_body(json!({
                 "jsonrpc": "1.0",
                 "id": "amp-client",

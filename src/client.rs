@@ -1198,33 +1198,79 @@ impl ElementsRpc {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let rpc = ElementsRpc::from_env()?;
-    /// let utxos = rpc.list_unspent(Some("asset_id_hex")).await?;
+    /// let utxos = rpc.list_unspent("test_wallet", Some("asset_id_hex")).await?;
     /// println!("Found {} UTXOs", utxos.len());
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_unspent(&self, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
-        tracing::debug!("Listing unspent outputs for asset: {:?}", asset_id);
+    pub async fn list_unspent(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!("Listing unspent outputs for wallet {} and asset: {:?}", wallet_name, asset_id);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
 
         let params = asset_id.map_or_else(
             || serde_json::json!([1, 9_999_999, [], true]),
             |asset| serde_json::json!([1, 9_999_999, [], true, {"asset": asset}]),
         );
 
-        let utxos: Vec<Unspent> = self
-            .rpc_call("listunspent", params)
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "listunspent".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
             .await
-            .map_err(|e| {
-                if let Some(asset) = asset_id {
-                    e.with_context(format!(
-                        "Failed to list unspent outputs for asset {asset}. \
-                        This may indicate that the treasury address is not imported in the Elements node. \
-                        Ensure the treasury address is properly imported as a watch-only address."
-                    ))
-                } else {
-                    e.with_context("Failed to list unspent outputs")
-                }
-            })?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send listunspent RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Listunspent RPC request failed with status: {status} - Body: {error_body}"
+            )));
+        }
+
+        let rpc_response: RpcResponse<Vec<Unspent>> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse listunspent RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            let error_msg = if asset_id.is_some() {
+                format!(
+                    "Failed to list unspent outputs for asset {}. \
+                    This may indicate that the treasury address is not imported in the Elements node. \
+                    Ensure the treasury address is properly imported as a watch-only address. \
+                    RPC error: {} (code: {})",
+                    asset_id.unwrap(),
+                    error.message,
+                    error.code
+                )
+            } else {
+                format!(
+                    "Failed to list unspent outputs: {} (code: {})",
+                    error.message, error.code
+                )
+            };
+            return Err(AmpError::rpc(error_msg));
+        }
+
+        let utxos = rpc_response.result.unwrap_or_default();
 
         tracing::debug!("Found {} unspent outputs", utxos.len());
 
@@ -1303,7 +1349,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -1679,7 +1726,8 @@ impl ElementsRpc {
         );
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -2425,7 +2473,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -2562,7 +2611,8 @@ impl ElementsRpc {
         ]);
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -2781,29 +2831,73 @@ impl ElementsRpc {
     /// let rpc = ElementsRpc::from_env()?;
     /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
     /// let amount = 1000000.0; // 0.01 of an asset with 8 decimals
-    /// let result = rpc.reissueasset(asset_id, amount).await?;
+    /// let result = rpc.reissueasset("test_wallet", asset_id, amount).await?;
     /// println!("Reissuance txid: {}, vin: {}", result["txid"], result["vin"]);
     /// # Ok(())
     /// # }
     /// ```
     pub async fn reissueasset(
         &self,
+        wallet_name: &str,
         asset_id: &str,
         amount: f64,
     ) -> Result<serde_json::Value, AmpError> {
-        tracing::debug!("Reissuing asset {} with amount {}", asset_id, amount);
+        tracing::debug!("Reissuing asset {} with amount {} in wallet {}", asset_id, amount, wallet_name);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
 
         let params = serde_json::json!([asset_id, amount]);
 
-        let result: serde_json::Value = self
-            .rpc_call("reissueasset", params)
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "reissueasset".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
             .await
-            .map_err(|e| {
-                e.with_context(format!(
-                    "Failed to reissue asset {asset_id}. \
-                    Ensure the asset is reissuable and the reissuance token is available in the wallet."
-                ))
-            })?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send reissueasset RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Reissueasset RPC request failed with status: {status} - Body: {error_body}"
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse reissueasset RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "Reissueasset RPC error: {} (code: {})",
+                error.message, error.code
+            )).with_context(format!(
+                "Failed to reissue asset {asset_id}. \
+                Ensure the asset is reissuable and the reissuance token is available in the wallet."
+            )));
+        }
+
+        let result = rpc_response.result.ok_or_else(|| {
+            AmpError::rpc("Reissueasset returned no result".to_string())
+        })?;
 
         // Extract txid and vin from result for logging
         let txid = result
@@ -2896,21 +2990,67 @@ impl ElementsRpc {
     /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
     /// let amount = 1000.0; // Burn 1000 units
     ///
-    /// let txid = rpc.destroyamount(asset_id, amount).await?;
+    /// let txid = rpc.destroyamount("test_wallet", asset_id, amount).await?;
     /// println!("Burn transaction created: {}", txid);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn destroyamount(&self, asset_id: &str, amount: f64) -> Result<String, AmpError> {
-        tracing::debug!("Burning asset {} with amount {}", asset_id, amount);
+    pub async fn destroyamount(&self, wallet_name: &str, asset_id: &str, amount: f64) -> Result<String, AmpError> {
+        tracing::debug!("Burning asset {} with amount {} in wallet {}", asset_id, amount, wallet_name);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
 
         let params = serde_json::json!([asset_id, amount]);
 
-        let result: String = self.rpc_call("destroyamount", params).await.map_err(|e| {
-            e.with_context(format!(
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "destroyamount".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to send destroyamount RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Destroyamount RPC request failed with status: {status} - Body: {error_body}"
+            )));
+        }
+
+        let rpc_response: RpcResponse<String> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse destroyamount RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "Destroyamount RPC error: {} (code: {})",
+                error.message, error.code
+            )).with_context(format!(
                 "Failed to burn asset {asset_id}. \
-                    Ensure sufficient balance exists in the wallet."
-            ))
+                Ensure sufficient balance exists in the wallet."
+            )));
+        }
+
+        let result = rpc_response.result.ok_or_else(|| {
+            AmpError::rpc("Destroyamount returned no result".to_string())
         })?;
 
         tracing::info!("Burn transaction created: txid={}", result);
@@ -2925,13 +3065,14 @@ impl ElementsRpc {
     /// for that specific asset. If None, returns balances for all assets.
     ///
     /// # Arguments
+    /// * `wallet_name` - Name of the Elements wallet to query
     /// * `asset_id` - Optional asset ID to get balance for. If None, returns all asset balances
     ///
     /// # Returns
     /// Returns a JSON value containing asset balances (as a map of `asset_id` -> balance)
     ///
     /// # Errors
-    /// Returns an error if the RPC call fails
+    /// Returns an error if the RPC call fails or the wallet cannot be loaded
     ///
     /// # Examples
     /// ```no_run
@@ -2941,24 +3082,67 @@ impl ElementsRpc {
     /// let rpc = ElementsRpc::from_env()?;
     /// let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
     ///
-    /// let balances = rpc.get_balance(None).await?;
+    /// let balances = rpc.get_balance("test_wallet", None).await?;
     /// if let Some(balance) = balances.get(asset_id) {
     ///     println!("Balance for asset {}: {}", asset_id, balance);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_balance(&self, asset_id: Option<&str>) -> Result<serde_json::Value, AmpError> {
-        tracing::debug!("Getting balance for asset: {:?}", asset_id);
+    pub async fn get_balance(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<serde_json::Value, AmpError> {
+        tracing::debug!("Getting balance for wallet {} and asset: {:?}", wallet_name, asset_id);
+
+        // First load the wallet to ensure it's available
+        self.load_wallet(wallet_name).await?;
 
         // getbalance RPC signature: getbalance ( "dummy" minconf include_watchonly )
         // We use "*" as the account, 0 minconf, false for include_watchonly
         let params = serde_json::json!(["*", 0, false]);
 
-        let balances: serde_json::Value = self
-            .rpc_call("getbalance", params)
+        let request = RpcRequest {
+            jsonrpc: "1.0".to_string(),
+            id: "amp-client".to_string(),
+            method: "getbalance".to_string(),
+            params,
+        };
+
+        // Use the wallet-specific RPC endpoint
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
+
+        let response = self
+            .client
+            .post(&wallet_url)
+            .basic_auth(&self.username, Some(&self.password))
+            .json(&request)
+            .send()
             .await
-            .map_err(|e| e.with_context("Failed to get balance"))?;
+            .map_err(|e| AmpError::rpc(format!("Failed to send getbalance RPC request: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error body".to_string());
+            return Err(AmpError::rpc(format!(
+                "Getbalance RPC request failed with status: {status} - Body: {error_body}"
+            )));
+        }
+
+        let rpc_response: RpcResponse<serde_json::Value> = response
+            .json()
+            .await
+            .map_err(|e| AmpError::rpc(format!("Failed to parse getbalance RPC response: {e}")))?;
+
+        if let Some(error) = rpc_response.error {
+            return Err(AmpError::rpc(format!(
+                "Getbalance RPC error: {} (code: {})",
+                error.message, error.code
+            )).with_context("Failed to get balance"));
+        }
+
+        let balances = rpc_response.result.unwrap_or_else(|| serde_json::json!({}));
 
         // If asset_id is specified, return just that balance
         if let Some(asset_id) = asset_id {
@@ -3412,7 +3596,8 @@ impl ElementsRpc {
         );
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -3502,7 +3687,8 @@ impl ElementsRpc {
         ]);
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -3973,7 +4159,8 @@ impl ElementsRpc {
         ]);
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let request = RpcRequest {
             jsonrpc: "1.0".to_string(),
@@ -4109,7 +4296,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4205,7 +4393,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4298,7 +4487,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4720,7 +4910,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4792,7 +4983,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4869,7 +5061,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -4954,7 +5147,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5025,7 +5219,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5104,7 +5299,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5191,7 +5387,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5266,7 +5463,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5356,7 +5554,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5445,7 +5644,8 @@ impl ElementsRpc {
         };
 
         // Use the wallet-specific RPC endpoint
-        let wallet_url = format!("{}/wallet/{}", self.base_url, wallet_name);
+        let base = self.base_url.trim_end_matches('/');
+        let wallet_url = format!("{base}/wallet/{wallet_name}");
 
         let response = self
             .client
@@ -5600,7 +5800,7 @@ mod elements_rpc_tests {
         // Test that methods exist and have correct signatures (compilation test)
         let _: std::pin::Pin<
             Box<dyn std::future::Future<Output = Result<Vec<Unspent>, AmpError>> + Send + '_>,
-        > = Box::pin(rpc.list_unspent(Some("test_asset")));
+        > = Box::pin(rpc.list_unspent("test_wallet", Some("test_asset")));
 
         let inputs = vec![TxInput {
             txid: "test_txid".to_string(),
@@ -5758,10 +5958,31 @@ mod elements_rpc_tests {
         });
 
         let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let wallet_name = "test_wallet";
+
+        // Mock loadwallet call
+        let load_wallet_mock = server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
 
         let mock = server.mock(|when, then| {
             when.method(POST)
-                .path("/")
+                .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -5775,7 +5996,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.list_unspent(Some(asset_id)).await;
+        let result = rpc.list_unspent(wallet_name, Some(asset_id)).await;
 
         assert!(result.is_ok());
         let utxos = result.unwrap();
@@ -5786,6 +6007,7 @@ mod elements_rpc_tests {
         assert_eq!(utxos[1].txid, "def456abc123789");
         assert_eq!(utxos[1].amount, 50.0);
 
+        load_wallet_mock.assert();
         mock.assert();
     }
 
@@ -5809,9 +6031,31 @@ mod elements_rpc_tests {
             ]
         });
 
-        let mock = server.mock(|when, then| {
+        let wallet_name = "test_wallet";
+
+        // Mock loadwallet call
+        let load_wallet_mock = server.mock(|when, then| {
             when.method(POST)
                 .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        let mock = server.mock(|when, then| {
+            when.method(POST)
+                .path(&format!("/wallet/{wallet_name}"))
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -5825,7 +6069,7 @@ mod elements_rpc_tests {
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.list_unspent(None).await;
+        let result = rpc.list_unspent(wallet_name, None).await;
 
         assert!(result.is_ok());
         let utxos = result.unwrap();
@@ -5833,6 +6077,7 @@ mod elements_rpc_tests {
         assert_eq!(utxos[0].txid, "ghi789jkl012345");
         assert_eq!(utxos[0].amount, 25.0);
 
+        load_wallet_mock.assert();
         mock.assert();
     }
 
@@ -6043,7 +6288,7 @@ mod elements_rpc_tests {
 
         let get_transaction_mock = server.mock(|when, then| {
             when.method(POST)
-                .path("//wallet/test_wallet")
+                .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -6889,7 +7134,7 @@ mod elements_rpc_tests {
         // Create a mock that returns 2 confirmations immediately (simpler test)
         let mock = server.mock(|when, then| {
             when.method(POST)
-                .path("//wallet/test_wallet")
+                .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -6967,7 +7212,7 @@ mod elements_rpc_tests {
 
         let _mock = server.mock(|when, then| {
             when.method(POST)
-                .path("//wallet/test_wallet")
+                .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -7049,7 +7294,7 @@ mod elements_rpc_tests {
 
         let mock = server.mock(|when, then| {
             when.method(POST)
-                .path("//wallet/test_wallet")
+                .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .json_body(serde_json::json!({
                     "jsonrpc": "1.0",
@@ -13371,7 +13616,7 @@ impl ApiClient {
             reissue_response.reissuance_utxos.len()
         );
 
-        let available_utxos = node_rpc.list_unspent(None).await.map_err(|e| {
+        let available_utxos = node_rpc.list_unspent(wallet_name, None).await.map_err(|e| {
             tracing::error!("Failed to list UTXOs: {}", e);
             AmpError::rpc(format!("Failed to list UTXOs: {e}"))
                 .with_context("Step 10: UTXO verification")
@@ -13407,7 +13652,7 @@ impl ApiClient {
         // Step 11: Call Elements node's reissueasset RPC method
         tracing::debug!("Step 11: Calling Elements reissueasset RPC method");
         let reissuance_output = node_rpc
-            .reissueasset(&reissue_response.asset_id, reissue_response.amount)
+            .reissueasset(wallet_name, &reissue_response.asset_id, reissue_response.amount)
             .await
             .map_err(|e| {
                 tracing::error!("Reissuance transaction creation failed: {}", e);
@@ -13967,7 +14212,7 @@ impl ApiClient {
             burn_response.utxos.len()
         );
 
-        let available_utxos = node_rpc.list_unspent(None).await.map_err(|e| {
+        let available_utxos = node_rpc.list_unspent(wallet_name, None).await.map_err(|e| {
             tracing::error!("Failed to list UTXOs: {}", e);
             AmpError::rpc(format!("Failed to list UTXOs: {e}"))
                 .with_context("Step 10: UTXO verification")
@@ -14002,7 +14247,7 @@ impl ApiClient {
 
         // Step 11: Check local balance >= requested amount
         tracing::debug!("Step 11: Verifying sufficient balance");
-        let balances = node_rpc.get_balance(None).await.map_err(|e| {
+        let balances = node_rpc.get_balance(wallet_name, None).await.map_err(|e| {
             tracing::error!("Failed to get balance: {}", e);
             AmpError::rpc(format!("Failed to get balance: {e}"))
                 .with_context("Step 11: Balance verification")
@@ -14032,7 +14277,7 @@ impl ApiClient {
         // Step 12: Call Elements node's destroyamount RPC method
         tracing::debug!("Step 12: Calling Elements destroyamount RPC method");
         let txid = node_rpc
-            .destroyamount(&burn_response.asset_id, requested_amount)
+            .destroyamount(wallet_name, &burn_response.asset_id, requested_amount)
             .await
             .map_err(|e| {
                 tracing::error!("Burn transaction creation failed: {}", e);
