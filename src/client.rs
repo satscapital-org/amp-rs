@@ -7321,6 +7321,1213 @@ mod elements_rpc_tests {
         // Should only need one call since confirmations are already sufficient
         mock.assert();
     }
+
+    // Tests for get_balance() method
+    #[tokio::test]
+    async fn test_get_balance_all_assets() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock getbalance
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "getbalance",
+                    "params": ["*", 0, false]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "bitcoin": 1.5,
+                        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0,
+                        "asset123": 50.25
+                    }
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_balance(wallet_name, None).await;
+
+        assert!(result.is_ok());
+        let balances = result.unwrap();
+        assert!(balances.is_object());
+        assert_eq!(balances.get("bitcoin").and_then(|v| v.as_f64()), Some(1.5));
+        assert_eq!(balances.get("6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d").and_then(|v| v.as_f64()), Some(100.0));
+    }
+
+    #[tokio::test]
+    async fn test_get_balance_specific_asset() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock getbalance
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "getbalance",
+                    "params": ["*", 0, false]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "bitcoin": 1.5,
+                        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0
+                    }
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_balance(wallet_name, Some(asset_id)).await;
+
+        assert!(result.is_ok());
+        let balance = result.unwrap();
+        assert_eq!(balance.as_f64(), Some(100.0));
+    }
+
+    #[tokio::test]
+    async fn test_get_balance_empty() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock getbalance with empty result
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "getbalance",
+                    "params": ["*", 0, false]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {}
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_balance(wallet_name, None).await;
+
+        assert!(result.is_ok());
+        let balances = result.unwrap();
+        assert!(balances.is_object());
+        assert_eq!(balances.as_object().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_balance_rpc_error() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock getbalance with error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "getbalance",
+                    "params": ["*", 0, false]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid or non-wallet transaction id"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_balance(wallet_name, None).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+        assert!(error.to_string().contains("Getbalance RPC error"));
+    }
+
+    // Tests for destroyamount() method
+    #[tokio::test]
+    async fn test_destroyamount_success() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 100.0;
+        let expected_txid = "abc123def456789abc123def456789abc123def456789abc123def456789abc123de";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock destroyamount
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "destroyamount",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": expected_txid
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.destroyamount(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_ok());
+        let txid = result.unwrap();
+        assert_eq!(txid, expected_txid);
+    }
+
+    #[tokio::test]
+    async fn test_destroyamount_insufficient_balance() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 100.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock destroyamount with insufficient balance error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "destroyamount",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -6,
+                        "message": "Insufficient funds"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.destroyamount(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+        assert!(error.to_string().contains("Insufficient funds") || error.to_string().contains("Failed to burn asset"));
+    }
+
+    #[tokio::test]
+    async fn test_destroyamount_invalid_asset() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "invalid_asset_id";
+        let amount = 100.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock destroyamount with invalid asset error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "destroyamount",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid asset"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.destroyamount(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+        assert!(error.to_string().contains("Invalid asset") || error.to_string().contains("Destroyamount RPC error"));
+    }
+
+    #[tokio::test]
+    async fn test_destroyamount_rpc_error() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 100.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock destroyamount with network error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "destroyamount",
+                    "params": [asset_id, amount]
+                }));
+            then.status(500)
+                .json_body(serde_json::json!({
+                    "error": "Internal server error"
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.destroyamount(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+    }
+
+    // Tests for reissueasset() method
+    #[tokio::test]
+    async fn test_reissueasset_success() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 50.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock reissueasset
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "reissueasset",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {
+                        "txid": "def456abc123789def456abc123789def456abc123789def456abc123789def456ab",
+                        "vin": 0
+                    }
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.reissueasset(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_ok());
+        let reissuance_output = result.unwrap();
+        assert_eq!(reissuance_output.get("txid").and_then(|v| v.as_str()), Some("def456abc123789def456abc123789def456abc123789def456abc123789def456ab"));
+        assert_eq!(reissuance_output.get("vin").and_then(|v| v.as_i64()), Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_reissueasset_non_reissuable() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 50.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock reissueasset with non-reissuable error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "reissueasset",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -8,
+                        "message": "Asset is not reissuable"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.reissueasset(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+        assert!(error.to_string().contains("not reissuable") || error.to_string().contains("Failed to reissue asset"));
+    }
+
+    #[tokio::test]
+    async fn test_reissueasset_insufficient_tokens() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 50.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock reissueasset with insufficient tokens error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "reissueasset",
+                    "params": [asset_id, amount]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -6,
+                        "message": "Insufficient reissuance tokens"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.reissueasset(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+        assert!(error.to_string().contains("reissuance token") || error.to_string().contains("Reissueasset RPC error"));
+    }
+
+    #[tokio::test]
+    async fn test_reissueasset_rpc_error() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let asset_id = "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d";
+        let amount = 50.0;
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        // Mock reissueasset with network error
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "reissueasset",
+                    "params": [asset_id, amount]
+                }));
+            then.status(500)
+                .json_body(serde_json::json!({
+                    "error": "Internal server error"
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.reissueasset(wallet_name, asset_id, amount).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, AmpError::Rpc(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_wallet_not_found() {
+        let server = MockServer::start();
+        let wallet_name = "nonexistent_wallet";
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -18,
+                        "message": "Wallet file not found"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.load_wallet(wallet_name).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_unload_wallet_not_loaded() {
+        let server = MockServer::start();
+        let wallet_name = "not_loaded_wallet";
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("unloadwallet");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -18,
+                        "message": "Requested wallet does not exist or is not loaded"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.unload_wallet(wallet_name).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_import_descriptor_with_rescan() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let descriptor = "wpkh([d34db33f/84h/0h/0h]xpub.../0/*)";
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path(&format!("/wallet/{}", wallet_name))
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importdescriptors");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": [{"success": true}]
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+        let result = rpc.import_descriptor(wallet_name, descriptor).await;
+        
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_import_descriptor_invalid() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let descriptor = "invalid_descriptor";
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path(&format!("/wallet/{}", wallet_name))
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importdescriptors");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid descriptor"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+        let result = rpc.import_descriptor(wallet_name, descriptor).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_dump_private_key_address_not_in_wallet() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let address = "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("dumpprivkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Address does not refer to a key"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.dump_private_key(wallet_name, address).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_import_private_key_with_rescan() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let private_key = "cPrivKeyHex123456789abcdef";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importprivkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.import_private_key(wallet_name, private_key, Some("test_label"), Some(true)).await;
+        
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_import_private_key_invalid() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let private_key = "invalid_key";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importprivkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid private key encoding"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.import_private_key(wallet_name, private_key, None, None).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_dump_blinding_key_success() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let address = "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("dumpblindingkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": "blindingkey123456789abcdef"
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.dump_blinding_key(wallet_name, address).await;
+        
+        assert!(result.is_ok());
+        let blinding_key = result.unwrap();
+        assert!(!blinding_key.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_dump_blinding_key_not_in_wallet() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let address = "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("dumpblindingkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Address not found in wallet"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.dump_blinding_key(wallet_name, address).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_import_blinding_key_success() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let address = "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq";
+        let blinding_key = "blindingkey123456789abcdef";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importblindingkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.import_blinding_key(wallet_name, address, blinding_key).await;
+        
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_import_blinding_key_invalid() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let address = "lq1qq2xvpcvfup5j8zscjq05u2wxxjcyewk7979f9lq";
+        let blinding_key = "invalid_key";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("importblindingkey");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid blinding key"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.import_blinding_key(wallet_name, address, blinding_key).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_confidential_address_invalid() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let unconfidential_address = "invalid_address";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("getaddressinfo");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid address"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_confidential_address(wallet_name, unconfidential_address).await;
+        
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_get_unconfidential_address_invalid() {
+        let server = MockServer::start();
+        let wallet_name = "test_wallet";
+        let confidential_address = "invalid_address";
+
+        // Mock loadwallet
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "method": "loadwallet",
+                    "params": [wallet_name]
+                }));
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "result": {"name": wallet_name, "warning": ""}
+                }));
+        });
+
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/wallet/test_wallet")
+                .header("authorization", "Basic dXNlcjpwYXNz")
+                .body_contains("getunconfidentialaddress");
+            then.status(200)
+                .json_body(serde_json::json!({
+                    "jsonrpc": "1.0",
+                    "id": "amp-client",
+                    "error": {
+                        "code": -5,
+                        "message": "Invalid address"
+                    },
+                    "result": null
+                }));
+        });
+
+        let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
+        let result = rpc.get_unconfidential_address(wallet_name, confidential_address).await;
+        
+        assert!(result.is_err());
+    }
 }
 
 /// Configuration for retry behavior in API requests
