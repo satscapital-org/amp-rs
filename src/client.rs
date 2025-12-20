@@ -1203,8 +1203,16 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn list_unspent(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<Vec<Unspent>, AmpError> {
-        tracing::debug!("Listing unspent outputs for wallet {} and asset: {:?}", wallet_name, asset_id);
+    pub async fn list_unspent(
+        &self,
+        wallet_name: &str,
+        asset_id: Option<&str>,
+    ) -> Result<Vec<Unspent>, AmpError> {
+        tracing::debug!(
+            "Listing unspent outputs for wallet {} and asset: {:?}",
+            wallet_name,
+            asset_id
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -2842,7 +2850,12 @@ impl ElementsRpc {
         asset_id: &str,
         amount: f64,
     ) -> Result<serde_json::Value, AmpError> {
-        tracing::debug!("Reissuing asset {} with amount {} in wallet {}", asset_id, amount, wallet_name);
+        tracing::debug!(
+            "Reissuing asset {} with amount {} in wallet {}",
+            asset_id,
+            amount,
+            wallet_name
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -2880,24 +2893,24 @@ impl ElementsRpc {
             )));
         }
 
-        let rpc_response: RpcResponse<serde_json::Value> = response
-            .json()
-            .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse reissueasset RPC response: {e}")))?;
+        let rpc_response: RpcResponse<serde_json::Value> = response.json().await.map_err(|e| {
+            AmpError::rpc(format!("Failed to parse reissueasset RPC response: {e}"))
+        })?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
                 "Reissueasset RPC error: {} (code: {})",
                 error.message, error.code
-            )).with_context(format!(
+            ))
+            .with_context(format!(
                 "Failed to reissue asset {asset_id}. \
                 Ensure the asset is reissuable and the reissuance token is available in the wallet."
             )));
         }
 
-        let result = rpc_response.result.ok_or_else(|| {
-            AmpError::rpc("Reissueasset returned no result".to_string())
-        })?;
+        let result = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("Reissueasset returned no result".to_string()))?;
 
         // Extract txid and vin from result for logging
         let txid = result
@@ -2995,8 +3008,18 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn destroyamount(&self, wallet_name: &str, asset_id: &str, amount: f64) -> Result<String, AmpError> {
-        tracing::debug!("Burning asset {} with amount {} in wallet {}", asset_id, amount, wallet_name);
+    pub async fn destroyamount(
+        &self,
+        wallet_name: &str,
+        asset_id: &str,
+        amount: f64,
+    ) -> Result<String, AmpError> {
+        tracing::debug!(
+            "Burning asset {} with amount {} in wallet {}",
+            asset_id,
+            amount,
+            wallet_name
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -3034,24 +3057,24 @@ impl ElementsRpc {
             )));
         }
 
-        let rpc_response: RpcResponse<String> = response
-            .json()
-            .await
-            .map_err(|e| AmpError::rpc(format!("Failed to parse destroyamount RPC response: {e}")))?;
+        let rpc_response: RpcResponse<String> = response.json().await.map_err(|e| {
+            AmpError::rpc(format!("Failed to parse destroyamount RPC response: {e}"))
+        })?;
 
         if let Some(error) = rpc_response.error {
             return Err(AmpError::rpc(format!(
                 "Destroyamount RPC error: {} (code: {})",
                 error.message, error.code
-            )).with_context(format!(
+            ))
+            .with_context(format!(
                 "Failed to burn asset {asset_id}. \
                 Ensure sufficient balance exists in the wallet."
             )));
         }
 
-        let result = rpc_response.result.ok_or_else(|| {
-            AmpError::rpc("Destroyamount returned no result".to_string())
-        })?;
+        let result = rpc_response
+            .result
+            .ok_or_else(|| AmpError::rpc("Destroyamount returned no result".to_string()))?;
 
         tracing::info!("Burn transaction created: txid={}", result);
 
@@ -3089,8 +3112,16 @@ impl ElementsRpc {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_balance(&self, wallet_name: &str, asset_id: Option<&str>) -> Result<serde_json::Value, AmpError> {
-        tracing::debug!("Getting balance for wallet {} and asset: {:?}", wallet_name, asset_id);
+    pub async fn get_balance(
+        &self,
+        wallet_name: &str,
+        asset_id: Option<&str>,
+    ) -> Result<serde_json::Value, AmpError> {
+        tracing::debug!(
+            "Getting balance for wallet {} and asset: {:?}",
+            wallet_name,
+            asset_id
+        );
 
         // First load the wallet to ensure it's available
         self.load_wallet(wallet_name).await?;
@@ -3139,7 +3170,8 @@ impl ElementsRpc {
             return Err(AmpError::rpc(format!(
                 "Getbalance RPC error: {} (code: {})",
                 error.message, error.code
-            )).with_context("Failed to get balance"));
+            ))
+            .with_context("Failed to get balance"));
         }
 
         let balances = rpc_response.result.unwrap_or_else(|| serde_json::json!({}));
@@ -7339,12 +7371,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock getbalance
@@ -7358,16 +7389,15 @@ mod elements_rpc_tests {
                     "method": "getbalance",
                     "params": ["*", 0, false]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {
-                        "bitcoin": 1.5,
-                        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0,
-                        "asset123": 50.25
-                    }
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {
+                    "bitcoin": 1.5,
+                    "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0,
+                    "asset123": 50.25
+                }
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7377,7 +7407,12 @@ mod elements_rpc_tests {
         let balances = result.unwrap();
         assert!(balances.is_object());
         assert_eq!(balances.get("bitcoin").and_then(|v| v.as_f64()), Some(1.5));
-        assert_eq!(balances.get("6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d").and_then(|v| v.as_f64()), Some(100.0));
+        assert_eq!(
+            balances
+                .get("6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d")
+                .and_then(|v| v.as_f64()),
+            Some(100.0)
+        );
     }
 
     #[tokio::test]
@@ -7397,12 +7432,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock getbalance
@@ -7416,15 +7450,14 @@ mod elements_rpc_tests {
                     "method": "getbalance",
                     "params": ["*", 0, false]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {
-                        "bitcoin": 1.5,
-                        "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0
-                    }
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {
+                    "bitcoin": 1.5,
+                    "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": 100.0
+                }
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7451,12 +7484,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock getbalance with empty result
@@ -7470,12 +7502,11 @@ mod elements_rpc_tests {
                     "method": "getbalance",
                     "params": ["*", 0, false]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {}
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7503,12 +7534,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock getbalance with error
@@ -7522,16 +7552,15 @@ mod elements_rpc_tests {
                     "method": "getbalance",
                     "params": ["*", 0, false]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid or non-wallet transaction id"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid or non-wallet transaction id"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7563,12 +7592,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock destroyamount
@@ -7582,12 +7610,11 @@ mod elements_rpc_tests {
                     "method": "destroyamount",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": expected_txid
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": expected_txid
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7616,12 +7643,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock destroyamount with insufficient balance error
@@ -7635,16 +7661,15 @@ mod elements_rpc_tests {
                     "method": "destroyamount",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -6,
-                        "message": "Insufficient funds"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -6,
+                    "message": "Insufficient funds"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7653,7 +7678,10 @@ mod elements_rpc_tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(matches!(error, AmpError::Rpc(_)));
-        assert!(error.to_string().contains("Insufficient funds") || error.to_string().contains("Failed to burn asset"));
+        assert!(
+            error.to_string().contains("Insufficient funds")
+                || error.to_string().contains("Failed to burn asset")
+        );
     }
 
     #[tokio::test]
@@ -7674,12 +7702,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock destroyamount with invalid asset error
@@ -7693,16 +7720,15 @@ mod elements_rpc_tests {
                     "method": "destroyamount",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid asset"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid asset"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7711,7 +7737,10 @@ mod elements_rpc_tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(matches!(error, AmpError::Rpc(_)));
-        assert!(error.to_string().contains("Invalid asset") || error.to_string().contains("Destroyamount RPC error"));
+        assert!(
+            error.to_string().contains("Invalid asset")
+                || error.to_string().contains("Destroyamount RPC error")
+        );
     }
 
     #[tokio::test]
@@ -7732,12 +7761,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock destroyamount with network error
@@ -7751,10 +7779,9 @@ mod elements_rpc_tests {
                     "method": "destroyamount",
                     "params": [asset_id, amount]
                 }));
-            then.status(500)
-                .json_body(serde_json::json!({
-                    "error": "Internal server error"
-                }));
+            then.status(500).json_body(serde_json::json!({
+                "error": "Internal server error"
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7784,12 +7811,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock reissueasset
@@ -7803,15 +7829,14 @@ mod elements_rpc_tests {
                     "method": "reissueasset",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {
-                        "txid": "def456abc123789def456abc123789def456abc123789def456abc123789def456ab",
-                        "vin": 0
-                    }
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {
+                    "txid": "def456abc123789def456abc123789def456abc123789def456abc123789def456ab",
+                    "vin": 0
+                }
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7819,8 +7844,14 @@ mod elements_rpc_tests {
 
         assert!(result.is_ok());
         let reissuance_output = result.unwrap();
-        assert_eq!(reissuance_output.get("txid").and_then(|v| v.as_str()), Some("def456abc123789def456abc123789def456abc123789def456abc123789def456ab"));
-        assert_eq!(reissuance_output.get("vin").and_then(|v| v.as_i64()), Some(0));
+        assert_eq!(
+            reissuance_output.get("txid").and_then(|v| v.as_str()),
+            Some("def456abc123789def456abc123789def456abc123789def456abc123789def456ab")
+        );
+        assert_eq!(
+            reissuance_output.get("vin").and_then(|v| v.as_i64()),
+            Some(0)
+        );
     }
 
     #[tokio::test]
@@ -7841,12 +7872,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock reissueasset with non-reissuable error
@@ -7860,16 +7890,15 @@ mod elements_rpc_tests {
                     "method": "reissueasset",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -8,
-                        "message": "Asset is not reissuable"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -8,
+                    "message": "Asset is not reissuable"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7878,7 +7907,10 @@ mod elements_rpc_tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(matches!(error, AmpError::Rpc(_)));
-        assert!(error.to_string().contains("not reissuable") || error.to_string().contains("Failed to reissue asset"));
+        assert!(
+            error.to_string().contains("not reissuable")
+                || error.to_string().contains("Failed to reissue asset")
+        );
     }
 
     #[tokio::test]
@@ -7899,12 +7931,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock reissueasset with insufficient tokens error
@@ -7918,16 +7949,15 @@ mod elements_rpc_tests {
                     "method": "reissueasset",
                     "params": [asset_id, amount]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -6,
-                        "message": "Insufficient reissuance tokens"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -6,
+                    "message": "Insufficient reissuance tokens"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -7936,7 +7966,10 @@ mod elements_rpc_tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(matches!(error, AmpError::Rpc(_)));
-        assert!(error.to_string().contains("reissuance token") || error.to_string().contains("Reissueasset RPC error"));
+        assert!(
+            error.to_string().contains("reissuance token")
+                || error.to_string().contains("Reissueasset RPC error")
+        );
     }
 
     #[tokio::test]
@@ -7957,12 +7990,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         // Mock reissueasset with network error
@@ -7976,10 +8008,9 @@ mod elements_rpc_tests {
                     "method": "reissueasset",
                     "params": [asset_id, amount]
                 }));
-            then.status(500)
-                .json_body(serde_json::json!({
-                    "error": "Internal server error"
-                }));
+            then.status(500).json_body(serde_json::json!({
+                "error": "Internal server error"
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
@@ -8005,21 +8036,20 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -18,
-                        "message": "Wallet file not found"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -18,
+                    "message": "Wallet file not found"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.load_wallet(wallet_name).await;
-        
+
         assert!(result.is_err());
     }
 
@@ -8033,21 +8063,20 @@ mod elements_rpc_tests {
                 .path("/")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("unloadwallet");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -18,
-                        "message": "Requested wallet does not exist or is not loaded"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -18,
+                    "message": "Requested wallet does not exist or is not loaded"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.unload_wallet(wallet_name).await;
-        
+
         assert!(result.is_err());
     }
 
@@ -8062,17 +8091,20 @@ mod elements_rpc_tests {
                 .path(&format!("/wallet/{}", wallet_name))
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importdescriptors");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": [{"success": true}]
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": [{"success": true}]
+            }));
         });
 
-        let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+        let rpc = ElementsRpc::new(
+            server.url("/").trim_end_matches('/').to_string(),
+            "user".to_string(),
+            "pass".to_string(),
+        );
         let result = rpc.import_descriptor(wallet_name, descriptor).await;
-        
+
         assert!(result.is_ok());
     }
 
@@ -8087,21 +8119,24 @@ mod elements_rpc_tests {
                 .path(&format!("/wallet/{}", wallet_name))
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importdescriptors");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid descriptor"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid descriptor"
+                },
+                "result": null
+            }));
         });
 
-        let rpc = ElementsRpc::new(server.url("/").trim_end_matches('/').to_string(), "user".to_string(), "pass".to_string());
+        let rpc = ElementsRpc::new(
+            server.url("/").trim_end_matches('/').to_string(),
+            "user".to_string(),
+            "pass".to_string(),
+        );
         let result = rpc.import_descriptor(wallet_name, descriptor).await;
-        
+
         assert!(result.is_err());
     }
 
@@ -8122,12 +8157,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8135,21 +8169,20 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("dumpprivkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Address does not refer to a key"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Address does not refer to a key"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.dump_private_key(wallet_name, address).await;
-        
+
         assert!(result.is_err());
     }
 
@@ -8170,12 +8203,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8183,17 +8215,18 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importprivkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.import_private_key(wallet_name, private_key, Some("test_label"), Some(true)).await;
-        
+        let result = rpc
+            .import_private_key(wallet_name, private_key, Some("test_label"), Some(true))
+            .await;
+
         assert!(result.is_ok());
     }
 
@@ -8214,12 +8247,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8227,21 +8259,22 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importprivkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid private key encoding"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid private key encoding"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.import_private_key(wallet_name, private_key, None, None).await;
-        
+        let result = rpc
+            .import_private_key(wallet_name, private_key, None, None)
+            .await;
+
         assert!(result.is_err());
     }
 
@@ -8262,12 +8295,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8275,17 +8307,16 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("dumpblindingkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": "blindingkey123456789abcdef"
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": "blindingkey123456789abcdef"
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.dump_blinding_key(wallet_name, address).await;
-        
+
         assert!(result.is_ok());
         let blinding_key = result.unwrap();
         assert!(!blinding_key.is_empty());
@@ -8308,12 +8339,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8321,21 +8351,20 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("dumpblindingkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Address not found in wallet"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Address not found in wallet"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
         let result = rpc.dump_blinding_key(wallet_name, address).await;
-        
+
         assert!(result.is_err());
     }
 
@@ -8357,12 +8386,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8370,17 +8398,18 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importblindingkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.import_blinding_key(wallet_name, address, blinding_key).await;
-        
+        let result = rpc
+            .import_blinding_key(wallet_name, address, blinding_key)
+            .await;
+
         assert!(result.is_ok());
     }
 
@@ -8402,12 +8431,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8415,21 +8443,22 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("importblindingkey");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid blinding key"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid blinding key"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.import_blinding_key(wallet_name, address, blinding_key).await;
-        
+        let result = rpc
+            .import_blinding_key(wallet_name, address, blinding_key)
+            .await;
+
         assert!(result.is_err());
     }
 
@@ -8450,12 +8479,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8463,21 +8491,22 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("getaddressinfo");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid address"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid address"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.get_confidential_address(wallet_name, unconfidential_address).await;
-        
+        let result = rpc
+            .get_confidential_address(wallet_name, unconfidential_address)
+            .await;
+
         assert!(result.is_err());
     }
 
@@ -8498,12 +8527,11 @@ mod elements_rpc_tests {
                     "method": "loadwallet",
                     "params": [wallet_name]
                 }));
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "result": {"name": wallet_name, "warning": ""}
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "result": {"name": wallet_name, "warning": ""}
+            }));
         });
 
         server.mock(|when, then| {
@@ -8511,21 +8539,22 @@ mod elements_rpc_tests {
                 .path("/wallet/test_wallet")
                 .header("authorization", "Basic dXNlcjpwYXNz")
                 .body_contains("getunconfidentialaddress");
-            then.status(200)
-                .json_body(serde_json::json!({
-                    "jsonrpc": "1.0",
-                    "id": "amp-client",
-                    "error": {
-                        "code": -5,
-                        "message": "Invalid address"
-                    },
-                    "result": null
-                }));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "1.0",
+                "id": "amp-client",
+                "error": {
+                    "code": -5,
+                    "message": "Invalid address"
+                },
+                "result": null
+            }));
         });
 
         let rpc = ElementsRpc::new(server.url("/"), "user".to_string(), "pass".to_string());
-        let result = rpc.get_unconfidential_address(wallet_name, confidential_address).await;
-        
+        let result = rpc
+            .get_unconfidential_address(wallet_name, confidential_address)
+            .await;
+
         assert!(result.is_err());
     }
 }
@@ -14823,11 +14852,14 @@ impl ApiClient {
             reissue_response.reissuance_utxos.len()
         );
 
-        let available_utxos = node_rpc.list_unspent(wallet_name, None).await.map_err(|e| {
-            tracing::error!("Failed to list UTXOs: {}", e);
-            AmpError::rpc(format!("Failed to list UTXOs: {e}"))
-                .with_context("Step 10: UTXO verification")
-        })?;
+        let available_utxos = node_rpc
+            .list_unspent(wallet_name, None)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to list UTXOs: {}", e);
+                AmpError::rpc(format!("Failed to list UTXOs: {e}"))
+                    .with_context("Step 10: UTXO verification")
+            })?;
 
         // Check that all required reissuance UTXOs are available
         let local_utxos: std::collections::HashSet<(String, i64)> = available_utxos
@@ -14859,7 +14891,11 @@ impl ApiClient {
         // Step 11: Call Elements node's reissueasset RPC method
         tracing::debug!("Step 11: Calling Elements reissueasset RPC method");
         let reissuance_output = node_rpc
-            .reissueasset(wallet_name, &reissue_response.asset_id, reissue_response.amount)
+            .reissueasset(
+                wallet_name,
+                &reissue_response.asset_id,
+                reissue_response.amount,
+            )
             .await
             .map_err(|e| {
                 tracing::error!("Reissuance transaction creation failed: {}", e);
@@ -15419,11 +15455,14 @@ impl ApiClient {
             burn_response.utxos.len()
         );
 
-        let available_utxos = node_rpc.list_unspent(wallet_name, None).await.map_err(|e| {
-            tracing::error!("Failed to list UTXOs: {}", e);
-            AmpError::rpc(format!("Failed to list UTXOs: {e}"))
-                .with_context("Step 10: UTXO verification")
-        })?;
+        let available_utxos = node_rpc
+            .list_unspent(wallet_name, None)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to list UTXOs: {}", e);
+                AmpError::rpc(format!("Failed to list UTXOs: {e}"))
+                    .with_context("Step 10: UTXO verification")
+            })?;
 
         // Check that all required UTXOs are available
         let local_utxos: std::collections::HashSet<(String, i64)> = available_utxos
